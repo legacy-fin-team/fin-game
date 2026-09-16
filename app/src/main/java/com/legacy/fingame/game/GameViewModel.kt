@@ -138,7 +138,10 @@ class GameViewModel : ViewModel() {
             shopItems = buildShopItems(current.selectedCategory, current.inventory, current.ownedItemIds, current.goal),
             cartTotal = total,
             canCheckout = total > 0 && total <= current.balance,
-            goalProgress = current.goal?.let { (current.balance.toFloat() / it.targetPrice).coerceIn(0f, 1f) } ?: 0f
+            goalProgress = current.goal
+                ?.takeIf { it.targetPrice > 0 }
+                ?.let { (current.balance.toFloat() / it.targetPrice).coerceIn(0f, 1f) }
+                ?: 0f
         )
     }
 

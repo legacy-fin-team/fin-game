@@ -41,7 +41,7 @@ private val ScreenPadding = 16.dp
 private val GoalCardWidth = 208.dp
 private val PrimaryActionSize = 60.dp
 private val SecondaryActionSize = 52.dp
-private const val PetAreaWidthFraction = 0.62f
+private const val PetAreaWidthFraction = 0.74f
 
 /**
  * Главный экран игры: «сцена» текущей подлокации с аватаром питомца по центру
@@ -187,7 +187,7 @@ private fun PetStage(
                 .fillMaxWidth()
                 .aspectRatio(1f)
         ) {
-            val petSize = maxWidth * 0.58f
+            val petSize = maxWidth * 0.66f
             Surface(
                 modifier = Modifier.fillMaxSize(),
                 shape = RoundedCornerShape(32.dp),
