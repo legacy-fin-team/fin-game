@@ -1,71 +1,54 @@
 package com.legacy.fingame.ui.theme
 
+import android.app.Activity
+import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-
-private val LightColorScheme = lightColorScheme(
-    primary = MintPrimaryLight,
-    onPrimary = MintOnPrimaryLight,
-    primaryContainer = MintPrimaryContainerLight,
-    onPrimaryContainer = MintOnPrimaryContainerLight,
-    secondary = AmberSecondaryLight,
-    onSecondary = AmberOnSecondaryLight,
-    secondaryContainer = AmberSecondaryContainerLight,
-    onSecondaryContainer = AmberOnSecondaryContainerLight,
-    tertiary = CoralTertiaryLight,
-    onTertiary = CoralOnTertiaryLight,
-    tertiaryContainer = CoralTertiaryContainerLight,
-    onTertiaryContainer = CoralOnTertiaryContainerLight,
-    background = CreamBackgroundLight,
-    onBackground = OnCreamBackgroundLight,
-    surface = CreamSurfaceLight,
-    onSurface = OnCreamSurfaceLight,
-    surfaceVariant = CreamSurfaceVariantLight,
-    onSurfaceVariant = OnCreamSurfaceVariantLight,
-    outline = CreamOutlineLight,
-    error = ErrorLight,
-    onError = OnErrorLight
-)
+import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = MintPrimaryDark,
-    onPrimary = MintOnPrimaryDark,
-    primaryContainer = MintPrimaryContainerDark,
-    onPrimaryContainer = MintOnPrimaryContainerDark,
-    secondary = AmberSecondaryDark,
-    onSecondary = AmberOnSecondaryDark,
-    secondaryContainer = AmberSecondaryContainerDark,
-    onSecondaryContainer = AmberOnSecondaryContainerDark,
-    tertiary = CoralTertiaryDark,
-    onTertiary = CoralOnTertiaryDark,
-    tertiaryContainer = CoralTertiaryContainerDark,
-    onTertiaryContainer = CoralOnTertiaryContainerDark,
-    background = DeepBlueGreyBackgroundDark,
-    onBackground = OnDeepBlueGreyBackgroundDark,
-    surface = DeepBlueGreySurfaceDark,
-    onSurface = OnDeepBlueGreySurfaceDark,
-    surfaceVariant = DeepBlueGreySurfaceVariantDark,
-    onSurfaceVariant = OnDeepBlueGreySurfaceVariantDark,
-    outline = DeepBlueGreyOutlineDark,
-    error = ErrorDark,
-    onError = OnErrorDark
+    primary = Purple80,
+    secondary = PurpleGrey80,
+    tertiary = Pink80
 )
 
-/**
- * Тема приложения FinGame — уютная казуально-игровая палитра (мятный + янтарный).
- * Динамические цвета Android 12+ по умолчанию выключены, чтобы бренд-палитра
- * всегда оставалась узнаваемой независимо от обоев пользователя.
- */
+private val LightColorScheme = lightColorScheme(
+    primary = Purple40,
+    secondary = PurpleGrey40,
+    tertiary = Pink40
+
+    /* Other default colors to override
+    background = Color(0xFFFFFBFE),
+    surface = Color(0xFFFFFBFE),
+    onPrimary = Color.White,
+    onSecondary = Color.White,
+    onTertiary = Color.White,
+    onBackground = Color(0xFF1C1B1F),
+    onSurface = Color(0xFF1C1B1F),
+    */
+)
+
 @Composable
 fun FinGameTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false,
+    // Dynamic color is available on Android 12+
+    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val colorScheme = when {
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            val context = LocalContext.current
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+
+        darkTheme -> DarkColorScheme
+        else -> LightColorScheme
+    }
 
     MaterialTheme(
         colorScheme = colorScheme,
