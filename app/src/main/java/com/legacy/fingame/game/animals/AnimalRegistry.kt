@@ -1,17 +1,16 @@
 package com.legacy.fingame.game.animals
 
-import java.io.InputStream
+import android.content.Context
 
-class AnimalRegistry(inputStream: InputStream) {
-    // Словарь для хранения животных, где ключ - это id животного
+class AnimalRegistry(context: Context) {
     private val animalsMap: Map<String, Animal>
 
     init {
         val reader = AnimalReader()
-        val animalsList = reader.readAnimals(inputStream)
-        
-        // Преобразуем список в словарь
-        animalsMap = animalsList.associateBy { it.id }
+        // Получаем доступ к файлу в assets/data/animals.xml
+        animalsMap = context.assets.open("data/animals.xml").use { inputStream ->
+            reader.readAnimals(inputStream)
+        }
     }
 
     /**
@@ -23,18 +22,17 @@ class AnimalRegistry(inputStream: InputStream) {
     }
 
     /**
-     * Получить конкретный вариант (ассеты) животного по его id и id варианта (вида).
-     * Используется в основной игре, чтобы отобразить животного на экране.
+     * Получить путь до ассетов конкретного варианта животного.
      */
-    fun getAnimalVariant(animalId: String, variantId: String): AnimalVariant? {
-        val animal = animalsMap[animalId]
-        return animal?.variants?.find { it.id == variantId }
+    fun getVariantPath(animalId: String, variantId: String): String {
+        val animal = animalsMap.getValue(animalId)
+        return animal.variants.getValue(variantId)
     }
     
     /**
      * Получить само животное по его id.
      */
-    fun getAnimalById(animalId: String): Animal? {
-        return animalsMap[animalId]
+    fun getAnimalById(animalId: String): Animal {
+        return animalsMap.getValue(animalId)
     }
 }
