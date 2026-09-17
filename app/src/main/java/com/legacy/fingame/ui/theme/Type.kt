@@ -7,9 +7,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * Игровая типографика FinGame: заголовки крупнее и жирнее стандартной Material3,
- * чтобы интерфейс читался как дружелюбная казуальная игра. Используется системный
- * шрифт по умолчанию (без подключения внешних Google Fonts).
+ * FinGame game typography: titles are larger and bolder than standard Material3
+ * to make the interface read as a friendly casual game. Uses system font by default
+ * (no external Google Fonts).
  */
 val Typography = Typography(
     displayLarge = TextStyle(

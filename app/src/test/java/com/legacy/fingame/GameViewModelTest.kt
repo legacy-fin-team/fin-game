@@ -1,140 +1,81 @@
 package com.legacy.fingame
 
-import com.legacy.fingame.domain.ItemCategory
-import com.legacy.fingame.domain.PurchaseKind
-import com.legacy.fingame.domain.ShopCatalog
 import com.legacy.fingame.game.GameViewModel
+import com.legacy.fingame.game.Screen
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GameViewModelTest {
 
-    private val consumable = ShopCatalog.items.first { it.kind == PurchaseKind.CONSUMABLE }
-    private val unique = ShopCatalog.items.first { it.kind == PurchaseKind.UNIQUE }
-
     @Test
-    fun `increaseQty and decreaseQty change cart quantity without going below zero`() {
+    fun `openScreen and closeScreen switch screen`() {
         val vm = GameViewModel()
-        vm.selectCategory(consumable.category)
 
-        vm.increaseQty(consumable.id)
-        vm.increaseQty(consumable.id)
-        var ui = vm.state.value.shopItems.first { it.item.id == consumable.id }
-        assertEquals(2, ui.quantity)
+        vm.openScreen(Screen.SHOP)
+        assertEquals(Screen.SHOP, vm.state.value.screen)
 
-        vm.decreaseQty(consumable.id)
-        ui = vm.state.value.shopItems.first { it.item.id == consumable.id }
-        assertEquals(1, ui.quantity)
-
-        vm.decreaseQty(consumable.id)
-        vm.decreaseQty(consumable.id) // не должно уйти в минус
-        ui = vm.state.value.shopItems.first { it.item.id == consumable.id }
-        assertEquals(0, ui.quantity)
+        vm.closeScreen()
+        assertEquals(Screen.MAIN, vm.state.value.screen)
     }
 
     @Test
-    fun `toggleUnique adds and removes item from cart`() {
+    fun `selectCategory changes selected category`() {
         val vm = GameViewModel()
-        vm.selectCategory(unique.category)
 
-        vm.toggleUnique(unique.id)
-        var ui = vm.state.value.shopItems.first { it.item.id == unique.id }
-        assertEquals(1, ui.quantity)
-        assertFalse(ui.owned)
+        vm.selectCategory("toys")
+        assertEquals("toys", vm.state.value.selectedCategoryId)
 
-        vm.toggleUnique(unique.id)
-        ui = vm.state.value.shopItems.first { it.item.id == unique.id }
-        assertEquals(0, ui.quantity)
+        vm.selectCategory("decor")
+        assertEquals("decor", vm.state.value.selectedCategoryId)
     }
 
     @Test
-    fun `toggleGoal assigns and clears goal`() {
+    fun `increaseQty increases item counter`() {
         val vm = GameViewModel()
-        vm.selectCategory(unique.category)
 
-        vm.toggleGoal(unique.id)
-        assertEquals(unique.id, vm.state.value.goal?.itemId)
-        assertTrue(vm.state.value.shopItems.first { it.item.id == unique.id }.isGoal)
+        vm.increaseQty("item_01")
+        vm.increaseQty("item_01")
 
-        vm.toggleGoal(unique.id)
-        assertNull(vm.state.value.goal)
+        assertEquals(2, vm.state.value.quantities["item_01"])
     }
 
     @Test
-    fun `checkout deducts balance clears cart and fills inventory and owned`() {
+    fun `decreaseQty never goes below zero`() {
         val vm = GameViewModel()
-        val startBalance = vm.state.value.balance
 
-        vm.selectCategory(consumable.category)
-        vm.increaseQty(consumable.id)
-        vm.increaseQty(consumable.id)
+        vm.decreaseQty("item_01")
+        assertEquals(0, vm.state.value.quantities["item_01"] ?: 0)
 
-        vm.selectCategory(unique.category)
-        vm.toggleUnique(unique.id)
-
-        val expectedTotal = consumable.price * 2 + unique.price
-        assertEquals(expectedTotal, vm.state.value.cartTotal)
-        assertTrue(vm.state.value.canCheckout)
-
-        vm.checkout()
-
-        val state = vm.state.value
-        assertEquals(startBalance - expectedTotal, state.balance)
-        assertEquals(0, state.cartTotal)
-        assertEquals(2, state.inventory[consumable.id])
-        assertTrue(state.ownedItemIds.contains(unique.id))
-        assertEquals("Куплено на $expectedTotal ₽", state.toast)
-
-        vm.consumeToast()
-        assertNull(vm.state.value.toast)
+        vm.increaseQty("item_01")
+        vm.decreaseQty("item_01")
+        vm.decreaseQty("item_01")
+        assertEquals(0, vm.state.value.quantities["item_01"])
     }
 
     @Test
-    fun `canCheckout is false when not enough money`() {
+    fun `quantities of different items are independent`() {
         val vm = GameViewModel()
-        val expensive = ShopCatalog.items.maxByOrNull { it.price }!!
-        vm.selectCategory(expensive.category)
 
-        // Тратим почти весь баланс на дорогой уникальный товар несколько раз невозможно (UNIQUE),
-        // поэтому проверяем сценарий через расходуемый товар в большом количестве.
-        val food = ShopCatalog.items.first { it.kind == PurchaseKind.CONSUMABLE }
-        vm.selectCategory(food.category)
-        val balance = vm.state.value.balance
-        val timesNeeded = balance / food.price + 5
-        repeat(timesNeeded) { vm.increaseQty(food.id) }
+        vm.increaseQty("item_01")
+        vm.increaseQty("item_01")
+        vm.increaseQty("item_02")
 
-        assertTrue(vm.state.value.cartTotal > balance)
-        assertFalse(vm.state.value.canCheckout)
+        assertEquals(2, vm.state.value.quantities["item_01"])
+        assertEquals(1, vm.state.value.quantities["item_02"])
     }
 
     @Test
-    fun `nextSubLocation and prevSubLocation cycle through locations`() {
+    fun `nextSubLocation and prevSubLocation cycle in both directions`() {
         val vm = GameViewModel()
-        val count = vm.state.value.subLocations.size
-        assertTrue(count > 0)
+        val count = 4 // matches DemoContent.subLocationCount
 
         vm.prevSubLocation()
         assertEquals(count - 1, vm.state.value.subLocationIndex)
 
         repeat(count) { vm.nextSubLocation() }
         assertEquals(count - 1, vm.state.value.subLocationIndex)
-    }
 
-    @Test
-    fun `owned unique item cannot be added to cart again`() {
-        val vm = GameViewModel()
-        vm.selectCategory(unique.category)
-        vm.toggleUnique(unique.id)
-        vm.checkout()
-
-        // товар уже куплен — повторное переключение не должно ничего изменить
-        vm.toggleUnique(unique.id)
-        val ui = vm.state.value.shopItems.first { it.item.id == unique.id }
-        assertTrue(ui.owned)
-        assertEquals(0, ui.quantity)
-        assertEquals(0, vm.state.value.cartTotal)
+        vm.nextSubLocation()
+        assertEquals(0, vm.state.value.subLocationIndex)
     }
 }

@@ -55,9 +55,9 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 /**
- * Тема приложения FinGame — уютная казуально-игровая палитра (мятный + янтарный).
- * Динамические цвета Android 12+ по умолчанию выключены, чтобы бренд-палитра
- * всегда оставалась узнаваемой независимо от обоев пользователя.
+ * FinGame app theme — cozy casual-game palette (mint + amber).
+ * Android 12+ dynamic colors are disabled by default to keep the brand palette
+ * recognizable regardless of user wallpapers.
  */
 @Composable
 fun FinGameTheme(

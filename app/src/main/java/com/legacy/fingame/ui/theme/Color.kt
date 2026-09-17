@@ -4,7 +4,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// ---------- Light theme ----------
 val MintPrimaryLight = Color(0xFF2E9C7A)
 val MintOnPrimaryLight = Color(0xFFFFFFFF)
 val MintPrimaryContainerLight = Color(0xFFB6F0DA)
@@ -30,7 +29,6 @@ val CreamOutlineLight = Color(0xFF827865)
 val ErrorLight = Color(0xFFBA1A1A)
 val OnErrorLight = Color(0xFFFFFFFF)
 
-// ---------- Dark theme ----------
 val MintPrimaryDark = Color(0xFF8FD9BB)
 val MintOnPrimaryDark = Color(0xFF00382497)
 val MintPrimaryContainerDark = Color(0xFF0B5A40)
@@ -57,9 +55,9 @@ val ErrorDark = Color(0xFFFFB4AB)
 val OnErrorDark = Color(0xFF690005)
 
 /**
- * Дополнительные игровые токены цвета, не входящие в стандартную Material3-схему
- * (монеты, прогресс цели, обводка карточек и т.д.). Значения подобраны так,
- * чтобы хорошо читаться и в светлой, и в тёмной теме через [Composable]-геттеры.
+ * Additional game color tokens not included in the standard Material3 scheme
+ * (coins, goal progress, card borders, etc.). Values are chosen to be readable
+ * in both light and dark themes via [Composable]-getters.
  */
 object GameColors {
     val coin: Color
