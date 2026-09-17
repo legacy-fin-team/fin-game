@@ -10,7 +10,6 @@ class AnimalStorage(private val context: Context) {
 
     /**
      * Инициализация хранилища.
-     * @param inputStream Поток с XML-данными (например, из assets или res/raw).
      */
     fun initialize(inputStream: InputStream) {
         animals = xmlReader.readAnimals(inputStream)
@@ -38,8 +37,6 @@ class AnimalStorage(private val context: Context) {
 
     /**
      * Получение конкретных ассетов животного по их id.
-     * @param animalId id животного
-     * @param variantId id вида (варианта)
      */
     fun getAnimalAsset(animalId: String, variantId: String): AnimalVariant? {
         val animal = animals.find { it.id == animalId }

@@ -11,8 +11,6 @@ class AnimalXmlReader {
 
     /**
      * Считывает XML-документ и возвращает список животных.
-     * Класс спроектирован с учетом легкой расширяемости:
-     * Для добавления новых тегов достаточно добавить новый case в блок when (parser.name).
      */
     fun readAnimals(inputStream: InputStream): List<Animal> {
         val animals = mutableListOf<Animal>()
