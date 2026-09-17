@@ -1,4 +1,4 @@
-package com.legacy.fingame.ui.theme
+package com.legacy.fingame
 
 import androidx.compose.ui.graphics.Color
 

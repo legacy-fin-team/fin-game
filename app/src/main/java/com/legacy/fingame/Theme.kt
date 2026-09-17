@@ -1,6 +1,5 @@
-package com.legacy.fingame.ui.theme
+package com.legacy.fingame
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme

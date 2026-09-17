@@ -1,4 +1,4 @@
-package com.legacy.fingame.ui.theme
+package com.legacy.fingame
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

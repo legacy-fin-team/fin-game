@@ -1,4 +1,4 @@
-package com.legacy.fingame.utils
+package com.legacy.fingame
 
 import android.content.Context
 import android.graphics.drawable.Drawable
