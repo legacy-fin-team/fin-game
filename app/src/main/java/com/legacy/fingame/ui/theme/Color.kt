@@ -30,7 +30,7 @@ val ErrorLight = Color(0xFFBA1A1A)
 val OnErrorLight = Color(0xFFFFFFFF)
 
 val MintPrimaryDark = Color(0xFF8FD9BB)
-val MintOnPrimaryDark = Color(0xFF00382497)
+val MintOnPrimaryDark = Color(0xFF003824)
 val MintPrimaryContainerDark = Color(0xFF0B5A40)
 val MintOnPrimaryContainerDark = Color(0xFFB6F0DA)
 

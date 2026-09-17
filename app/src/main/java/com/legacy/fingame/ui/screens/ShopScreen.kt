@@ -1,6 +1,8 @@
 package com.legacy.fingame.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,6 +44,12 @@ import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 
+private val CloseButtonSize = 64.dp
+private val CategoryButtonSize = 56.dp
+private val CounterButtonSize = 48.dp
+private val StarButtonSize = 40.dp
+private val ItemCellMinSize = 170.dp
+
 /** How a card exposes its purchase controls. Presentation-only, never stored in the ViewModel. */
 enum class ShopItemMode { COUNTER, ADDABLE, PURCHASED }
 
@@ -56,9 +64,9 @@ fun ShopScreen(
     onIncrease: (String) -> Unit,
     onDecrease: (String) -> Unit,
     onClose: () -> Unit,
+    modifier: Modifier = Modifier,
     itemIds: List<String> = DemoContent.itemIds,
-    categoryIds: List<String> = DemoContent.categoryIds,
-    modifier: Modifier = Modifier
+    categoryIds: List<String> = DemoContent.categoryIds
 ) {
     Column(
         modifier = modifier
@@ -75,7 +83,8 @@ fun ShopScreen(
             SpriteButton(
                 assetPath = Sprites.CLOSE,
                 contentDescription = "Закрыть магазин",
-                onClick = onClose
+                onClick = onClose,
+                size = CloseButtonSize
             )
         }
 
@@ -92,7 +101,7 @@ fun ShopScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 150.dp),
+            columns = GridCells.Adaptive(minSize = ItemCellMinSize),
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -117,23 +126,28 @@ fun ShopScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Categories scroll horizontally so the "Купить" button always keeps its full width.
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 categoryIds.forEach { categoryId ->
                     SpriteButton(
                         assetPath = Sprites.shopCategory(categoryId),
                         contentDescription = "Категория товаров",
                         onClick = { onSelectCategory(categoryId) },
-                        size = 48.dp,
+                        size = CategoryButtonSize,
                         selected = categoryId == state.selectedCategoryId
                     )
                 }
             }
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.width(12.dp))
             PillButton(
                 text = "Купить",
                 // Purchase flow belongs to another team and will be wired in later.
-                onClick = {},
-                enabled = true
+                onClick = {}
             )
         }
     }
@@ -183,7 +197,7 @@ private fun ShopItemCard(
                     assetPath = if (inGoals) Sprites.STAR_ON else Sprites.STAR_OFF,
                     contentDescription = if (inGoals) "Убрать из целей" else "Добавить в цели",
                     onClick = { inGoals = !inGoals },
-                    size = 32.dp,
+                    size = StarButtonSize,
                     modifier = Modifier.align(Alignment.TopEnd)
                 )
             }
@@ -216,7 +230,7 @@ private fun ShopItemCard(
                         assetPath = Sprites.MINUS,
                         contentDescription = "Уменьшить количество",
                         onClick = { if (quantity > 0) onDecrease() },
-                        size = 36.dp
+                        size = CounterButtonSize
                     )
                     Text(
                         text = quantity.toString(),
@@ -229,7 +243,7 @@ private fun ShopItemCard(
                         assetPath = Sprites.PLUS,
                         contentDescription = "Увеличить количество",
                         onClick = onIncrease,
-                        size = 36.dp
+                        size = CounterButtonSize
                     )
                 }
 

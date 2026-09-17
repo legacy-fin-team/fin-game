@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -23,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.legacy.fingame.game.GameUiState
 import com.legacy.fingame.game.Screen
@@ -37,9 +40,13 @@ import com.legacy.fingame.ui.theme.GameColors
 
 private val ScreenPadding = 16.dp
 private val GoalCardWidth = 208.dp
-private val PrimaryActionSize = 64.dp
-private val SecondaryActionSize = 56.dp
+private val PrimaryActionSize = 80.dp
+private val SecondaryActionSize = 64.dp
+
+// The pet area is capped by height as well as width, otherwise in landscape it grows
+// past the screen and covers the corner buttons.
 private const val PetAreaWidthFraction = 0.74f
+private const val PetAreaHeightFraction = 0.52f
 
 // Demo-only progress value for the goal card: no goal data exists in the UI layer.
 private const val DemoGoalProgress = 0.4f
@@ -50,20 +57,26 @@ fun MainScreen(
     onOpenScreen: (Screen) -> Unit,
     onPrevSubLocation: () -> Unit,
     onNextSubLocation: () -> Unit,
+    modifier: Modifier = Modifier,
     petId: String = DemoContent.petId,
-    subLocationTitles: List<String> = DemoContent.subLocationTitles,
-    modifier: Modifier = Modifier
+    subLocationTitles: List<String> = DemoContent.subLocationTitles
 ) {
-    Box(
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .systemBarsPadding()
             .padding(ScreenPadding)
     ) {
+        val petAreaSize = minOf(
+            maxWidth * PetAreaWidthFraction,
+            maxHeight * PetAreaHeightFraction
+        )
+
         PetStage(
             petId = petId,
             subLocationTitle = subLocationTitles.getOrNull(state.subLocationIndex),
+            areaSize = petAreaSize,
             modifier = Modifier.align(Alignment.Center)
         )
 
@@ -97,48 +110,55 @@ fun MainScreen(
             )
         }
 
+        // Both bottom groups share one row so the enlarged buttons cannot overlap on narrow screens.
         Row(
-            modifier = Modifier.align(Alignment.BottomStart),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom
         ) {
-            SpriteButton(
-                assetPath = Sprites.ARROW_LEFT,
-                contentDescription = "Предыдущая подлокация",
-                onClick = onPrevSubLocation,
-                size = SecondaryActionSize
-            )
-            SpriteButton(
-                assetPath = Sprites.ARROW_RIGHT,
-                contentDescription = "Следующая подлокация",
-                onClick = onNextSubLocation,
-                size = SecondaryActionSize
-            )
-        }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SpriteButton(
+                    assetPath = Sprites.ARROW_LEFT,
+                    contentDescription = "Предыдущая подлокация",
+                    onClick = onPrevSubLocation,
+                    size = SecondaryActionSize
+                )
+                SpriteButton(
+                    assetPath = Sprites.ARROW_RIGHT,
+                    contentDescription = "Следующая подлокация",
+                    onClick = onNextSubLocation,
+                    size = SecondaryActionSize
+                )
+            }
 
-        Row(
-            modifier = Modifier.align(Alignment.BottomEnd),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            SpriteButton(
-                assetPath = Sprites.QUESTS,
-                contentDescription = "Открыть квесты",
-                onClick = { onOpenScreen(Screen.QUESTS) },
-                size = PrimaryActionSize
-            )
-            SpriteButton(
-                assetPath = Sprites.INVENTORY,
-                contentDescription = "Открыть инвентарь",
-                onClick = { onOpenScreen(Screen.INVENTORY) },
-                size = PrimaryActionSize
-            )
-            SpriteButton(
-                assetPath = Sprites.SHOP,
-                contentDescription = "Открыть магазин",
-                onClick = { onOpenScreen(Screen.SHOP) },
-                size = PrimaryActionSize
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                SpriteButton(
+                    assetPath = Sprites.QUESTS,
+                    contentDescription = "Открыть квесты",
+                    onClick = { onOpenScreen(Screen.QUESTS) },
+                    size = PrimaryActionSize
+                )
+                SpriteButton(
+                    assetPath = Sprites.INVENTORY,
+                    contentDescription = "Открыть инвентарь",
+                    onClick = { onOpenScreen(Screen.INVENTORY) },
+                    size = PrimaryActionSize
+                )
+                SpriteButton(
+                    assetPath = Sprites.SHOP,
+                    contentDescription = "Открыть магазин",
+                    onClick = { onOpenScreen(Screen.SHOP) },
+                    size = PrimaryActionSize
+                )
+            }
         }
     }
 }
@@ -148,10 +168,11 @@ fun MainScreen(
 private fun PetStage(
     petId: String,
     subLocationTitle: String?,
+    areaSize: Dp,
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.fillMaxWidth(PetAreaWidthFraction),
+        modifier = modifier.width(areaSize),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (subLocationTitle != null) {
@@ -173,7 +194,7 @@ private fun PetStage(
                     assetPath = Sprites.pet(petId),
                     contentDescription = "Питомец",
                     modifier = Modifier
-                        .fillMaxWidth(0.82f)
+                        .fillMaxWidth(0.88f)
                         .aspectRatio(1f)
                 )
             }
@@ -227,6 +248,21 @@ private fun MainScreenDarkPreview() {
         Surface(color = MaterialTheme.colorScheme.background) {
             MainScreen(
                 state = GameUiState(subLocationIndex = 1),
+                onOpenScreen = {},
+                onPrevSubLocation = {},
+                onNextSubLocation = {}
+            )
+        }
+    }
+}
+
+@Preview(name = "MainScreen — Landscape", showBackground = true, widthDp = 891, heightDp = 411)
+@Composable
+private fun MainScreenLandscapePreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            MainScreen(
+                state = GameUiState(subLocationIndex = 2),
                 onOpenScreen = {},
                 onPrevSubLocation = {},
                 onNextSubLocation = {}

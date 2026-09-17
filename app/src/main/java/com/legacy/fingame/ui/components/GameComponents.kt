@@ -1,16 +1,19 @@
 package com.legacy.fingame.ui.components
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -21,7 +24,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -31,7 +37,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
@@ -41,6 +46,7 @@ import kotlin.math.roundToInt
 /**
  * Draws a sprite from assets/textures/ via SpriteLoader + Coil.
  * Missing assets are expected to render error.webp for now — do not paper over this with fallbacks.
+ * FilterQuality.None keeps pixel-art edges crisp when the sprite is scaled up.
  */
 @Composable
 fun Sprite(
@@ -56,55 +62,62 @@ fun Sprite(
         model = request,
         contentDescription = contentDescription,
         modifier = modifier,
-        contentScale = ContentScale.Fit
+        contentScale = ContentScale.Fit,
+        filterQuality = FilterQuality.None
     )
 }
 
-/** Round tappable sprite. [selected] draws a primary-colored highlight ring (e.g. shop category tabs). */
+/**
+ * Tappable sprite with no background, border or shadow — the artwork is the whole button.
+ * [selected] is shown by dropping opacity/scale on the unselected state and drawing a thin
+ * underline beneath the selected one; there is no circular plate behind the image.
+ */
 @Composable
 fun SpriteButton(
     assetPath: String,
     contentDescription: String,
     onClick: () -> Unit,
-    size: Dp = 56.dp,
-    selected: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    size: Dp = 72.dp,
+    selected: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val ringColor = if (selected) MaterialTheme.colorScheme.primary else GameColors.cardStroke
-    val ringWidth = if (selected) 2.dp else 1.dp
+    val alpha = if (selected) 1f else 0.6f
+    val scale = if (selected) 1f else 0.92f
 
-    Surface(
+    Column(
         modifier = modifier
-            .size(size)
-            .shadow(elevation = 4.dp, shape = CircleShape, clip = false)
+            .clip(RoundedCornerShape(12.dp))
             .clickable(
                 interactionSource = interactionSource,
-                indication = ripple(bounded = true, radius = size / 2),
+                indication = ripple(),
                 onClick = onClick
             )
             .semantics { this.contentDescription = contentDescription },
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.primaryContainer,
-        border = BorderStroke(ringWidth, ringColor)
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Sprite(
-                assetPath = assetPath,
-                contentDescription = null,
-                modifier = Modifier
-                    .size(size * 0.6f)
-                    .padding(4.dp)
-            )
-        }
+        Sprite(
+            assetPath = assetPath,
+            contentDescription = null,
+            modifier = Modifier
+                .size(size)
+                .graphicsLayer(alpha = alpha, scaleX = scale, scaleY = scale)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Box(
+            modifier = Modifier
+                .width(size * 0.4f)
+                .height(2.dp)
+                .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
+        )
     }
 }
 
 /** Player balance pill: coin sprite + externally supplied text. No number formatting happens here. */
 @Composable
 fun BalanceChip(
-    text: String = "Баланс",
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    text: String = "Баланс"
 ) {
     Surface(
         modifier = modifier.wrapContentSize(),
@@ -119,7 +132,7 @@ fun BalanceChip(
             Sprite(
                 assetPath = Sprites.COIN,
                 contentDescription = null,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(28.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
@@ -134,9 +147,9 @@ fun BalanceChip(
 /** Current-goal card. [progress] is supplied by the caller; the only computation here is clamping and % formatting. */
 @Composable
 fun GoalCard(
-    title: String = "текущая цель",
     progress: Float,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    title: String = "текущая цель"
 ) {
     val clampedProgress = progress.coerceIn(0f, 1f)
     val percentText = "${(clampedProgress * 100).roundToInt()}%"
@@ -149,7 +162,7 @@ fun GoalCard(
         shadowElevation = 2.dp
     ) {
         Box(modifier = Modifier.padding(16.dp)) {
-            androidx.compose.foundation.layout.Column(modifier = Modifier.wrapContentSize()) {
+            Column(modifier = Modifier.wrapContentSize()) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
@@ -184,8 +197,8 @@ fun GoalCard(
 fun PillButton(
     text: String,
     onClick: () -> Unit,
-    enabled: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     val containerColor = if (enabled) MaterialTheme.colorScheme.primary else GameColors.disabledContainer
     val contentColor = if (enabled) MaterialTheme.colorScheme.onPrimary else GameColors.disabledContent
@@ -241,15 +254,15 @@ private fun GameComponentsDarkPreview() {
 
 @Composable
 private fun PreviewContent() {
-    androidx.compose.foundation.layout.Column(
+    Column(
         modifier = Modifier.padding(16.dp),
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Row(
-            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Sprite(assetPath = Sprites.pet("cat"), contentDescription = "Питомец", modifier = Modifier.size(56.dp))
+            Sprite(assetPath = Sprites.pet("cat"), contentDescription = "Питомец", modifier = Modifier.size(72.dp))
             SpriteButton(
                 assetPath = Sprites.SHOP,
                 contentDescription = "Открыть магазин",
@@ -264,7 +277,7 @@ private fun PreviewContent() {
             BalanceChip(text = "12 400 ₽")
         }
         GoalCard(title = "Велосипед", progress = 0.64f)
-        Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             PillButton(text = "Купить", onClick = {})
             PillButton(text = "Недоступно", onClick = {}, enabled = false)
         }

@@ -37,7 +37,7 @@ fun PlaceholderScreen(
             assetPath = Sprites.CLOSE,
             contentDescription = "Закрыть",
             onClick = onBack,
-            size = 48.dp,
+            size = 64.dp,
             modifier = Modifier.align(Alignment.TopEnd)
         )
         Column(
@@ -48,7 +48,7 @@ fun PlaceholderScreen(
             Sprite(
                 assetPath = iconPath,
                 contentDescription = title,
-                modifier = Modifier.size(96.dp)
+                modifier = Modifier.size(140.dp)
             )
             Text(text = title, style = MaterialTheme.typography.headlineMedium)
             Text(
