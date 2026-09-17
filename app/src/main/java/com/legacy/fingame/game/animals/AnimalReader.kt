@@ -9,11 +9,11 @@ class AnimalReader {
     private val TAG = "AnimalReader"
 
     /**
-     * Считывает XML документ и возвращает список животных.
+     * Считывает XML документ и возвращает словарь животных (ключ - id).
      * Не проверяет реальное существование путей.
      */
-    fun readAnimals(inputStream: InputStream): List<Animal> {
-        val animals = mutableListOf<Animal>()
+    fun readAnimals(inputStream: InputStream): Map<String, Animal> {
+        val animals = mutableMapOf<String, Animal>()
         var totalVariants = 0
 
         val factory = DocumentBuilderFactory.newInstance()
@@ -50,7 +50,7 @@ class AnimalReader {
                     throw IllegalArgumentException(msg)
                 }
 
-                val variantList = mutableListOf<AnimalVariant>()
+                val variantMap = mutableMapOf<String, String>()
                 val variantNodes = variantsElement.getElementsByTagName("variant")
 
                 for (j in 0 until variantNodes.length) {
@@ -63,18 +63,26 @@ class AnimalReader {
                             Log.e(TAG, msg)
                             throw IllegalArgumentException(msg)
                         }
-                        variantList.add(AnimalVariant(id = variantId))
+                        
+                        // Формируем полный путь до спрайтов
+                        val fullPath = if (variantsPath.endsWith("/")) {
+                            "$variantsPath$variantId"
+                        } else {
+                            "$variantsPath/$variantId"
+                        }
+                        
+                        variantMap[variantId] = fullPath
                     }
                 }
 
-                // =========================================================================
-                // Место для считывания новых тегов.
-                // Система легко расширяется: просто добавьте парсинг новых тегов здесь, 
-                // не затрагивая уже написанный код для <variants>.
-                // =========================================================================
+                if (variantMap.isEmpty()) {
+                    val msg = "У животного с id = '$animalId' нет ни одного варианта (тега <variant>)."
+                    Log.e(TAG, msg)
+                    throw IllegalArgumentException(msg)
+                }
 
-                animals.add(Animal(id = animalId, variantsPath = variantsPath, variants = variantList))
-                totalVariants += variantList.size
+                animals[animalId] = Animal(id = animalId, variants = variantMap)
+                totalVariants += variantMap.size
             }
         }
 
