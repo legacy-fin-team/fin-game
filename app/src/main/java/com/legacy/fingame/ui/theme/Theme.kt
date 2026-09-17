@@ -58,6 +58,11 @@ private val DarkColorScheme = darkColorScheme(
  * FinGame app theme — cozy casual-game palette (mint + amber).
  * Android 12+ dynamic colors are disabled by default to keep the brand palette
  * recognizable regardless of user wallpapers.
+ *
+ * @param darkTheme whether to use the dark color scheme; defaults to the system setting.
+ * @param dynamicColor whether to use Android 12+ dynamic (wallpaper-based) colors instead of
+ *   the brand palette; disabled by default.
+ * @param content the app content to render inside this theme.
  */
 @Composable
 fun FinGameTheme(

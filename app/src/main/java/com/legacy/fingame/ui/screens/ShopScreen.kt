@@ -56,6 +56,25 @@ enum class ShopItemMode { COUNTER, ADDABLE, PURCHASED }
 /**
  * Shop screen. It receives plain ids and builds blocks out of them — no prices, names or
  * catalog models are known here; visible labels are the placeholders from the customer's mockup.
+ *
+ * Layout:
+ * - Top: balance chip and a close button.
+ * - Below that: the current category title, then a scrollable grid of item cards
+ *   ([ShopItemCard]), one per id in [itemIds].
+ * - Bottom: category buttons ([categoryIds]) in a row that scrolls horizontally (so the row can
+ *   hold any number of categories) next to a "Купить" button that always keeps its full width.
+ *
+ * @param state current game state; [GameUiState.quantities] supplies the quantity shown on each
+ *   item card (keyed by item id) and [GameUiState.selectedCategoryId] marks which category button
+ *   is highlighted.
+ * @param onSelectCategory called with the id of the category button that was pressed.
+ * @param onIncrease called with the id of the item whose quantity should be increased.
+ * @param onDecrease called with the id of the item whose quantity should be decreased.
+ * @param onClose called when the close button is pressed.
+ * @param modifier modifier applied to the screen root.
+ * @param itemIds ids of the products the shop turns into cards; defaults to the demo content ids.
+ * @param categoryIds ids of the category buttons shown at the bottom; defaults to the demo
+ *   content ids.
  */
 @Composable
 fun ShopScreen(
@@ -90,6 +109,7 @@ fun ShopScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
+        // TODO: "Название категории" is a static placeholder title; replace with the selected category's real display name from app/catalog logic.
         Text(
             text = "Название категории",
             style = MaterialTheme.typography.titleMedium,
@@ -113,6 +133,7 @@ fun ShopScreen(
                 ShopItemCard(
                     itemId = itemId,
                     quantity = state.quantities[itemId] ?: 0,
+                    // TODO: demoModeFor picks the card mode by grid index; replace with the mode derived from the item's real data (e.g. purchase state, type).
                     mode = demoModeFor(index),
                     onIncrease = { onIncrease(itemId) },
                     onDecrease = { onDecrease(itemId) }
@@ -126,7 +147,6 @@ fun ShopScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Categories scroll horizontally so the "Купить" button always keeps its full width.
             Row(
                 modifier = Modifier
                     .weight(1f)
@@ -146,20 +166,37 @@ fun ShopScreen(
             Spacer(modifier = Modifier.width(12.dp))
             PillButton(
                 text = "Купить",
-                // Purchase flow belongs to another team and will be wired in later.
+                // TODO: onClick is empty; wire up the purchase flow once that logic is implemented (owned by another team).
                 onClick = {}
             )
         }
     }
 }
 
-/** Demo-only layout rule: every fifth card looks purchased, every third offers add/remove. */
+/**
+ * Demo-only layout rule: every fifth card looks purchased, every third offers add/remove.
+ *
+ * @param index position of the item within the grid.
+ * @return the [ShopItemMode] to render for the card at [index].
+ */
+// TODO: demoModeFor derives the card mode from grid position only; replace with a mode based on the item's actual purchase state / type once that data is available.
 private fun demoModeFor(index: Int): ShopItemMode = when {
     (index + 1) % 5 == 0 -> ShopItemMode.PURCHASED
     (index + 1) % 3 == 0 -> ShopItemMode.ADDABLE
     else -> ShopItemMode.COUNTER
 }
 
+/**
+ * Single shop item card: image with a "add to goals" star toggle, name/price placeholders and
+ * a purchase control that depends on [mode].
+ *
+ * @param itemId id of the item to render (used to look up its sprite).
+ * @param quantity current quantity of this item, shown by the [ShopItemMode.COUNTER] control.
+ * @param mode which purchase control to show; see [ShopItemMode].
+ * @param onIncrease called to increase this item's quantity.
+ * @param onDecrease called to decrease this item's quantity.
+ * @param modifier modifier applied to the card surface.
+ */
 @Composable
 private fun ShopItemCard(
     itemId: String,
@@ -169,7 +206,7 @@ private fun ShopItemCard(
     onDecrease: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Goal toggle is local UI state until the team defines where goals actually live.
+    // TODO: "in goals" star state is local UI state; move it to the goals logic/data layer once the team defines where goals actually live.
     var inGoals by remember { mutableStateOf(false) }
 
     Surface(
@@ -204,6 +241,7 @@ private fun ShopItemCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
+            // TODO: "Название" is a placeholder; replace with the item's real display name.
             Text(
                 text = "Название",
                 style = MaterialTheme.typography.bodyLarge,
@@ -211,6 +249,7 @@ private fun ShopItemCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            // TODO: "стоимость" is a placeholder; replace with the item's real price.
             Text(
                 text = "стоимость",
                 style = MaterialTheme.typography.bodySmall,
@@ -268,8 +307,7 @@ private fun ShopItemCard(
     }
 }
 
-// ---------- Previews ----------
-
+/** Preview of [ShopScreen] in the light theme. */
 @Preview(name = "Shop — Light", showBackground = true)
 @Composable
 private fun ShopScreenLightPreview() {
@@ -286,6 +324,7 @@ private fun ShopScreenLightPreview() {
     }
 }
 
+/** Preview of [ShopScreen] in the dark theme. */
 @Preview(name = "Shop — Dark", showBackground = true)
 @Composable
 private fun ShopScreenDarkPreview() {

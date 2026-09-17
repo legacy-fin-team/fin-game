@@ -43,14 +43,47 @@ private val GoalCardWidth = 208.dp
 private val PrimaryActionSize = 80.dp
 private val SecondaryActionSize = 64.dp
 
-// The pet area is capped by height as well as width, otherwise in landscape it grows
-// past the screen and covers the corner buttons.
+/**
+ * Fraction of the available width the pet area may occupy. Combined with
+ * [PetAreaHeightFraction] to keep the pet card from growing past the screen in landscape
+ * and covering the corner buttons.
+ */
 private const val PetAreaWidthFraction = 0.74f
+
+/**
+ * Fraction of the available height the pet area may occupy. See [PetAreaWidthFraction].
+ */
 private const val PetAreaHeightFraction = 0.52f
 
-// Demo-only progress value for the goal card: no goal data exists in the UI layer.
+// TODO: DemoGoalProgress is a hardcoded placeholder for the goal card progress bar. Replace with the real progress value once goal data is exposed from app logic.
 private const val DemoGoalProgress = 0.4f
 
+/**
+ * Main game screen: shows the pet, current balance/goal progress, and navigation entry
+ * points to the other screens.
+ *
+ * Layout:
+ * - Center: [PetStage] with the pet sprite and the current sub-location badge above it. The
+ *   pet area is sized from both the available width and height ([PetAreaWidthFraction],
+ *   [PetAreaHeightFraction]) so it cannot grow past the screen in landscape and cover the
+ *   corner buttons.
+ * - Top-start: balance chip and goal progress card.
+ * - Top-end: secondary buttons for opening settings and locations.
+ * - Bottom: a single row split into two groups — sub-location navigation arrows (start) and
+ *   primary action buttons for quests/inventory/shop (end). Both groups are combined into one
+ *   row so the enlarged action buttons cannot overlap each other on narrow screens.
+ *
+ * @param state current game state; [GameUiState.subLocationIndex] selects which title from
+ *   [subLocationTitles] is shown above the pet.
+ * @param onOpenScreen called with the [Screen] that should be opened when a navigation button
+ *   (settings, locations, quests, inventory, shop) is pressed.
+ * @param onPrevSubLocation called when the "previous sub-location" arrow is pressed.
+ * @param onNextSubLocation called when the "next sub-location" arrow is pressed.
+ * @param modifier modifier applied to the screen root.
+ * @param petId id of the pet sprite to display; defaults to the demo content pet id.
+ * @param subLocationTitles titles for each sub-location, indexed by
+ *   [GameUiState.subLocationIndex]; defaults to the demo content titles.
+ */
 @Composable
 fun MainScreen(
     state: GameUiState,
@@ -58,7 +91,9 @@ fun MainScreen(
     onPrevSubLocation: () -> Unit,
     onNextSubLocation: () -> Unit,
     modifier: Modifier = Modifier,
+    // TODO: default pulls from demo content; replace with the player's actually owned/selected pet id.
     petId: String = DemoContent.petId,
+    // TODO: default pulls from demo content; replace with real sub-location names for the current location.
     subLocationTitles: List<String> = DemoContent.subLocationTitles
 ) {
     BoxWithConstraints(
@@ -110,7 +145,6 @@ fun MainScreen(
             )
         }
 
-        // Both bottom groups share one row so the enlarged buttons cannot overlap on narrow screens.
         Row(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -163,7 +197,16 @@ fun MainScreen(
     }
 }
 
-/** Square pet card with the current sub-location badge above it. */
+/**
+ * Square pet card with the current sub-location badge shown above it.
+ *
+ * @param petId id of the pet sprite to render.
+ * @param subLocationTitle title of the current sub-location shown in the badge above the pet,
+ *   or `null` to hide the badge.
+ * @param areaSize side length of the square pet card; the caller computes it from both the
+ *   available width and height so the pet cannot grow past the screen in landscape.
+ * @param modifier modifier applied to the root column.
+ */
 @Composable
 private fun PetStage(
     petId: String,
@@ -202,6 +245,12 @@ private fun PetStage(
     }
 }
 
+/**
+ * Pill-shaped badge showing the current sub-location name, displayed above the pet.
+ *
+ * @param title text to display inside the badge.
+ * @param modifier modifier applied to the badge surface.
+ */
 @Composable
 private fun SubLocationBadge(
     title: String,
@@ -224,8 +273,7 @@ private fun SubLocationBadge(
     }
 }
 
-// ---------- Previews ----------
-
+/** Preview of [MainScreen] in the light theme, portrait orientation. */
 @Preview(name = "MainScreen — Light", showBackground = true, widthDp = 411, heightDp = 891)
 @Composable
 private fun MainScreenLightPreview() {
@@ -241,6 +289,7 @@ private fun MainScreenLightPreview() {
     }
 }
 
+/** Preview of [MainScreen] in the dark theme, portrait orientation. */
 @Preview(name = "MainScreen — Dark", showBackground = true, widthDp = 411, heightDp = 891)
 @Composable
 private fun MainScreenDarkPreview() {
@@ -256,6 +305,7 @@ private fun MainScreenDarkPreview() {
     }
 }
 
+/** Preview of [MainScreen] in the light theme, landscape orientation. */
 @Preview(name = "MainScreen — Landscape", showBackground = true, widthDp = 891, heightDp = 411)
 @Composable
 private fun MainScreenLandscapePreview() {

@@ -85,5 +85,6 @@ object GameColors {
         @Composable get() = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
 }
 
+/** @return whether the system is currently in dark theme. */
 @Composable
 private fun isSystemDark(): Boolean = androidx.compose.foundation.isSystemInDarkTheme()

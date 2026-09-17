@@ -20,6 +20,18 @@ import com.legacy.fingame.ui.screens.MainScreen
 import com.legacy.fingame.ui.screens.PlaceholderScreen
 import com.legacy.fingame.ui.screens.ShopScreen
 
+/**
+ * Root composable of the app: hosts the current [Screen] behind a fade animation and wires
+ * back-press handling to close any non-main screen.
+ *
+ * Layout: a full-size [Surface] with an [AnimatedContent] that cross-fades between
+ * [MainScreen], [ShopScreen] and the [PlaceholderScreen] instances for the yet-unspecified
+ * sections (inventory, quests, locations, options), based on [GameUiState.screen].
+ *
+ * @param modifier modifier applied to the root surface.
+ * @param vm view model providing [GameUiState] and the navigation/action callbacks passed down
+ *   to each screen; defaults to a [GameViewModel] scoped to this composable.
+ */
 @Composable
 fun FinGameApp(
     modifier: Modifier = Modifier,

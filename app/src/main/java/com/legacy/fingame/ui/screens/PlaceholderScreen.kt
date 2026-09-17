@@ -19,7 +19,17 @@ import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.theme.FinGameTheme
 
-/** Screen stub for sections the customer has not specified yet. */
+/**
+ * Screen stub for sections the customer has not specified yet.
+ *
+ * Layout: a close button in the top-end corner, and a centered column with the section icon,
+ * its title and a "in development" caption.
+ *
+ * @param title section title shown under the icon (e.g. "Инвентарь", "Квесты").
+ * @param iconPath sprite path of the icon shown above the title.
+ * @param onBack called when the close button is pressed.
+ * @param modifier modifier applied to the screen root.
+ */
 @Composable
 fun PlaceholderScreen(
     title: String,
@@ -51,6 +61,7 @@ fun PlaceholderScreen(
                 modifier = Modifier.size(140.dp)
             )
             Text(text = title, style = MaterialTheme.typography.headlineMedium)
+            // TODO: "Раздел в разработке" is a temporary placeholder caption; replace once the customer provides requirements for this section.
             Text(
                 text = "Раздел в разработке",
                 style = MaterialTheme.typography.bodyMedium,
@@ -60,6 +71,7 @@ fun PlaceholderScreen(
     }
 }
 
+/** Preview of [PlaceholderScreen] for the inventory section. */
 @Preview(showBackground = true)
 @Composable
 private fun PlaceholderPreview() {

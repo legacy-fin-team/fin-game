@@ -44,9 +44,18 @@ import com.legacy.fingame.utils.SpriteLoader
 import kotlin.math.roundToInt
 
 /**
- * Draws a sprite from assets/textures/ via SpriteLoader + Coil.
- * Missing assets are expected to render error.webp for now — do not paper over this with fallbacks.
- * FilterQuality.None keeps pixel-art edges crisp when the sprite is scaled up.
+ * Draws a sprite from `assets/textures/` via [SpriteLoader] and Coil.
+ *
+ * Uses [FilterQuality.None] so pixel-art edges stay crisp when the sprite is scaled up, instead of
+ * being smoothed by bilinear filtering.
+ *
+ * @param assetPath path to the sprite, relative to `assets/textures/`. If the file at this path
+ *   does not exist, [SpriteLoader] automatically falls back to `error.webp` — that is expected
+ *   behavior while assets are being produced, not a bug, so callers should not add their own
+ *   fallback handling for missing files.
+ * @param contentDescription accessibility description announced for this image, or `null` when
+ *   the sprite is purely decorative and should be skipped by screen readers.
+ * @param modifier modifier applied to the underlying [AsyncImage].
  */
 @Composable
 fun Sprite(
@@ -68,9 +77,20 @@ fun Sprite(
 }
 
 /**
- * Tappable sprite with no background, border or shadow — the artwork is the whole button.
- * [selected] is shown by dropping opacity/scale on the unselected state and drawing a thin
- * underline beneath the selected one; there is no circular plate behind the image.
+ * Tappable sprite with no background, border or shadow — the artwork itself is the whole button.
+ *
+ * When [selected] is `false`, the sprite is drawn at reduced opacity and scale and no underline is
+ * shown. When [selected] is `true`, the sprite is drawn at full opacity/scale and a thin underline
+ * is drawn beneath it to highlight the active item; there is no circular plate behind the image in
+ * either state.
+ *
+ * @param assetPath path to the sprite, relative to `assets/textures/`, passed through to [Sprite].
+ * @param contentDescription accessibility description for the tappable element.
+ * @param onClick called when the button is tapped.
+ * @param modifier modifier applied to the outer [Column] container.
+ * @param size side length (width and height) of the square sprite image.
+ * @param selected whether this item is the currently active/selected one; when `true`, the sprite
+ *   is shown at full opacity/scale and an underline is drawn beneath it to highlight it.
  */
 @Composable
 fun SpriteButton(
@@ -113,10 +133,19 @@ fun SpriteButton(
     }
 }
 
-/** Player balance pill: coin sprite + externally supplied text. No number formatting happens here. */
+/**
+ * Player balance pill: coin sprite plus externally supplied text.
+ *
+ * No number formatting happens here — [text] is rendered as-is.
+ *
+ * @param modifier modifier applied to the outer [Surface].
+ * @param text label displayed next to the coin sprite; expected to already be formatted (e.g. with
+ *   currency and thousands separators) by the caller.
+ */
 @Composable
 fun BalanceChip(
     modifier: Modifier = Modifier,
+    // TODO: replace this placeholder with the player's real balance from app logic.
     text: String = "Баланс"
 ) {
     Surface(
@@ -144,11 +173,23 @@ fun BalanceChip(
     }
 }
 
-/** Current-goal card. [progress] is supplied by the caller; the only computation here is clamping and % formatting. */
+/**
+ * Current-goal card: title, progress bar and percentage text.
+ *
+ * [progress] is supplied by the caller; the only computation performed here is clamping it to
+ * `0f..1f` and formatting it as a rounded percentage string.
+ *
+ * @param progress fraction of the goal completed, in the `0f..1f` range; values outside that range
+ *   are clamped before being used.
+ * @param modifier modifier applied to the outer [Surface].
+ * @param title label displayed above the progress bar, truncated with an ellipsis if it does not
+ *   fit on one line.
+ */
 @Composable
 fun GoalCard(
     progress: Float,
     modifier: Modifier = Modifier,
+    // TODO: replace this placeholder with the player's real current goal title from app logic.
     title: String = "текущая цель"
 ) {
     val clampedProgress = progress.coerceIn(0f, 1f)
@@ -192,7 +233,15 @@ fun GoalCard(
     }
 }
 
-/** Pill-shaped button; muted appearance when [enabled] is false. */
+/**
+ * Pill-shaped button with a muted appearance when [enabled] is `false`.
+ *
+ * @param text label displayed inside the pill.
+ * @param onClick called when the button is tapped; not invoked while [enabled] is `false`.
+ * @param modifier modifier applied to the outer [Surface].
+ * @param enabled whether the button responds to taps; when `false`, the button is rendered with
+ *   the disabled container/content colors and taps are ignored.
+ */
 @Composable
 fun PillButton(
     text: String,
@@ -229,8 +278,6 @@ fun PillButton(
         }
     }
 }
-
-// ---------- Previews ----------
 
 @Preview(name = "Components — Light", showBackground = true)
 @Composable
