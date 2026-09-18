@@ -80,7 +80,9 @@ private const val DemoGoalProgress = 0.4f
  * @param onPrevSubLocation called when the "previous sub-location" arrow is pressed.
  * @param onNextSubLocation called when the "next sub-location" arrow is pressed.
  * @param modifier modifier applied to the screen root.
- * @param petId id of the pet sprite to display; defaults to the demo content pet id.
+ * @param petId species id of the pet to display; defaults to the demo content pet id.
+ * @param petVariantId variant id of that pet (its colouring or skin); together with [petId] it
+ *   resolves the sprite, defaults to the demo content variant id.
  * @param subLocationTitles titles for each sub-location, indexed by
  *   [GameUiState.subLocationIndex]; defaults to the demo content titles.
  */
@@ -93,6 +95,8 @@ fun MainScreen(
     modifier: Modifier = Modifier,
     // TODO: default pulls from demo content; replace with the player's actually owned/selected pet id.
     petId: String = DemoContent.petId,
+    // TODO: default pulls from demo content; replace with the variant the player's pet was created with.
+    petVariantId: String = DemoContent.petVariantId,
     // TODO: default pulls from demo content; replace with real sub-location names for the current location.
     subLocationTitles: List<String> = DemoContent.subLocationTitles
 ) {
@@ -110,6 +114,7 @@ fun MainScreen(
 
         PetStage(
             petId = petId,
+            petVariantId = petVariantId,
             subLocationTitle = subLocationTitles.getOrNull(state.subLocationIndex),
             areaSize = petAreaSize,
             modifier = Modifier.align(Alignment.Center)
@@ -200,7 +205,8 @@ fun MainScreen(
 /**
  * Square pet card with the current sub-location badge shown above it.
  *
- * @param petId id of the pet sprite to render.
+ * @param petId species id of the pet to render.
+ * @param petVariantId variant id of that pet; both ids are required to resolve its sprite.
  * @param subLocationTitle title of the current sub-location shown in the badge above the pet,
  *   or `null` to hide the badge.
  * @param areaSize side length of the square pet card; the caller computes it from both the
@@ -210,6 +216,7 @@ fun MainScreen(
 @Composable
 private fun PetStage(
     petId: String,
+    petVariantId: String,
     subLocationTitle: String?,
     areaSize: Dp,
     modifier: Modifier = Modifier
@@ -234,7 +241,7 @@ private fun PetStage(
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Sprite(
-                    assetPath = Sprites.pet(petId),
+                    assetPath = Sprites.pet(petId, petVariantId),
                     contentDescription = "Питомец",
                     modifier = Modifier
                         .fillMaxWidth(0.88f)

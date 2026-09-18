@@ -35,7 +35,9 @@ enum class Screen {
  * [DemoContent.categoryIds]. Defaults to the first available category.
  * @property quantities per-item counters keyed by item id (see [DemoContent.itemIds]).
  * This is UI-only state (e.g. quantity pickers in the shop) and is not related to an
- * actual purchase/cart.
+ * actual purchase/cart. Each counter is capped at [GameViewModel.MAX_ITEM_QUANTITY] and
+ * is reset whenever the player navigates away from [Screen.SHOP], so an unpurchased
+ * selection does not persist across shop visits.
  * @property subLocationIndex index of the currently displayed sub-location within
  * [DemoContent.subLocationTitles].
  */
@@ -52,6 +54,17 @@ data class GameUiState(
  */
 class GameViewModel : ViewModel() {
 
+    /**
+     * Constant limits for [GameViewModel]'s UI state.
+     */
+    companion object {
+        /**
+         * Maximum value a [GameUiState.quantities] counter can reach. Keeps the quantity
+         * text short enough to always fit on screen.
+         */
+        const val MAX_ITEM_QUANTITY = 99
+    }
+
     private val _state = MutableStateFlow(GameUiState())
 
     /** Current [GameUiState], observed by the UI. */
@@ -61,18 +74,38 @@ class GameViewModel : ViewModel() {
      * Switches the currently displayed screen.
      *
      * To return to the main screen, prefer [closeScreen] instead of passing [Screen.MAIN] here.
+     * When navigating away from [Screen.SHOP] to a different screen, any unpurchased
+     * [GameUiState.quantities] picked in the shop are reset.
      *
      * @param screen the screen to navigate to.
      */
     fun openScreen(screen: Screen) {
-        _state.value = _state.value.copy(screen = screen)
+        _state.value = stateForNavigatingTo(screen)
     }
 
     /**
      * Returns the player to the main screen, equivalent to `openScreen(`[Screen.MAIN]`)`.
+     * If the player was on [Screen.SHOP], any unpurchased [GameUiState.quantities] picked
+     * in the shop are reset.
      */
     fun closeScreen() {
-        _state.value = _state.value.copy(screen = Screen.MAIN)
+        _state.value = stateForNavigatingTo(Screen.MAIN)
+    }
+
+    /**
+     * Builds the state resulting from navigating to [screen], resetting
+     * [GameUiState.quantities] when the current screen is [Screen.SHOP] and [screen] is not.
+     *
+     * @param screen the screen to navigate to.
+     */
+    private fun stateForNavigatingTo(screen: Screen): GameUiState {
+        val previous = _state.value
+        val quantities = if (previous.screen == Screen.SHOP && screen != Screen.SHOP) {
+            emptyMap()
+        } else {
+            previous.quantities
+        }
+        return previous.copy(screen = screen, quantities = quantities)
     }
 
     /**
@@ -85,14 +118,17 @@ class GameViewModel : ViewModel() {
     }
 
     /**
-     * Increments the quantity counter for the given item by one.
+     * Increments the quantity counter for the given item by one, up to
+     * [MAX_ITEM_QUANTITY]. Calling this when the counter is already at
+     * [MAX_ITEM_QUANTITY] has no effect.
      *
      * @param itemId id of the item whose counter to increase, the same id the shop
      * uses to build the item's card (see [DemoContent.itemIds]).
      */
     fun increaseQty(itemId: String) {
         val current = _state.value.quantities
-        val updated = current + (itemId to (current[itemId] ?: 0) + 1)
+        val newQty = minOf((current[itemId] ?: 0) + 1, MAX_ITEM_QUANTITY)
+        val updated = current + (itemId to newQty)
         _state.value = _state.value.copy(quantities = updated)
     }
 

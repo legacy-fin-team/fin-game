@@ -24,6 +24,13 @@ object DemoContent {
         "Гостиная", "Кухня", "Спальня", "Двор"
     )
 
-    /** Id of the player's pet. TODO: replace with the real pet id from the data layer built by the team. */
+    /** Species id of the player's pet. TODO: replace with the real pet id from the data layer built by the team. */
     const val petId: String = "cat"
+
+    /**
+     * Variant id of the player's pet: an animal is identified by its species plus the variant it
+     * was created with, and both are needed to resolve its sprites.
+     * TODO: replace with the real variant id from the data layer built by the team.
+     */
+    const val petVariantId: String = "white"
 }

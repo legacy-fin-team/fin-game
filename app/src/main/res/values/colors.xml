@@ -1,3 +1,67 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+
+    <!-- Material3 light scheme — mint + amber cozy casual-game palette -->
+    <color name="primary_light">#FF2E9C7A</color>
+    <color name="on_primary_light">#FFFFFFFF</color>
+    <color name="primary_container_light">#FFB6F0DA</color>
+    <color name="on_primary_container_light">#FF00311F</color>
+
+    <color name="secondary_light">#FFE0912B</color>
+    <color name="on_secondary_light">#FFFFFFFF</color>
+    <color name="secondary_container_light">#FFFFDDB0</color>
+    <color name="on_secondary_container_light">#FF4A2B00</color>
+
+    <color name="tertiary_light">#FFE0745F</color>
+    <color name="on_tertiary_light">#FFFFFFFF</color>
+    <color name="tertiary_container_light">#FFFFDAD1</color>
+    <color name="on_tertiary_container_light">#FF3E0A00</color>
+
+    <color name="background_light">#FFFFF8EE</color>
+    <color name="on_background_light">#FF231B10</color>
+    <color name="surface_light">#FFFFFBF4</color>
+    <color name="on_surface_light">#FF231B10</color>
+    <color name="surface_variant_light">#FFF1E4CE</color>
+    <color name="on_surface_variant_light">#FF504536</color>
+    <color name="outline_light">#FF827865</color>
+    <color name="error_light">#FFBA1A1A</color>
+    <color name="on_error_light">#FFFFFFFF</color>
+
+    <!-- Material3 dark scheme — mint + amber cozy casual-game palette -->
+    <color name="primary_dark">#FF8FD9BB</color>
+    <color name="on_primary_dark">#FF003824</color>
+    <color name="primary_container_dark">#FF0B5A40</color>
+    <color name="on_primary_container_dark">#FFB6F0DA</color>
+
+    <color name="secondary_dark">#FFF6BC6A</color>
+    <color name="on_secondary_dark">#FF4A2B00</color>
+    <color name="secondary_container_dark">#FF6B4200</color>
+    <color name="on_secondary_container_dark">#FFFFDDB0</color>
+
+    <color name="tertiary_dark">#FFFFB4A2</color>
+    <color name="on_tertiary_dark">#FF5F1200</color>
+    <color name="tertiary_container_dark">#FF7F2A15</color>
+    <color name="on_tertiary_container_dark">#FFFFDAD1</color>
+
+    <color name="background_dark">#FF14181F</color>
+    <color name="on_background_dark">#FFE4E2DD</color>
+    <color name="surface_dark">#FF1B2029</color>
+    <color name="on_surface_dark">#FFE4E2DD</color>
+    <color name="surface_variant_dark">#FF3A4048</color>
+    <color name="on_surface_variant_dark">#FFC3C9CF</color>
+    <color name="outline_dark">#FF8C939A</color>
+    <color name="error_dark">#FFFFB4AB</color>
+    <color name="on_error_dark">#FF690005</color>
+
+    <!-- Extra game tokens (coins, success state, card shadow base color) -->
+    <color name="game_coin_light">#FFE0912B</color>
+    <color name="game_coin_dark">#FFFFCB66</color>
+
+    <color name="game_success_light">#FF2E9C7A</color>
+    <color name="game_success_dark">#FF8FD9BB</color>
+
+    <!-- Fully opaque base color; alpha is applied at composition time -->
+    <color name="game_card_shadow_base_light">#FF7A6A4E</color>
+    <color name="game_card_shadow_base_dark">#FF000000</color>
+
 </resources>

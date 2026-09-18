@@ -95,7 +95,7 @@ fun ShopScreen(
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Top
         ) {
             BalanceChip()
             Spacer(modifier = Modifier.weight(1f))

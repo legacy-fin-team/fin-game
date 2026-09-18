@@ -24,10 +24,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -61,7 +63,8 @@ import kotlin.math.roundToInt
 fun Sprite(
     assetPath: String,
     contentDescription: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    colorFilter: ColorFilter? = null
 ) {
     val context = LocalContext.current
     val loader = remember(context) { SpriteLoader(context) }
@@ -72,7 +75,8 @@ fun Sprite(
         contentDescription = contentDescription,
         modifier = modifier,
         contentScale = ContentScale.Fit,
-        filterQuality = FilterQuality.None
+        filterQuality = FilterQuality.None,
+        colorFilter = colorFilter
     )
 }
 
@@ -92,6 +96,9 @@ fun Sprite(
  * @param selected whether this item is the currently active/selected one; when `true`, the sprite
  *   is shown at full opacity/scale and an underline is drawn beneath it to highlight it.
  */
+/** Translucent black laid over a sprite while its button is held down. */
+private val PressedOverlayColor = Color(0x59000000)
+
 @Composable
 fun SpriteButton(
     assetPath: String,
@@ -102,15 +109,18 @@ fun SpriteButton(
     selected: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val alpha = if (selected) 1f else 0.6f
-    val scale = if (selected) 1f else 0.92f
+    val pressed by interactionSource.collectIsPressedAsState()
+    val pressFilter = if (pressed) {
+        ColorFilter.tint(PressedOverlayColor, BlendMode.SrcAtop)
+    } else {
+        null
+    }
 
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
             .clickable(
                 interactionSource = interactionSource,
-                indication = ripple(),
+                indication = null,
                 onClick = onClick
             )
             .semantics { this.contentDescription = contentDescription },
@@ -119,9 +129,8 @@ fun SpriteButton(
         Sprite(
             assetPath = assetPath,
             contentDescription = null,
-            modifier = Modifier
-                .size(size)
-                .graphicsLayer(alpha = alpha, scaleX = scale, scaleY = scale)
+            modifier = Modifier.size(size),
+            colorFilter = pressFilter
         )
         Spacer(modifier = Modifier.height(4.dp))
         Box(
@@ -309,7 +318,7 @@ private fun PreviewContent() {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Sprite(assetPath = Sprites.pet("cat"), contentDescription = "Питомец", modifier = Modifier.size(72.dp))
+            Sprite(assetPath = Sprites.pet("cat", "white"), contentDescription = "Питомец", modifier = Modifier.size(72.dp))
             SpriteButton(
                 assetPath = Sprites.SHOP,
                 contentDescription = "Открыть магазин",

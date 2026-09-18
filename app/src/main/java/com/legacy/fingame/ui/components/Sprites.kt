@@ -50,13 +50,18 @@ object Sprites {
     const val COIN = "ui/coin.webp"
 
     /**
-     * Builds the asset path for a pet's idle sprite.
+     * Builds the asset path for a pet sprite.
      *
-     * @param petId identifier of the pet whose idle sprite should be resolved; used verbatim as a
-     *   path segment, so it must match the pet's asset folder name.
-     * @return path (relative to `assets/textures/`) to the pet's idle sprite.
+     * An animal is identified by two ids: the species and the variant it was created with, so both
+     * are used as path segments (for example `cat` + `white` resolves to
+     * `animals/cat/white/idle.webp`).
+     *
+     * @param petId species identifier of the animal, used verbatim as a path segment.
+     * @param variantId variant identifier of the animal (its colouring or skin), used verbatim as
+     *   a path segment.
+     * @return path relative to `assets/textures/` pointing at the pet's idle sprite.
      */
-    fun pet(petId: String) = "animals/$petId/idle.webp"
+    fun pet(petId: String, variantId: String) = "animals/$petId/$variantId/idle.webp"
 
     /**
      * Builds the asset path for a shop item's sprite.
