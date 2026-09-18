@@ -25,7 +25,6 @@ class AnimalReader {
         for (i in 0 until animalNodes.length) {
             val animalNode = animalNodes.item(i)
             if (animalNode is Element) {
-                // Считываем обязательный атрибут id животного
                 val animalId = animalNode.getAttribute("id")
                 if (animalId.isNullOrBlank()) {
                     val msg = "Отсутствует обязательный атрибут 'id' у тега <animal>."
@@ -33,7 +32,6 @@ class AnimalReader {
                     throw IllegalArgumentException(msg)
                 }
 
-                // Считываем тег variants
                 val variantsNodes = animalNode.getElementsByTagName("variants")
                 if (variantsNodes.length == 0) {
                     val msg = "Отсутствует обязательный тег <variants> у животного с id = '$animalId'"
@@ -64,7 +62,6 @@ class AnimalReader {
                             throw IllegalArgumentException(msg)
                         }
                         
-                        // Формируем полный путь до спрайтов
                         val fullPath = if (variantsPath.endsWith("/")) {
                             "$variantsPath$variantId"
                         } else {
@@ -86,7 +83,6 @@ class AnimalReader {
             }
         }
 
-        // Логирование количества загруженных животных и их вариантов
         Log.i(TAG, "Успешно загружено животных: ${animals.size}. Всего вариантов загружено: $totalVariants.")
         
         return animals

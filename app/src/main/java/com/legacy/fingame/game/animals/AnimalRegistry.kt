@@ -7,7 +7,6 @@ class AnimalRegistry(context: Context) {
 
     init {
         val reader = AnimalReader()
-        // Получаем доступ к файлу в assets/data/animals.xml
         animalsMap = context.assets.open("data/animals.xml").use { inputStream ->
             reader.readAnimals(inputStream)
         }
@@ -15,7 +14,6 @@ class AnimalRegistry(context: Context) {
 
     /**
      * Получить список всех животных.
-     * Используется при создании питомца.
      */
     fun getAllAnimals(): List<Animal> {
         return animalsMap.values.toList()
@@ -30,7 +28,7 @@ class AnimalRegistry(context: Context) {
     }
     
     /**
-     * Получить само животное по его id.
+     * Получить список вариантов животного по id животного.
      */
     fun getAnimalById(animalId: String): Animal {
         return animalsMap.getValue(animalId)
