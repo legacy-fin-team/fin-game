@@ -9,8 +9,11 @@ class AnimalReader {
     private val TAG = "AnimalReader"
 
     /**
-     * Считывает XML документ и возвращает словарь животных (ключ - id).
-     * Не проверяет реальное существование путей.
+     * Reads XML document. Doesn't do path data validation.
+     * @param inputStream stream that reads XML file.
+     * @return Map of animals. The key is animal id.
+     * The value is map of paths to animal variants.
+     * The key is the animal variant id. The value is the path relative to the /asstets/textures/.
      */
     fun readAnimals(inputStream: InputStream): Map<String, Animal> {
         val animals = mutableMapOf<String, Animal>()
@@ -27,14 +30,14 @@ class AnimalReader {
             if (animalNode is Element) {
                 val animalId = animalNode.getAttribute("id")
                 if (animalId.isNullOrBlank()) {
-                    val msg = "Отсутствует обязательный атрибут 'id' у тега <animal>."
+                    val msg = "Tag <animal> doesn't have id attribute."
                     Log.e(TAG, msg)
                     throw IllegalArgumentException(msg)
                 }
 
                 val variantsNodes = animalNode.getElementsByTagName("variants")
                 if (variantsNodes.length == 0) {
-                    val msg = "Отсутствует обязательный тег <variants> у животного с id = '$animalId'"
+                    val msg = "Animal with id '$animalId' doesn't have tag <variants>."
                     Log.e(TAG, msg)
                     throw IllegalArgumentException(msg)
                 }
@@ -43,7 +46,9 @@ class AnimalReader {
                 val variantsPath = variantsElement.getAttribute("path")
                 
                 if (variantsPath.isNullOrBlank()) {
-                    val msg = "У тега <variants> отсутствует обязательный атрибут 'path' (animal id: $animalId)"
+                    val msg =
+                        "Tag <variants> of animal with id '$animalId' " +
+                                "doesn't have 'path' attribute."
                     Log.e(TAG, msg)
                     throw IllegalArgumentException(msg)
                 }
@@ -57,7 +62,8 @@ class AnimalReader {
                         val variantId = variantNode.getAttribute("id")
 
                         if (variantId.isNullOrBlank()) {
-                            val msg = "У тега <variant> отсутствует обязательный атрибут 'id' (animal id: $animalId)"
+                            val msg = "Tag <variant> of animal with id '$animalId' " +
+                                    "doesn't have 'id' attribute."
                             Log.e(TAG, msg)
                             throw IllegalArgumentException(msg)
                         }
@@ -73,7 +79,7 @@ class AnimalReader {
                 }
 
                 if (variantMap.isEmpty()) {
-                    val msg = "У животного с id = '$animalId' нет ни одного варианта (тега <variant>)."
+                    val msg = "Animal with id '$animalId' doesn't have any tag <variant>."
                     Log.e(TAG, msg)
                     throw IllegalArgumentException(msg)
                 }
@@ -83,7 +89,7 @@ class AnimalReader {
             }
         }
 
-        Log.i(TAG, "Успешно загружено животных: ${animals.size}. Всего вариантов загружено: $totalVariants.")
+        Log.i(TAG, "Loaded animals: ${animals.size}. Loaded animal variants: $totalVariants.")
         
         return animals
     }

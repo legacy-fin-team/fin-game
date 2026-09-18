@@ -13,14 +13,16 @@ class AnimalRegistry(context: Context) {
     }
 
     /**
-     * Получить список всех животных.
+     * @return List of [Animal].
      */
     fun getAllAnimals(): List<Animal> {
         return animalsMap.values.toList()
     }
 
     /**
-     * Получить путь до ассетов конкретного варианта животного.
+     * @param animalId id of an animal.
+     * @param variantId id of an animal variant.
+     * @return Path to animal variant relative to /assets/textures/.
      */
     fun getVariantPath(animalId: String, variantId: String): String {
         val animal = animalsMap.getValue(animalId)
@@ -28,7 +30,8 @@ class AnimalRegistry(context: Context) {
     }
     
     /**
-     * Получить список вариантов животного по id животного.
+     * @param animalId id of an animal.
+     * @return List of animal variants
      */
     fun getAnimalById(animalId: String): Animal {
         return animalsMap.getValue(animalId)
