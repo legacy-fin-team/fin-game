@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<items>
+    <item
+        id="hat"
+        price="100"
+        type="single"
+        category="clothes"
+    >
+        <variants path="items/hat/">
+            <variant id="black" />
+            <variant id="white" />
+            <variant id="violet" />
+        </variants>
+    </item>
+</items>
