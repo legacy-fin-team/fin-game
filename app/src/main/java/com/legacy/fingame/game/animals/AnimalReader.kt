@@ -32,14 +32,14 @@ class AnimalReader {
                 if (animalId.isNullOrBlank()) {
                     val msg = "Tag <animal> doesn't have id attribute."
                     Log.e(TAG, msg)
-                    throw IllegalArgumentException(msg)
+                    continue
                 }
 
                 val variantsNodes = animalNode.getElementsByTagName("variants")
                 if (variantsNodes.length == 0) {
                     val msg = "Animal with id '$animalId' doesn't have tag <variants>."
                     Log.e(TAG, msg)
-                    throw IllegalArgumentException(msg)
+                    continue
                 }
 
                 val variantsElement = variantsNodes.item(0) as Element
@@ -50,7 +50,7 @@ class AnimalReader {
                         "Tag <variants> of animal with id '$animalId' " +
                                 "doesn't have 'path' attribute."
                     Log.e(TAG, msg)
-                    throw IllegalArgumentException(msg)
+                    continue
                 }
 
                 val variantMap = mutableMapOf<String, String>()
@@ -65,7 +65,7 @@ class AnimalReader {
                             val msg = "Tag <variant> of animal with id '$animalId' " +
                                     "doesn't have 'id' attribute."
                             Log.e(TAG, msg)
-                            throw IllegalArgumentException(msg)
+                            continue
                         }
                         
                         val fullPath = if (variantsPath.endsWith("/")) {
@@ -81,7 +81,7 @@ class AnimalReader {
                 if (variantMap.isEmpty()) {
                     val msg = "Animal with id '$animalId' doesn't have any tag <variant>."
                     Log.e(TAG, msg)
-                    throw IllegalArgumentException(msg)
+                    continue
                 }
 
                 animals[animalId] = Animal(id = animalId, variants = variantMap)
