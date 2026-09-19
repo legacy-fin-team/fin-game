@@ -28,13 +28,6 @@ class ItemRegistry(context: Context) {
     }
 
     /**
-     * Получить словарь предметов определенной категории (ключ - id предмета)
-     */
-    fun getCategoryMap(category: ItemCategory): Map<String, Item> {
-        return itemsByCategory.getValue(category)
-    }
-
-    /**
      * Получить путь до ассетов конкретного варианта предмета.
      */
     fun getVariantPath(itemId: String, variantId: String): String {
