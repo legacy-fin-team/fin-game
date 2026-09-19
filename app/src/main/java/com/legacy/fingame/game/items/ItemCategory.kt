@@ -8,11 +8,13 @@ enum class ItemCategory(val xmlName: String) {
 
     companion object {
         /**
-         * Поиск категории по строке из XML (игнорирует регистр).
+         * @param categoryId an if of the category.
+         * @return [ItemCategory] if id is valid. Null in case it doesn't.
          */
-        fun fromString(value: String): ItemCategory {
-            return entries.find { it.xmlName.equals(value, ignoreCase = true) }
-                ?: throw IllegalArgumentException("Неизвестная категория предметов: $value")
+        fun fromString(categoryId: String): ItemCategory? {
+            return entries.find {
+                it.xmlName.equals(categoryId, ignoreCase = true)
+            }
         }
     }
 }

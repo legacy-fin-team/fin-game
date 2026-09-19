@@ -47,11 +47,11 @@ class ItemReader {
             }
 
             val categoryStr = itemNode.getAttribute("category")
-            if (categoryStr.isNullOrBlank()) {
+            val category = ItemCategory.fromString(categoryStr)
+            if (category == null) {
                 Log.e(TAG, "Item with id '$itemId' does not have proper 'category' attribute.")
                 continue
             }
-            val category = ItemCategory.fromString(categoryStr)
 
             val variantsNodes = itemNode.getElementsByTagName("variants")
             if (variantsNodes.length == 0) {
