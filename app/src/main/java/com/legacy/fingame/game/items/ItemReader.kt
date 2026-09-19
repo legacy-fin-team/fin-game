@@ -39,17 +39,22 @@ class ItemReader {
                 continue
             }
 
-            val priceStr = itemNode.getAttribute("price")
-            val price = priceStr.toIntOrNull()
-            if (price == null) {
-                Log.e(TAG, "Item with id '$itemId' does not have proper 'price' attribute.")
-                continue
-            }
-
             val categoryStr = itemNode.getAttribute("category")
             val category = ItemCategory.fromString(categoryStr)
             if (category == null) {
                 Log.e(TAG, "Item with id '$itemId' does not have proper 'category' attribute.")
+                continue
+            }
+
+            if (itemsByCategory.getValue(category).containsKey(itemId)) {
+                Log.e(TAG, "At least two items share the same id: '$itemId'")
+                continue
+            }
+
+            val priceStr = itemNode.getAttribute("price")
+            val price = priceStr.toIntOrNull()
+            if (price == null) {
+                Log.e(TAG, "Item with id '$itemId' does not have proper 'price' attribute.")
                 continue
             }
 
@@ -109,6 +114,11 @@ class ItemReader {
             if (variantId.isNullOrBlank()) {
                 Log.e(TAG, "Tag <variant> of item with id '$itemId' " +
                         "doesn't have 'id' attribute.")
+                continue
+            }
+
+            if (variantMap.containsKey(variantId)) {
+                Log.e(TAG, "At least two variants share the same id: '$variantId'")
                 continue
             }
 
