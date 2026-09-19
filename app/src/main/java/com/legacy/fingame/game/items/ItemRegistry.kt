@@ -3,16 +3,12 @@ package com.legacy.fingame.game.items
 import android.content.Context
 
 class ItemRegistry(context: Context) {
-    // 1. Словарь, разделенный на 4 словаря по категориям
     private val itemsByCategory: Map<ItemCategory, Map<String, Item>>
     
-    // 2. Дополнительно создаем единый плоский словарь всех предметов 
-    // для быстрого поиска по id (чтобы не искать по всем категориям вручную)
-    private val allItemsById: Map<String, Item>
+    private val itemsById: Map<String, Item>
 
     init {
         val reader = ItemReader()
-        // Получаем доступ к файлу в assets/data/items.xml
         itemsByCategory = context.assets.open("data/items.xml").use { inputStream ->
             reader.readItems(inputStream)
         }
@@ -21,7 +17,7 @@ class ItemRegistry(context: Context) {
         itemsByCategory.values.forEach { categoryMap ->
             flatMap.putAll(categoryMap)
         }
-        allItemsById = flatMap
+        itemsById = flatMap.toMap()
     }
 
     /**
@@ -42,7 +38,7 @@ class ItemRegistry(context: Context) {
      * Получить путь до ассетов конкретного варианта предмета.
      */
     fun getVariantPath(itemId: String, variantId: String): String {
-        val item = allItemsById.getValue(itemId)
+        val item = itemsById.getValue(itemId)
         return item.variants.getValue(variantId)
     }
 
@@ -50,6 +46,6 @@ class ItemRegistry(context: Context) {
      * Получить сам предмет по его id (ищет сразу среди всех).
      */
     fun getItemById(itemId: String): Item {
-        return allItemsById.getValue(itemId)
+        return itemsById.getValue(itemId)
     }
 }
