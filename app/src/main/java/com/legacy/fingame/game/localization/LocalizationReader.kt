@@ -7,43 +7,34 @@ import org.xmlpull.v1.XmlPullParser
 import java.io.InputStream
 
 /**
- * Менеджер локализации.
+ * Загрузчик локализаций.
+ * Отвечает за поиск, чтение и парсинг XML файлов из assets.
  */
-class LocalizationManager(private val context: Context) {
+class LocalizationReader(private val context: Context) {
 
-    private val translations = mutableMapOf<String, String>()
     /**
      * Загружает все XML файлы для указанного языка из папки "locale/<languageCode>".
      * @param languageCode код языка (название папки), например "ru-RU" или "en-US".
+     * @return Словарь (Map) найденных ключей и их значений.
      */
-    fun loadLocales(languageCode: String) {
-        translations.clear()
+    fun readLocales(languageCode: String): Map<String, String> {
+        val translations = mutableMapOf<String, String>()
         val basePath = "locale/$languageCode"
         val xmlFiles = findXmlFiles(basePath)
         
         for (filePath in xmlFiles) {
             try {
                 context.assets.open(filePath).use { inputStream ->
-                    parseXml(inputStream)
+                    parseXml(inputStream, translations)
                 }
             } catch (e: Exception) {
-                Log.e("LocalizationManager", "Ошибка при чтении файла: $filePath", e)
+                Log.e("LocalizationReader", "Ошибка при чтении файла: $filePath", e)
             }
         }
-        Log.d("LocalizationManager", "Загружено ${translations.size} строк из ${xmlFiles.size} файлов.")
+        Log.d("LocalizationReader", "Считано ${translations.size} строк из ${xmlFiles.size} файлов.")
+        return translations
     }
-    /**
-     * Возвращает переведенную строку по её id.
-     */
-    fun getString(id: String): String? {
-        return translations[id]
-    }
-    /**
-     * Возвращает словарь со всеми загруженными строками.
-     */
-    fun getAllStrings(): Map<String, String> {
-        return translations.toMap()
-    }
+
     /**
      * Рекурсивный поиск XML файлов в папке assets.
      */
@@ -52,27 +43,25 @@ class LocalizationManager(private val context: Context) {
         try {
             val list = context.assets.list(path)
             if (list != null && list.isNotEmpty()) {
-                // Если это папка, рекурсивно обходим её содержимое
                 for (file in list) {
                     val fullPath = if (path.isEmpty()) file else "$path/$file"
                     result.addAll(findXmlFiles(fullPath))
                 }
             } else {
-                // Если это файл (или пустая папка), проверяем расширение
                 if (path.endsWith(".xml", ignoreCase = true)) {
                     result.add(path)
                 }
             }
         } catch (e: Exception) {
-            Log.e("LocalizationManager", "Ошибка при получении списка файлов по пути: $path", e)
+            Log.e("LocalizationReader", "Ошибка при получении списка файлов: $path", e)
         }
         return result
     }
 
     /**
-     * Парсинг конкретного XML файла и добавление найденных ключей в словарь translations.
+     * Парсинг конкретного XML файла и добавление найденных ключей в переданный словарь.
      */
-    private fun parseXml(inputStream: InputStream) {
+    private fun parseXml(inputStream: InputStream, translations: MutableMap<String, String>) {
         try {
             val parser = Xml.newPullParser()
             parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
@@ -91,7 +80,7 @@ class LocalizationManager(private val context: Context) {
                 eventType = parser.next()
             }
         } catch (e: Exception) {
-            Log.e("LocalizationManager", "Ошибка при парсинге XML", e)
+            Log.e("LocalizationReader", "Ошибка при парсинге XML", e)
         }
     }
 }
