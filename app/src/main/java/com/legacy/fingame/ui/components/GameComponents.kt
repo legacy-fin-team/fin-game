@@ -36,12 +36,14 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
+import com.legacy.fingame.ui.theme.GameDimens
 import com.legacy.fingame.utils.SpriteLoader
 import kotlin.math.roundToInt
 
@@ -92,7 +94,8 @@ fun Sprite(
  * @param contentDescription accessibility description for the tappable element.
  * @param onClick called when the button is tapped.
  * @param modifier modifier applied to the outer [Column] container.
- * @param size side length (width and height) of the square sprite image.
+ * @param size side length (width and height) of the square sprite image on a phone; on tablets the
+ *   button is enlarged from it by [GameDimens.buttonSize], so call sites only state the phone size.
  * @param selected whether this item is the currently active/selected one; when `true`, the sprite
  *   is shown at full opacity/scale and an underline is drawn beneath it to highlight it.
  */
@@ -108,6 +111,7 @@ fun SpriteButton(
     size: Dp = 72.dp,
     selected: Boolean = false
 ) {
+    val spriteSize = GameDimens.buttonSize(size)
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val pressFilter = if (pressed) {
@@ -129,13 +133,13 @@ fun SpriteButton(
         Sprite(
             assetPath = assetPath,
             contentDescription = null,
-            modifier = Modifier.size(size),
+            modifier = Modifier.size(spriteSize),
             colorFilter = pressFilter
         )
         Spacer(modifier = Modifier.height(4.dp))
         Box(
             modifier = Modifier
-                .width(size * 0.4f)
+                .width(spriteSize * 0.4f)
                 .height(2.dp)
                 .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
         )
@@ -240,8 +244,16 @@ fun GoalCard(
     }
 }
 
+/** Padding around the label of a [PillButton] on a phone; enlarged on tablets. */
+private val PillHorizontalPadding = 24.dp
+private val PillVerticalPadding = 12.dp
+
 /**
  * Pill-shaped button with a muted appearance when [enabled] is `false`.
+ *
+ * The pill takes its size from its label plus [PillHorizontalPadding]/[PillVerticalPadding], both
+ * of which grow on tablets via [GameDimens.buttonSize]; the label follows with a larger text style
+ * so the button does not end up as a big pill around small text.
  *
  * @param text label displayed inside the pill.
  * @param onClick called when the button is tapped; not invoked while [enabled] is `false`.
@@ -259,6 +271,11 @@ fun PillButton(
     val containerColor = if (enabled) MaterialTheme.colorScheme.primary else GameColors.disabledContainer
     val contentColor = if (enabled) MaterialTheme.colorScheme.onPrimary else GameColors.disabledContent
     val interactionSource = remember { MutableInteractionSource() }
+    val textStyle = if (GameDimens.isTabletScreen) {
+        MaterialTheme.typography.titleMedium
+    } else {
+        MaterialTheme.typography.labelLarge
+    }
 
     Surface(
         modifier = modifier
@@ -273,12 +290,15 @@ fun PillButton(
         color = containerColor
     ) {
         Box(
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+            modifier = Modifier.padding(
+                horizontal = GameDimens.buttonSize(PillHorizontalPadding),
+                vertical = GameDimens.buttonSize(PillVerticalPadding)
+            ),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelLarge,
+                style = textStyle,
                 fontWeight = FontWeight.Bold,
                 color = contentColor
             )
@@ -289,6 +309,17 @@ fun PillButton(
 @Preview(name = "Components — Light", showBackground = true)
 @Composable
 private fun GameComponentsLightPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            PreviewContent()
+        }
+    }
+}
+
+/** Preview of the same components on a tablet, where the buttons are drawn enlarged. */
+@Preview(name = "Components — Tablet", showBackground = true, device = Devices.TABLET)
+@Composable
+private fun GameComponentsTabletPreview() {
     FinGameTheme(darkTheme = false) {
         Surface(color = MaterialTheme.colorScheme.background) {
             PreviewContent()

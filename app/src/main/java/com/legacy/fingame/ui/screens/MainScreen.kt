@@ -24,6 +24,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -42,6 +43,11 @@ import com.legacy.fingame.ui.theme.GameColors
 
 private val ScreenPadding = 16.dp
 private val GoalCardWidth = 208.dp
+
+/**
+ * Sizes of the action buttons on a phone; [com.legacy.fingame.ui.components.SpriteButton] enlarges
+ * them on tablets, so these stay the compact values.
+ */
 private val PrimaryActionSize = 80.dp
 private val SecondaryActionSize = 64.dp
 
@@ -320,6 +326,27 @@ private fun MainScreenDarkPreview() {
         Surface(color = MaterialTheme.colorScheme.background) {
             MainScreen(
                 state = GameUiState(balance = 250, subLocationIndex = 1),
+                onOpenScreen = {},
+                onPrevSubLocation = {},
+                onNextSubLocation = {},
+                onClaimDailyBonus = {}
+            )
+        }
+    }
+}
+
+/** Preview of [MainScreen] on a tablet, where the buttons are drawn enlarged. */
+@Preview(name = "MainScreen — Tablet", showBackground = true, device = Devices.TABLET)
+@Composable
+private fun MainScreenTabletPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            MainScreen(
+                state = GameUiState(
+                    balance = 250,
+                    dailyBonusAvailable = true,
+                    subLocationIndex = 1
+                ),
                 onOpenScreen = {},
                 onPrevSubLocation = {},
                 onNextSubLocation = {},

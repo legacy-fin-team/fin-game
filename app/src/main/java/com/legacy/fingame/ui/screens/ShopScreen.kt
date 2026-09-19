@@ -47,6 +47,10 @@ import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 
+/**
+ * Sizes of the shop buttons on a phone; [com.legacy.fingame.ui.components.SpriteButton] enlarges
+ * them on tablets, so these stay the compact values.
+ */
 private val CloseButtonSize = 64.dp
 private val CategoryButtonSize = 56.dp
 private val CounterButtonSize = 48.dp
