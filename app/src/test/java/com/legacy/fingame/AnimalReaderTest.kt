@@ -121,6 +121,19 @@ class AnimalReaderTest {
     }
 
     @Test
+    fun `a file without animal tags yields no animals`() {
+        val animals = readAnimals(
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <animals>
+            </animals>
+            """
+        )
+
+        assertEquals(emptyMap<String, Animal>(), animals)
+    }
+
+    @Test
     fun `idle sprite path contains the age stage`() {
         val cat = Animal(
             id = "cat",

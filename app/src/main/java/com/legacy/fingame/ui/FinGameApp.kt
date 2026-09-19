@@ -33,8 +33,10 @@ import com.legacy.fingame.ui.screens.ShopScreen
  *
  * Until the player has picked a pet — i.e. on the very first launch — the whole app is replaced by
  * [AnimalSelectScreen]; the choice is saved right away, so the following launches go straight to
- * the game. A saved choice that is no longer present in the animal data (e.g. the animal was
- * removed) is treated as no choice at all and the player picks again.
+ * the game. A saved choice that is no longer present in the animal data (e.g. the animal or its
+ * variant was renamed or removed) can't be played, so the player picks again — but is told that
+ * the pet is gone instead of being greeted as a newcomer, and the saved choice stays in
+ * [PlayerPreferences] until a replacement is actually picked.
  *
  * Layout: a full-size [Surface] with an [AnimatedContent] that cross-fades between
  * [MainScreen], [ShopScreen] and the [PlaceholderScreen] instances for the yet-unspecified
@@ -54,11 +56,12 @@ fun FinGameApp(
     val animalRegistry = application.animalRegistry
     val playerPreferences = application.playerPreferences
 
-    var selection by remember {
-        val saved = playerPreferences.getSelectedAnimal()
-            ?.takeIf { animalRegistry.hasVariant(it.animalId, it.variantId) }
-        mutableStateOf(saved)
+    val savedSelection = remember { playerPreferences.getSelectedAnimal() }
+    val savedPetIsGone = remember(savedSelection) {
+        savedSelection != null &&
+            !animalRegistry.hasVariant(savedSelection.animalId, savedSelection.variantId)
     }
+    var selection by remember { mutableStateOf(savedSelection.takeIf { !savedPetIsGone }) }
 
     BackHandler(enabled = state.screen != Screen.MAIN) { vm.closeScreen() }
 
@@ -73,7 +76,8 @@ fun FinGameApp(
                 onSelect = { picked: AnimalSelection ->
                     playerPreferences.saveSelectedAnimal(picked)
                     selection = picked
-                }
+                },
+                previousPetLost = savedPetIsGone
             )
         } else {
             AnimatedContent(
