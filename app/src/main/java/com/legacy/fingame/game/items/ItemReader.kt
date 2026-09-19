@@ -33,7 +33,7 @@ class ItemReader {
                 if (itemId.isNullOrBlank()) {
                     val msg = "Отсутствует обязательный атрибут 'id' у тега <item>."
                     Log.e(TAG, msg)
-                    throw IllegalArgumentException(msg)
+                    continue
                 }
 
                 val priceStr = itemNode.getAttribute("price")
@@ -41,14 +41,14 @@ class ItemReader {
                 if (price == null) {
                     val msg = "Отсутствует или неверный формат атрибута 'price' у предмета id = '$itemId'"
                     Log.e(TAG, msg)
-                    throw IllegalArgumentException(msg)
+                    continue
                 }
 
                 val categoryStr = itemNode.getAttribute("category")
                 if (categoryStr.isNullOrBlank()) {
                     val msg = "Отсутствует обязательный атрибут 'category' у предмета id = '$itemId'"
                     Log.e(TAG, msg)
-                    throw IllegalArgumentException(msg)
+                    continue
                 }
                 val category = ItemCategory.fromString(categoryStr)
 
@@ -56,7 +56,7 @@ class ItemReader {
                 if (variantsNodes.length == 0) {
                     val msg = "Отсутствует обязательный тег <variants> у предмета id = '$itemId'"
                     Log.e(TAG, msg)
-                    throw IllegalArgumentException(msg)
+                    continue
                 }
 
                 val variantsElement = variantsNodes.item(0) as Element
@@ -65,7 +65,7 @@ class ItemReader {
                 if (variantsPath.isNullOrBlank()) {
                     val msg = "У тега <variants> отсутствует обязательный атрибут 'path' (item id: $itemId)"
                     Log.e(TAG, msg)
-                    throw IllegalArgumentException(msg)
+                    continue
                 }
 
                 val variantMap = mutableMapOf<String, String>()
@@ -79,7 +79,7 @@ class ItemReader {
                         if (variantId.isNullOrBlank()) {
                             val msg = "У тега <variant> отсутствует обязательный атрибут 'id' (item id: $itemId)"
                             Log.e(TAG, msg)
-                            throw IllegalArgumentException(msg)
+                            continue
                         }
 
                         // Формируем полный путь
@@ -96,7 +96,7 @@ class ItemReader {
                 if (variantMap.isEmpty()) {
                     val msg = "У предмета с id = '$itemId' нет ни одного варианта (тега <variant>)."
                     Log.e(TAG, msg)
-                    throw IllegalArgumentException(msg)
+                    continue
                 }
 
                 val item = Item(
