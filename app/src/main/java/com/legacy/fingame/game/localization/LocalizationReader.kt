@@ -12,6 +12,10 @@ import java.io.InputStream
  */
 class LocalizationReader(private val context: Context) {
 
+    companion object {
+        private const val TAG = "LocalizationReader"
+    }
+
     /**
      * Загружает все XML файлы для указанного языка из папки "locale/<languageCode>".
      * @param languageCode код языка (название папки), например "ru-RU" или "en-US".
@@ -28,10 +32,10 @@ class LocalizationReader(private val context: Context) {
                     parseXml(inputStream, translations)
                 }
             } catch (e: Exception) {
-                Log.e("LocalizationReader", "Ошибка при чтении файла: $filePath", e)
+                Log.e(TAG, "Ошибка при чтении файла: $filePath", e)
             }
         }
-        Log.d("LocalizationReader", "Считано ${translations.size} строк из ${xmlFiles.size} файлов.")
+        Log.i(TAG, "Считано ${translations.size} строк из ${xmlFiles.size} файлов.")
         return translations
     }
 
@@ -53,7 +57,7 @@ class LocalizationReader(private val context: Context) {
                 }
             }
         } catch (e: Exception) {
-            Log.e("LocalizationReader", "Ошибка при получении списка файлов: $path", e)
+            Log.e(TAG, "Ошибка при получении списка файлов: $path", e)
         }
         return result
     }
@@ -80,7 +84,7 @@ class LocalizationReader(private val context: Context) {
                 eventType = parser.next()
             }
         } catch (e: Exception) {
-            Log.e("LocalizationReader", "Ошибка при парсинге XML", e)
+            Log.e(TAG, "Ошибка при парсинге XML", e)
         }
     }
 }
