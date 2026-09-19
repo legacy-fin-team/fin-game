@@ -1,49 +1,62 @@
 package com.legacy.fingame.utils
 
 import android.content.Context
+import com.legacy.fingame.game.PlayerState
+import com.legacy.fingame.game.PlayerStateStore
 import com.legacy.fingame.game.animals.AnimalSelection
 
 /**
- * Keeps the player's choices that have to survive app restarts, backed by SharedPreferences.
+ * [PlayerStateStore] backed by SharedPreferences: this is what makes the player's game survive
+ * the app being closed and the process being killed.
  *
- * Right now the only such choice is the animal the player picked on the first launch.
+ * Every value is stored under a key of its own rather than as one blob, so a state that grew a
+ * new field still reads back on a device that saved it before the field existed.
  *
  * @param context current local application context. Used to get access to SharedPreferences.
  */
-class PlayerPreferences(context: Context) {
+class PlayerPreferences(context: Context) : PlayerStateStore {
 
     companion object {
         private const val PREFERENCES_NAME = "player"
         private const val KEY_ANIMAL_ID = "selected_animal_id"
         private const val KEY_ANIMAL_VARIANT_ID = "selected_animal_variant_id"
+        private const val KEY_SUB_LOCATION_INDEX = "sub_location_index"
     }
 
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
 
     /**
-     * @return The [AnimalSelection] saved by [saveSelectedAnimal] or null if the player hasn't
-     * picked an animal yet, i.e. this is the first launch.
+     * @return The state saved by [save], with everything that was never saved — or was saved
+     * empty — left at its default. A pet is only restored when both of its ids are there, since
+     * one id without the other resolves to no animal at all.
      */
-    fun getSelectedAnimal(): AnimalSelection? {
+    override fun load(): PlayerState {
+        val defaults = PlayerState()
+
         val animalId = preferences.getString(KEY_ANIMAL_ID, null)
         val variantId = preferences.getString(KEY_ANIMAL_VARIANT_ID, null)
-
-        if (animalId.isNullOrBlank() || variantId.isNullOrBlank()) {
-            return null
+        val selection = if (animalId.isNullOrBlank() || variantId.isNullOrBlank()) {
+            defaults.selection
+        } else {
+            AnimalSelection(animalId = animalId, variantId = variantId)
         }
 
-        return AnimalSelection(animalId = animalId, variantId = variantId)
+        return PlayerState(
+            selection = selection,
+            subLocationIndex = preferences.getInt(KEY_SUB_LOCATION_INDEX, defaults.subLocationIndex)
+        )
     }
 
     /**
-     * Saves the animal the player picked, so the selection screen isn't shown again.
+     * Writes the whole state in a single edit, so a save can never leave half of it behind.
      *
-     * @param selection the animal and the variant the player picked.
+     * @param state the state to remember for the next launch.
      */
-    fun saveSelectedAnimal(selection: AnimalSelection) {
+    override fun save(state: PlayerState) {
         preferences.edit()
-            .putString(KEY_ANIMAL_ID, selection.animalId)
-            .putString(KEY_ANIMAL_VARIANT_ID, selection.variantId)
+            .putString(KEY_ANIMAL_ID, state.selection?.animalId)
+            .putString(KEY_ANIMAL_VARIANT_ID, state.selection?.variantId)
+            .putInt(KEY_SUB_LOCATION_INDEX, state.subLocationIndex)
             .apply()
     }
 }

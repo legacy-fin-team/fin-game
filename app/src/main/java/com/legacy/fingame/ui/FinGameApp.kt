@@ -10,9 +10,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -20,7 +17,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.legacy.fingame.FinGameApplication
 import com.legacy.fingame.game.GameViewModel
 import com.legacy.fingame.game.Screen
-import com.legacy.fingame.game.animals.AnimalSelection
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.screens.AnimalSelectScreen
 import com.legacy.fingame.ui.screens.MainScreen
@@ -33,10 +29,11 @@ import com.legacy.fingame.ui.screens.ShopScreen
  *
  * Until the player has picked a pet — i.e. on the very first launch — the whole app is replaced by
  * [AnimalSelectScreen]; the choice is saved right away, so the following launches go straight to
- * the game. A saved choice that is no longer present in the animal data (e.g. the animal or its
- * variant was renamed or removed) can't be played, so the player picks again — but is told that
- * the pet is gone instead of being greeted as a newcomer, and the saved choice stays in
- * [PlayerPreferences] until a replacement is actually picked.
+ * the game with the pet, and the sub-location it was left in, already restored by [vm]. A saved
+ * choice that is no longer present in the animal data (e.g. the animal or its variant was renamed
+ * or removed) can't be played, so the player picks again — but is told that the pet is gone
+ * instead of being greeted as a newcomer, and the saved choice is only replaced once a new pet is
+ * actually picked.
  *
  * Layout: a full-size [Surface] with an [AnimatedContent] that cross-fades between
  * [MainScreen], [ShopScreen] and the [PlaceholderScreen] instances for the yet-unspecified
@@ -44,24 +41,24 @@ import com.legacy.fingame.ui.screens.ShopScreen
  *
  * @param modifier modifier applied to the root surface.
  * @param vm view model providing [GameUiState] and the navigation/action callbacks passed down
- *   to each screen; defaults to a [GameViewModel] scoped to this composable.
+ *   to each screen; defaults to a [GameViewModel] scoped to this composable, restoring the
+ *   player's game from [FinGameApplication.playerPreferences].
  */
 @Composable
 fun FinGameApp(
     modifier: Modifier = Modifier,
-    vm: GameViewModel = viewModel()
+    vm: GameViewModel = viewModel(
+        factory = GameViewModel.factory(
+            (LocalContext.current.applicationContext as FinGameApplication).playerPreferences
+        )
+    )
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val application = LocalContext.current.applicationContext as FinGameApplication
     val animalRegistry = application.animalRegistry
-    val playerPreferences = application.playerPreferences
 
-    val savedSelection = remember { playerPreferences.getSelectedAnimal() }
-    val savedPetIsGone = remember(savedSelection) {
-        savedSelection != null &&
-            !animalRegistry.hasVariant(savedSelection.animalId, savedSelection.variantId)
-    }
-    var selection by remember { mutableStateOf(savedSelection.takeIf { !savedPetIsGone }) }
+    val savedSelection = state.selection
+    val pet = savedSelection?.takeIf { animalRegistry.hasVariant(it.animalId, it.variantId) }
 
     BackHandler(enabled = state.screen != Screen.MAIN) { vm.closeScreen() }
 
@@ -69,15 +66,11 @@ fun FinGameApp(
         modifier = modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
     ) {
-        val pet = selection
         if (pet == null) {
             AnimalSelectScreen(
                 animals = animalRegistry.getAllAnimals(),
-                onSelect = { picked: AnimalSelection ->
-                    playerPreferences.saveSelectedAnimal(picked)
-                    selection = picked
-                },
-                previousPetLost = savedPetIsGone
+                onSelect = vm::selectAnimal,
+                previousPetLost = savedSelection != null
             )
         } else {
             AnimatedContent(

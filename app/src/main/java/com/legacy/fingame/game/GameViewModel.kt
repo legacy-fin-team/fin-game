@@ -1,6 +1,10 @@
 package com.legacy.fingame.game
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import com.legacy.fingame.game.animals.AnimalSelection
 import com.legacy.fingame.ui.DemoContent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,7 +34,13 @@ enum class Screen {
 /**
  * UI state for the game screen flow.
  *
- * @property screen the currently displayed [Screen].
+ * Part of it is the player's game and comes back on the next launch (see [PlayerState]), the rest
+ * belongs to the current visit only and starts over every time the app is opened.
+ *
+ * @property screen the currently displayed [Screen]. Always starts at [Screen.MAIN]: the player
+ * comes back to the main screen, not to wherever the app happened to be closed.
+ * @property selection the pet the player picked, restored from [PlayerState.selection], or null
+ * when no pet has been picked yet and the animal selection screen is shown instead of the game.
  * @property selectedCategoryId id of the currently selected shop category, one of
  * [DemoContent.categoryIds]. Defaults to the first available category.
  * @property quantities per-item counters keyed by item id (see [DemoContent.itemIds]).
@@ -39,23 +49,30 @@ enum class Screen {
  * is reset whenever the player navigates away from [Screen.SHOP], so an unpurchased
  * selection does not persist across shop visits.
  * @property subLocationIndex index of the currently displayed sub-location within
- * [DemoContent.subLocationTitles].
+ * [DemoContent.subLocationTitles], restored from [PlayerState.subLocationIndex].
  */
 data class GameUiState(
     val screen: Screen = Screen.MAIN,
+    val selection: AnimalSelection? = null,
     val selectedCategoryId: String = DemoContent.categoryIds.first(),
     val quantities: Map<String, Int> = emptyMap(),
     val subLocationIndex: Int = 0
 )
 
 /**
- * UI-only state holder for the game screen: screen navigation, category selection,
- * item counters and sub-location index. Holds no domain logic (balance, cart, catalog).
+ * State holder for the game screen: the pet the player plays with, screen navigation, category
+ * selection, item counters and sub-location index. Holds no domain logic (balance, cart, catalog).
+ *
+ * The player's game is restored from [store] when the view model is created and written back to it
+ * on every change, so closing the app — or having its process killed — doesn't lose the pet or the
+ * sub-location it was left in.
+ *
+ * @param store where the player's state is restored from and saved to.
  */
-class GameViewModel : ViewModel() {
+class GameViewModel(private val store: PlayerStateStore) : ViewModel() {
 
     /**
-     * Constant limits for [GameViewModel]'s UI state.
+     * Constant limits for [GameViewModel]'s UI state, and the way it is built outside of tests.
      */
     companion object {
         /**
@@ -63,9 +80,21 @@ class GameViewModel : ViewModel() {
          * text short enough to always fit on screen.
          */
         const val MAX_ITEM_QUANTITY = 99
+
+        /**
+         * Builds a [GameViewModel] over a store, for `viewModel(factory = ...)`: the view model
+         * needs the store the moment it is created, since that is when the player's game is
+         * restored.
+         *
+         * @param store where the player's state is restored from and saved to.
+         * @return A factory creating a [GameViewModel] backed by [store].
+         */
+        fun factory(store: PlayerStateStore): ViewModelProvider.Factory = viewModelFactory {
+            initializer { GameViewModel(store) }
+        }
     }
 
-    private val _state = MutableStateFlow(GameUiState())
+    private val _state = MutableStateFlow(restoredState())
 
     /** Current [GameUiState], observed by the UI. */
     val state: StateFlow<GameUiState> = _state.asStateFlow()
@@ -109,6 +138,17 @@ class GameViewModel : ViewModel() {
     }
 
     /**
+     * Takes the pet the player picked on the animal selection screen, for this run and for every
+     * run after it.
+     *
+     * @param selection the animal and the variant the player picked.
+     */
+    fun selectAnimal(selection: AnimalSelection) {
+        _state.value = _state.value.copy(selection = selection)
+        persist()
+    }
+
+    /**
      * Selects the shop category currently shown to the player.
      *
      * @param categoryId id of the category to select, one of [DemoContent.categoryIds].
@@ -149,23 +189,68 @@ class GameViewModel : ViewModel() {
 
     /**
      * Advances to the next sub-location, wrapping back to the first sub-location
-     * after the last one.
+     * after the last one. The pet stays there until the player moves it again, including
+     * across app launches.
      */
     fun nextSubLocation() {
         val count = DemoContent.subLocationCount
         if (count == 0) return
         val current = _state.value.subLocationIndex
         _state.value = _state.value.copy(subLocationIndex = (current + 1) % count)
+        persist()
     }
 
     /**
      * Goes back to the previous sub-location, wrapping around to the last
-     * sub-location when moving before the first one.
+     * sub-location when moving before the first one. The pet stays there until the player
+     * moves it again, including across app launches.
      */
     fun prevSubLocation() {
         val count = DemoContent.subLocationCount
         if (count == 0) return
         val current = _state.value.subLocationIndex
         _state.value = _state.value.copy(subLocationIndex = (current - 1 + count) % count)
+        persist()
+    }
+
+    /**
+     * Builds the state the app starts with out of the [PlayerState] the previous run left behind.
+     *
+     * @return The initial [GameUiState]: the player's game as it was saved, everything else fresh.
+     */
+    private fun restoredState(): GameUiState {
+        val saved = store.load()
+        return GameUiState(
+            selection = saved.selection,
+            subLocationIndex = existingSubLocation(saved.subLocationIndex)
+        )
+    }
+
+    /**
+     * Keeps a restored sub-location index pointing at a sub-location that is actually there: the
+     * saved one may be gone, since the sub-locations can change between two launches of the app.
+     *
+     * @param index sub-location index as it was saved.
+     * @return The nearest index within the sub-locations that exist now, or the first one when
+     * there are no sub-locations at all.
+     */
+    private fun existingSubLocation(index: Int): Int {
+        val count = DemoContent.subLocationCount
+        if (count == 0) return 0
+        return index.coerceIn(0, count - 1)
+    }
+
+    /**
+     * Hands the part of the current state that belongs to the player's game over to [store], so
+     * the next launch finds it in place.
+     */
+    private fun persist() {
+        val current = _state.value
+        store.save(
+            PlayerState(
+                selection = current.selection,
+                subLocationIndex = current.subLocationIndex
+            )
+        )
     }
 }
