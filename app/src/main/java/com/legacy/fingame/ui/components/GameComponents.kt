@@ -143,20 +143,18 @@ fun SpriteButton(
 }
 
 /**
- * Player balance pill: coin sprite plus externally supplied text.
+ * Player balance pill: coin sprite plus the coins the player has.
  *
- * No number formatting happens here — [text] is rendered as-is.
- *
+ * @param balance number of coins to show, taken from
+ *   [com.legacy.fingame.game.GameUiState.balance].
  * @param modifier modifier applied to the outer [Surface].
- * @param text label displayed next to the coin sprite; expected to already be formatted (e.g. with
- *   currency and thousands separators) by the caller.
  */
 @Composable
 fun BalanceChip(
-    modifier: Modifier = Modifier,
-    // TODO: replace this placeholder with the player's real balance from app logic.
-    text: String = "Баланс"
+    balance: Int,
+    modifier: Modifier = Modifier
 ) {
+    val text = balance.toString()
     Surface(
         modifier = modifier.wrapContentSize(),
         shape = RoundedCornerShape(50),
@@ -330,7 +328,7 @@ private fun PreviewContent() {
                 onClick = {},
                 selected = true
             )
-            BalanceChip(text = "12 400 ₽")
+            BalanceChip(balance = 12400)
         }
         GoalCard(title = "Велосипед", progress = 0.64f)
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -14,11 +14,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -35,7 +36,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.legacy.fingame.game.GameUiState
-import com.legacy.fingame.ui.DemoContent
+import com.legacy.fingame.game.items.Item
+import com.legacy.fingame.game.items.ItemCategory
+import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.ui.components.BalanceChip
 import com.legacy.fingame.ui.components.PillButton
 import com.legacy.fingame.ui.components.Sprite
@@ -48,44 +51,50 @@ private val CloseButtonSize = 64.dp
 private val CategoryButtonSize = 56.dp
 private val CounterButtonSize = 48.dp
 private val StarButtonSize = 40.dp
+private val VariantButtonSize = 36.dp
+private val PriceIconSize = 16.dp
 private val ItemCellMinSize = 170.dp
 
 /** How a card exposes its purchase controls. Presentation-only, never stored in the ViewModel. */
 enum class ShopItemMode { COUNTER, ADDABLE, PURCHASED }
 
 /**
- * Shop screen. It receives plain ids and builds blocks out of them — no prices, names or
- * catalog models are known here; visible labels are the placeholders from the customer's mockup.
+ * Shop screen: the registered items of one category at a time, and the balance they are paid from.
  *
  * Layout:
- * - Top: balance chip and a close button.
- * - Below that: the current category title, then a scrollable grid of item cards
- *   ([ShopItemCard]), one per id in [itemIds].
- * - Bottom: category buttons ([categoryIds]) in a row that scrolls horizontally (so the row can
- *   hold any number of categories) next to a "Купить" button that always keeps its full width.
+ * - Top: the player's balance and a close button.
+ * - Below that: the title of the current category, then a scrollable grid of item cards
+ *   ([ShopItemCard]), one per item of [items]; a category with nothing on its shelves says so
+ *   instead of showing an empty grid.
+ * - Bottom: one button per category in a row that scrolls horizontally (so the row can hold any
+ *   number of categories) next to the "Купить" button, which shows what the cart costs and stays
+ *   disabled while the cart is empty or the player cannot afford it.
  *
- * @param state current game state; [GameUiState.quantities] supplies the quantity shown on each
- *   item card (keyed by item id) and [GameUiState.selectedCategoryId] marks which category button
- *   is highlighted.
- * @param onSelectCategory called with the id of the category button that was pressed.
- * @param onIncrease called with the id of the item whose quantity should be increased.
- * @param onDecrease called with the id of the item whose quantity should be decreased.
+ * @param state current game state: the balance to show, which category is selected, what is in the
+ *   cart with what it costs, and which items the player already owns.
+ * @param items the items of [GameUiState.selectedCategory], as the catalog registered them.
+ * @param onSelectCategory called with the category whose button was pressed.
+ * @param onPickVariant called with an item id and the id of the variant picked for it.
+ * @param onIncrease called with the id of the item to put one more of into the cart.
+ * @param onDecrease called with the id of the item to take one of out of the cart.
+ * @param onBuy called when the player pays for the cart.
  * @param onClose called when the close button is pressed.
  * @param modifier modifier applied to the screen root.
- * @param itemIds ids of the products the shop turns into cards; defaults to the demo content ids.
- * @param categoryIds ids of the category buttons shown at the bottom; defaults to the demo
- *   content ids.
+ * @param categories categories the shop is split into; every [ItemCategory] by default, so a
+ *   section is there even before its items are.
  */
 @Composable
 fun ShopScreen(
     state: GameUiState,
-    onSelectCategory: (String) -> Unit,
+    items: List<Item>,
+    onSelectCategory: (ItemCategory) -> Unit,
+    onPickVariant: (String, String) -> Unit,
     onIncrease: (String) -> Unit,
     onDecrease: (String) -> Unit,
+    onBuy: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
-    itemIds: List<String> = DemoContent.itemIds,
-    categoryIds: List<String> = DemoContent.categoryIds
+    categories: List<ItemCategory> = ItemCategory.entries
 ) {
     Column(
         modifier = modifier
@@ -97,7 +106,7 @@ fun ShopScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top
         ) {
-            BalanceChip()
+            BalanceChip(balance = state.balance)
             Spacer(modifier = Modifier.weight(1f))
             SpriteButton(
                 assetPath = Sprites.CLOSE,
@@ -109,9 +118,8 @@ fun ShopScreen(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // TODO: "Название категории" is a static placeholder title; replace with the selected category's real display name from app/catalog logic.
         Text(
-            text = "Название категории",
+            text = state.selectedCategory.title(),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onBackground,
             maxLines = 1,
@@ -120,24 +128,39 @@ fun ShopScreen(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = ItemCellMinSize),
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
-            contentPadding = PaddingValues(vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .weight(1f)
         ) {
-            itemsIndexed(items = itemIds, key = { _, itemId -> itemId }) { index, itemId ->
-                ShopItemCard(
-                    itemId = itemId,
-                    quantity = state.quantities[itemId] ?: 0,
-                    // TODO: demoModeFor picks the card mode by grid index; replace with the mode derived from the item's real data (e.g. purchase state, type).
-                    mode = demoModeFor(index),
-                    onIncrease = { onIncrease(itemId) },
-                    onDecrease = { onDecrease(itemId) }
+            if (items.isEmpty()) {
+                Text(
+                    text = "В этом разделе пока нет товаров",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.align(Alignment.Center)
                 )
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = ItemCellMinSize),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(items = items, key = { item -> item.id }) { item ->
+                        ShopItemCard(
+                            item = item,
+                            pickedVariantId = state.pickedVariantOf(item),
+                            quantity = state.quantities[item.id] ?: 0,
+                            mode = modeOf(item, state),
+                            onPickVariant = { variantId -> onPickVariant(item.id, variantId) },
+                            onIncrease = { onIncrease(item.id) },
+                            onDecrease = { onDecrease(item.id) }
+                        )
+                    }
+                }
             }
         }
 
@@ -153,55 +176,74 @@ fun ShopScreen(
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                categoryIds.forEach { categoryId ->
+                categories.forEach { category ->
                     SpriteButton(
-                        assetPath = Sprites.shopCategory(categoryId),
-                        contentDescription = "Категория товаров",
-                        onClick = { onSelectCategory(categoryId) },
+                        assetPath = Sprites.shopCategory(category.xmlName),
+                        contentDescription = category.title(),
+                        onClick = { onSelectCategory(category) },
                         size = CategoryButtonSize,
-                        selected = categoryId == state.selectedCategoryId
+                        selected = category == state.selectedCategory
                     )
                 }
             }
             Spacer(modifier = Modifier.width(12.dp))
             PillButton(
-                text = "Купить",
-                // TODO: onClick is empty; wire up the purchase flow once that logic is implemented (owned by another team).
-                onClick = {}
+                text = if (state.cartPrice > 0) "Купить · ${state.cartPrice}" else "Купить",
+                onClick = onBuy,
+                enabled = state.canBuyCart
             )
         }
     }
 }
 
 /**
- * Demo-only layout rule: every fifth card looks purchased, every third offers add/remove.
+ * Name of a shop section as the player reads it.
  *
- * @param index position of the item within the grid.
- * @return the [ShopItemMode] to render for the card at [index].
+ * @return The Russian title of the category.
  */
-// TODO: demoModeFor derives the card mode from grid position only; replace with a mode based on the item's actual purchase state / type once that data is available.
-private fun demoModeFor(index: Int): ShopItemMode = when {
-    (index + 1) % 5 == 0 -> ShopItemMode.PURCHASED
-    (index + 1) % 3 == 0 -> ShopItemMode.ADDABLE
-    else -> ShopItemMode.COUNTER
+private fun ItemCategory.title(): String = when (this) {
+    ItemCategory.FOOD -> "Еда"
+    ItemCategory.TOYS -> "Игрушки"
+    ItemCategory.CLOTHES -> "Одежда"
+    ItemCategory.DECOR -> "Декор"
 }
 
 /**
- * Single shop item card: image with a "add to goals" star toggle, name/price placeholders and
- * a purchase control that depends on [mode].
+ * Picks the purchase control an item gets.
  *
- * @param itemId id of the item to render (used to look up its sprite).
- * @param quantity current quantity of this item, shown by the [ShopItemMode.COUNTER] control.
+ * @param item the item the card is built for.
+ * @param state current game state, for what the player already owns.
+ * @return [ShopItemMode.COUNTER] for food, which is bought by the handful over and over;
+ * [ShopItemMode.PURCHASED] for anything already owned in the picked variant, since buying it again
+ * would pay for nothing; [ShopItemMode.ADDABLE] otherwise.
+ */
+private fun modeOf(item: Item, state: GameUiState): ShopItemMode = when {
+    item.category == ItemCategory.FOOD -> ShopItemMode.COUNTER
+    state.ownedCountOf(item) > 0 -> ShopItemMode.PURCHASED
+    else -> ShopItemMode.ADDABLE
+}
+
+/**
+ * Single shop item card: the sprite of the picked variant with an "add to goals" star toggle, the
+ * item's name and price, a variant picker for items offered in several variants, and a purchase
+ * control that depends on [mode].
+ *
+ * @param item the item to show.
+ * @param pickedVariantId variant the item is shown and would be bought in.
+ * @param quantity how many of this item are in the cart; shown by [ShopItemMode.COUNTER].
  * @param mode which purchase control to show; see [ShopItemMode].
- * @param onIncrease called to increase this item's quantity.
- * @param onDecrease called to decrease this item's quantity.
+ * @param onPickVariant called with the id of the variant the player picked.
+ * @param onIncrease called to put one more of this item into the cart.
+ * @param onDecrease called to take one of this item out of the cart.
  * @param modifier modifier applied to the card surface.
  */
 @Composable
 private fun ShopItemCard(
-    itemId: String,
+    item: Item,
+    pickedVariantId: String,
     quantity: Int,
     mode: ShopItemMode,
+    onPickVariant: (String) -> Unit,
     onIncrease: () -> Unit,
     onDecrease: () -> Unit,
     modifier: Modifier = Modifier
@@ -226,8 +268,8 @@ private fun ShopItemCard(
                     .aspectRatio(1f)
             ) {
                 Sprite(
-                    assetPath = Sprites.shopItem(itemId),
-                    contentDescription = "Изображение товара",
+                    assetPath = item.getSpritePath(pickedVariantId),
+                    contentDescription = item.title,
                     modifier = Modifier.fillMaxSize()
                 )
                 SpriteButton(
@@ -241,22 +283,49 @@ private fun ShopItemCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // TODO: "Название" is a placeholder; replace with the item's real display name.
             Text(
-                text = "Название",
+                text = item.title,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            // TODO: "стоимость" is a placeholder; replace with the item's real price.
-            Text(
-                text = "стоимость",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Sprite(
+                    assetPath = Sprites.COIN,
+                    contentDescription = null,
+                    modifier = Modifier.size(PriceIconSize)
+                )
+                Text(
+                    text = item.price.toString(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            if (item.hasSeveralVariants) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    item.variantIds.forEach { variantId ->
+                        SpriteButton(
+                            assetPath = item.getSpritePath(variantId),
+                            contentDescription = "Вариант «$variantId»",
+                            onClick = { onPickVariant(variantId) },
+                            size = VariantButtonSize,
+                            selected = variantId == pickedVariantId
+                        )
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -307,6 +376,31 @@ private fun ShopItemCard(
     }
 }
 
+/** Items the previews go shopping with, standing in for what the catalog reads from the assets. */
+private val PreviewItems = listOf(
+    Item(
+        id = "apple",
+        title = "Яблоко",
+        price = 15,
+        category = ItemCategory.FOOD,
+        variants = mapOf("red" to "items/apple/red", "green" to "items/apple/green")
+    ),
+    Item(
+        id = "fish",
+        title = "Рыбка",
+        price = 25,
+        category = ItemCategory.FOOD,
+        variants = mapOf("default" to "items/fish/default")
+    ),
+    Item(
+        id = "cake",
+        title = "Пирожное",
+        price = 40,
+        category = ItemCategory.FOOD,
+        variants = mapOf("default" to "items/cake/default")
+    )
+)
+
 /** Preview of [ShopScreen] in the light theme. */
 @Preview(name = "Shop — Light", showBackground = true)
 @Composable
@@ -314,27 +408,44 @@ private fun ShopScreenLightPreview() {
     FinGameTheme(darkTheme = false) {
         Surface(color = MaterialTheme.colorScheme.background) {
             ShopScreen(
-                state = GameUiState(quantities = mapOf("item_01" to 2)),
+                state = GameUiState(
+                    balance = 300,
+                    quantities = mapOf("apple" to 2),
+                    pickedVariants = mapOf("apple" to "green"),
+                    cartPrice = 30
+                ),
+                items = PreviewItems,
                 onSelectCategory = {},
+                onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
+                onBuy = {},
                 onClose = {}
             )
         }
     }
 }
 
-/** Preview of [ShopScreen] in the dark theme. */
+/** Preview of [ShopScreen] in the dark theme, with an item the player already owns. */
 @Preview(name = "Shop — Dark", showBackground = true)
 @Composable
 private fun ShopScreenDarkPreview() {
     FinGameTheme(darkTheme = true) {
         Surface(color = MaterialTheme.colorScheme.background) {
             ShopScreen(
-                state = GameUiState(quantities = mapOf("item_02" to 1)),
+                state = GameUiState(
+                    balance = 120,
+                    selectedCategory = ItemCategory.CLOTHES,
+                    quantities = mapOf("fish" to 1),
+                    cartPrice = 25,
+                    owned = mapOf(ItemSelection("hat", "black") to 1)
+                ),
+                items = emptyList(),
                 onSelectCategory = {},
+                onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
+                onBuy = {},
                 onClose = {}
             )
         }

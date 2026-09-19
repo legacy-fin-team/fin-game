@@ -29,9 +29,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.legacy.fingame.game.GameUiState
 import com.legacy.fingame.game.Screen
+import com.legacy.fingame.game.economy.Economy
 import com.legacy.fingame.ui.DemoContent
 import com.legacy.fingame.ui.components.BalanceChip
 import com.legacy.fingame.ui.components.GoalCard
+import com.legacy.fingame.ui.components.PillButton
 import com.legacy.fingame.ui.components.Sprite
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
@@ -67,18 +69,21 @@ private const val DemoGoalProgress = 0.4f
  *   pet area is sized from both the available width and height ([PetAreaWidthFraction],
  *   [PetAreaHeightFraction]) so it cannot grow past the screen in landscape and cover the
  *   corner buttons.
- * - Top-start: balance chip and goal progress card.
+ * - Top-start: balance chip, the daily bonus button while the bonus is unclaimed, and the goal
+ *   progress card.
  * - Top-end: secondary buttons for opening settings and locations.
  * - Bottom: a single row split into two groups — sub-location navigation arrows (start) and
  *   primary action buttons for quests/inventory/shop (end). Both groups are combined into one
  *   row so the enlarged action buttons cannot overlap each other on narrow screens.
  *
  * @param state current game state; [GameUiState.subLocationIndex] selects which title from
- *   [subLocationTitles] is shown above the pet.
+ *   [subLocationTitles] is shown above the pet, [GameUiState.balance] fills the balance chip and
+ *   [GameUiState.dailyBonusAvailable] decides whether the bonus button is there at all.
  * @param onOpenScreen called with the [Screen] that should be opened when a navigation button
  *   (settings, locations, quests, inventory, shop) is pressed.
  * @param onPrevSubLocation called when the "previous sub-location" arrow is pressed.
  * @param onNextSubLocation called when the "next sub-location" arrow is pressed.
+ * @param onClaimDailyBonus called when the player takes the daily bonus.
  * @param modifier modifier applied to the screen root.
  * @param petSpritePath path (relative to `assets/textures/`) to the sprite of the player's pet;
  *   the caller resolves it from the animal the player picked and its current age stage, so this
@@ -92,6 +97,7 @@ fun MainScreen(
     onOpenScreen: (Screen) -> Unit,
     onPrevSubLocation: () -> Unit,
     onNextSubLocation: () -> Unit,
+    onClaimDailyBonus: () -> Unit,
     modifier: Modifier = Modifier,
     // TODO: default pulls from demo content; replace with the sprite of the pet at its real age stage.
     petSpritePath: String = Sprites.pet(
@@ -125,7 +131,13 @@ fun MainScreen(
             modifier = Modifier.align(Alignment.TopStart),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            BalanceChip()
+            BalanceChip(balance = state.balance)
+            if (state.dailyBonusAvailable) {
+                PillButton(
+                    text = "Бонус дня +${Economy.DAILY_BONUS}",
+                    onClick = onClaimDailyBonus
+                )
+            }
             GoalCard(
                 progress = DemoGoalProgress,
                 modifier = Modifier.widthIn(max = GoalCardWidth)
@@ -286,10 +298,15 @@ private fun MainScreenLightPreview() {
     FinGameTheme(darkTheme = false) {
         Surface(color = MaterialTheme.colorScheme.background) {
             MainScreen(
-                state = GameUiState(subLocationIndex = 1),
+                state = GameUiState(
+                    balance = 250,
+                    dailyBonusAvailable = true,
+                    subLocationIndex = 1
+                ),
                 onOpenScreen = {},
                 onPrevSubLocation = {},
-                onNextSubLocation = {}
+                onNextSubLocation = {},
+                onClaimDailyBonus = {}
             )
         }
     }
@@ -302,10 +319,11 @@ private fun MainScreenDarkPreview() {
     FinGameTheme(darkTheme = true) {
         Surface(color = MaterialTheme.colorScheme.background) {
             MainScreen(
-                state = GameUiState(subLocationIndex = 1),
+                state = GameUiState(balance = 250, subLocationIndex = 1),
                 onOpenScreen = {},
                 onPrevSubLocation = {},
-                onNextSubLocation = {}
+                onNextSubLocation = {},
+                onClaimDailyBonus = {}
             )
         }
     }
@@ -318,10 +336,11 @@ private fun MainScreenLandscapePreview() {
     FinGameTheme(darkTheme = false) {
         Surface(color = MaterialTheme.colorScheme.background) {
             MainScreen(
-                state = GameUiState(subLocationIndex = 2),
+                state = GameUiState(balance = 250, subLocationIndex = 2),
                 onOpenScreen = {},
                 onPrevSubLocation = {},
-                onNextSubLocation = {}
+                onNextSubLocation = {},
+                onClaimDailyBonus = {}
             )
         }
     }

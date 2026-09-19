@@ -42,20 +42,22 @@ import com.legacy.fingame.ui.screens.ShopScreen
  * @param modifier modifier applied to the root surface.
  * @param vm view model providing [GameUiState] and the navigation/action callbacks passed down
  *   to each screen; defaults to a [GameViewModel] scoped to this composable, restoring the
- *   player's game from [FinGameApplication.playerPreferences].
+ *   player's game from [FinGameApplication.playerPreferences] and pricing the shop out of
+ *   [FinGameApplication.itemRegistry].
  */
 @Composable
 fun FinGameApp(
     modifier: Modifier = Modifier,
     vm: GameViewModel = viewModel(
-        factory = GameViewModel.factory(
-            (LocalContext.current.applicationContext as FinGameApplication).playerPreferences
-        )
+        factory = with(LocalContext.current.applicationContext as FinGameApplication) {
+            GameViewModel.factory(store = playerPreferences, catalog = itemRegistry)
+        }
     )
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val application = LocalContext.current.applicationContext as FinGameApplication
     val animalRegistry = application.animalRegistry
+    val itemRegistry = application.itemRegistry
 
     val savedSelection = state.selection
     val pet = savedSelection?.takeIf { animalRegistry.hasVariant(it.animalId, it.variantId) }
@@ -84,6 +86,7 @@ fun FinGameApp(
                         onOpenScreen = vm::openScreen,
                         onPrevSubLocation = vm::prevSubLocation,
                         onNextSubLocation = vm::nextSubLocation,
+                        onClaimDailyBonus = { vm.claimDailyBonus() },
                         // TODO: DemoContent.petAge is a placeholder; pass the pet's real age stage once
                         //  the pet growth logic exists.
                         petSpritePath = animalRegistry.getIdleSpritePath(
@@ -95,9 +98,12 @@ fun FinGameApp(
 
                     Screen.SHOP -> ShopScreen(
                         state = state,
+                        items = itemRegistry.getItemsByCategory(state.selectedCategory),
                         onSelectCategory = vm::selectCategory,
+                        onPickVariant = vm::pickVariant,
                         onIncrease = vm::increaseQty,
                         onDecrease = vm::decreaseQty,
+                        onBuy = { vm.buyCart() },
                         onClose = vm::closeScreen
                     )
 

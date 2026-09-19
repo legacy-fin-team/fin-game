@@ -2,7 +2,7 @@ package com.legacy.fingame.game.items
 
 import android.content.Context
 
-class ItemRegistry(context: Context) {
+class ItemRegistry(context: Context) : ItemCatalog {
     private val itemsByCategory: Map<ItemCategory, Map<String, Item>>
     
     private val itemsById: Map<String, Item>
@@ -22,10 +22,19 @@ class ItemRegistry(context: Context) {
 
     /**
      * @param category a valid item category.
-     * @return A list of [Item] that share the same category.
+     * @return A list of [Item] that share the same category, empty when the data registers no item
+     * of that category — the shop still has a section for it.
      */
-    fun getItemsByCategory(category: ItemCategory): List<Item> {
-        return itemsByCategory.getValue(category).values.toList()
+    override fun getItemsByCategory(category: ItemCategory): List<Item> {
+        return itemsByCategory[category]?.values?.toList() ?: emptyList()
+    }
+
+    /**
+     * @param itemId id of an item.
+     * @return [Item] data, or null when no item is registered under [itemId].
+     */
+    override fun findItemById(itemId: String): Item? {
+        return itemsById[itemId]
     }
 
     /**

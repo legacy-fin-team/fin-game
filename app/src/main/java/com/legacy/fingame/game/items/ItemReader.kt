@@ -81,8 +81,12 @@ class ItemReader {
                 continue
             }
 
+            // An item whose data doesn't name it is still playable, it is just called by its id.
+            val title = itemNode.getAttribute("title").ifBlank { itemId }
+
             val item = Item(
                 id = itemId,
+                title = title,
                 price = price,
                 category = category,
                 variants = variantMap
