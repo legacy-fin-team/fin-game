@@ -2,7 +2,6 @@ package com.legacy.fingame.game.animals
 
 import android.util.Log
 import org.w3c.dom.Element
-import org.w3c.dom.Node
 import org.w3c.dom.NodeList
 import java.io.InputStream
 import javax.xml.parsers.DocumentBuilderFactory
@@ -38,6 +37,11 @@ class AnimalReader {
             val animalId = animalNode.getAttribute("id")
             if (animalId.isNullOrBlank()) {
                 Log.e(TAG, "Tag <animal> doesn't have id attribute.")
+                continue
+            }
+
+            if (animals.containsKey(animalId)) {
+                Log.e(TAG, "At least two animals share the same id: '$animalId'")
                 continue
             }
 
@@ -90,6 +94,12 @@ class AnimalReader {
             if (variantId.isNullOrBlank()) {
                 Log.e(TAG, "Tag <variant> of animal with id '$animalId' " +
                         "doesn't have 'id' attribute.")
+                continue
+            }
+
+            if (variantMap.containsKey(variantId)) {
+                Log.e(TAG, "At least two variants of animal with id '$animalId' " +
+                        "share the same id: '$variantId'")
                 continue
             }
 
