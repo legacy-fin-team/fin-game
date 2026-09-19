@@ -21,14 +21,17 @@ class ItemRegistry(context: Context) {
     }
 
     /**
-     * Получить список предметов определенной категории (например, для 1 вкладки магазина)
+     * @param category a valid item category.
+     * @return A list of [Item] that share the same category.
      */
     fun getItemsByCategory(category: ItemCategory): List<Item> {
         return itemsByCategory.getValue(category).values.toList()
     }
 
     /**
-     * Получить путь до ассетов конкретного варианта предмета.
+     * @param itemId id of an item.
+     * @param variantId id of an item variant.
+     * @return The asset path to variant.
      */
     fun getVariantPath(itemId: String, variantId: String): String {
         val item = itemsById.getValue(itemId)
@@ -36,7 +39,8 @@ class ItemRegistry(context: Context) {
     }
 
     /**
-     * Получить сам предмет по его id (ищет сразу среди всех).
+     * @param itemId id of an item.
+     * @return [Item] data.
      */
     fun getItemById(itemId: String): Item {
         return itemsById.getValue(itemId)
