@@ -80,13 +80,13 @@ class AnimalReader {
                     continue
                 }
 
-                animals[animalId] = Animal(id = animalId, variants = variantMap)
+                animals[animalId] = Animal(id = animalId, variants = variantMap.toMap())
                 totalVariants += variantMap.size
             }
         }
 
         Log.i(TAG, "Loaded animals: ${animals.size}. Loaded animal variants: $totalVariants.")
         
-        return animals
+        return animals.toMap()
     }
 }
