@@ -30,15 +30,13 @@ class AnimalReader {
             if (animalNode is Element) {
                 val animalId = animalNode.getAttribute("id")
                 if (animalId.isNullOrBlank()) {
-                    val msg = "Tag <animal> doesn't have id attribute."
-                    Log.e(TAG, msg)
+                    Log.e(TAG, "Tag <animal> doesn't have id attribute.")
                     continue
                 }
 
                 val variantsNodes = animalNode.getElementsByTagName("variants")
                 if (variantsNodes.length == 0) {
-                    val msg = "Animal with id '$animalId' doesn't have tag <variants>."
-                    Log.e(TAG, msg)
+                    Log.e(TAG, "Animal with id '$animalId' doesn't have tag <variants>.")
                     continue
                 }
 
@@ -46,10 +44,8 @@ class AnimalReader {
                 val variantsPath = variantsElement.getAttribute("path")
                 
                 if (variantsPath.isNullOrBlank()) {
-                    val msg =
-                        "Tag <variants> of animal with id '$animalId' " +
-                                "doesn't have 'path' attribute."
-                    Log.e(TAG, msg)
+                    Log.e(TAG, "Tag <variants> of animal with id '$animalId' " +
+                            "doesn't have 'path' attribute.")
                     continue
                 }
 
@@ -62,9 +58,8 @@ class AnimalReader {
                         val variantId = variantNode.getAttribute("id")
 
                         if (variantId.isNullOrBlank()) {
-                            val msg = "Tag <variant> of animal with id '$animalId' " +
-                                    "doesn't have 'id' attribute."
-                            Log.e(TAG, msg)
+                            Log.e(TAG, "Tag <variant> of animal with id '$animalId' " +
+                                    "doesn't have 'id' attribute.")
                             continue
                         }
                         
@@ -79,8 +74,7 @@ class AnimalReader {
                 }
 
                 if (variantMap.isEmpty()) {
-                    val msg = "Animal with id '$animalId' doesn't have any tag <variant>."
-                    Log.e(TAG, msg)
+                    Log.e(TAG, "Animal with id '$animalId' doesn't have any tag <variant>.")
                     continue
                 }
 
