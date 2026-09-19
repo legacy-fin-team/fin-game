@@ -40,13 +40,6 @@ class ItemReader {
                     throw IllegalArgumentException(msg)
                 }
 
-                val type = itemNode.getAttribute("type")
-                if (type.isNullOrBlank()) {
-                    val msg = "Отсутствует обязательный атрибут 'type' у предмета id = '$itemId'"
-                    Log.e(TAG, msg)
-                    throw IllegalArgumentException(msg)
-                }
-
                 val categoryStr = itemNode.getAttribute("category")
                 if (categoryStr.isNullOrBlank()) {
                     val msg = "Отсутствует обязательный атрибут 'category' у предмета id = '$itemId'"
@@ -105,7 +98,6 @@ class ItemReader {
                 val item = Item(
                     id = itemId,
                     price = price,
-                    type = type,
                     category = category,
                     variants = variantMap
                 )
