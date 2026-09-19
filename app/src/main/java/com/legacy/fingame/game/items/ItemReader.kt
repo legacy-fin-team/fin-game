@@ -12,11 +12,11 @@ class ItemReader {
     }
 
     /**
-     * Считывает XML документ и возвращает словарь, где ключ - это категория,
-     * а значение - словарь предметов этой категории (по id предмета).
+     * Reads XML document. Doesn't do path data validation.
+     * @param inputStream stream that reads XML file.
+     * @return Map of items. The key is item id.
      */
     fun readItems(inputStream: InputStream): Map<ItemCategory, Map<String, Item>> {
-        // Подготавливаем словари для каждой категории
         val itemsByCategory = ItemCategory.entries.associateWith { mutableMapOf<String, Item>() }
         var totalVariants = 0
 
@@ -34,31 +34,27 @@ class ItemReader {
 
             val itemId = itemNode.getAttribute("id")
             if (itemId.isNullOrBlank()) {
-                val msg = "Отсутствует обязательный атрибут 'id' у тега <item>."
-                Log.e(TAG, msg)
+                Log.e(TAG, "Tag <item> does not have 'id' attribute.")
                 continue
             }
 
             val priceStr = itemNode.getAttribute("price")
             val price = priceStr.toIntOrNull()
             if (price == null) {
-                val msg = "Отсутствует или неверный формат атрибута 'price' у предмета id = '$itemId'"
-                Log.e(TAG, msg)
+                Log.e(TAG, "Item with id '$itemId' does not have proper 'price' attribute.")
                 continue
             }
 
             val categoryStr = itemNode.getAttribute("category")
             if (categoryStr.isNullOrBlank()) {
-                val msg = "Отсутствует обязательный атрибут 'category' у предмета id = '$itemId'"
-                Log.e(TAG, msg)
+                Log.e(TAG, "Item with id '$itemId' does not have proper 'category' attribute.")
                 continue
             }
             val category = ItemCategory.fromString(categoryStr)
 
             val variantsNodes = itemNode.getElementsByTagName("variants")
             if (variantsNodes.length == 0) {
-                val msg = "Отсутствует обязательный тег <variants> у предмета id = '$itemId'"
-                Log.e(TAG, msg)
+                Log.e(TAG, "Item with id '$itemId' does not have <variants> tag.")
                 continue
             }
 
@@ -66,8 +62,8 @@ class ItemReader {
             val variantsPath = variantsElement.getAttribute("path")
 
             if (variantsPath.isNullOrBlank()) {
-                val msg = "У тега <variants> отсутствует обязательный атрибут 'path' (item id: $itemId)"
-                Log.e(TAG, msg)
+                Log.e(TAG, "<variants> tag of item with id '$itemId' " +
+                        "does not have 'path' attribute.")
                 continue
             }
 
@@ -80,12 +76,11 @@ class ItemReader {
                     val variantId = variantNode.getAttribute("id")
 
                     if (variantId.isNullOrBlank()) {
-                        val msg = "У тега <variant> отсутствует обязательный атрибут 'id' (item id: $itemId)"
-                        Log.e(TAG, msg)
+                        Log.e(TAG, "<variant> tag of item with id '$itemId' " +
+                                "does not have 'id' attribute.")
                         continue
                     }
 
-                    // Формируем полный путь
                     val fullPath = if (variantsPath.endsWith("/")) {
                         "$variantsPath$variantId"
                     } else {
@@ -97,8 +92,7 @@ class ItemReader {
             }
 
             if (variantMap.isEmpty()) {
-                val msg = "У предмета с id = '$itemId' нет ни одного варианта (тега <variant>)."
-                Log.e(TAG, msg)
+                Log.e(TAG, "<variants> tag of item with id '$itemId' is empty.")
                 continue
             }
 
@@ -113,7 +107,7 @@ class ItemReader {
         }
 
         val totalItems = itemsByCategory.values.sumOf { it.size }
-        Log.i(TAG, "Успешно загружено предметов: $totalItems. Всего вариантов загружено: $totalVariants.")
+        Log.i(TAG, "Loaded items: $totalItems. Loaded variants: $totalVariants.")
 
         return itemsByCategory
     }
