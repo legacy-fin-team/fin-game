@@ -26,19 +26,19 @@ object Sprites {
     const val SHOP = "ui/shop.webp"
 
     /** Path to the left-arrow navigation sprite. */
-    const val ARROW_LEFT = "ui/arrow_left.webp"
+    const val ARROW_LEFT = "ui/arrow-left.webp"
 
     /** Path to the right-arrow navigation sprite. */
-    const val ARROW_RIGHT = "ui/arrow_right.webp"
+    const val ARROW_RIGHT = "ui/arrow-right.webp"
 
     /** Path to the close ("X") icon sprite. */
     const val CLOSE = "ui/close.webp"
 
     /** Path to the filled/"on" star icon sprite. */
-    const val STAR_ON = "ui/star_on.webp"
+    const val STAR_ON = "ui/star-on.webp"
 
     /** Path to the empty/"off" star icon sprite. */
-    const val STAR_OFF = "ui/star_off.webp"
+    const val STAR_OFF = "ui/star-off.webp"
 
     /** Path to the plus ("+") icon sprite. */
     const val PLUS = "ui/plus.webp"
