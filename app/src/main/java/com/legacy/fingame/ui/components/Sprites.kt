@@ -1,5 +1,7 @@
 package com.legacy.fingame.ui.components
 
+import com.legacy.fingame.game.animals.Animal
+
 /**
  * Asset paths (relative to `assets/textures/`) for all UI sprites used by game components.
  *
@@ -50,18 +52,26 @@ object Sprites {
     const val COIN = "ui/coin.webp"
 
     /**
-     * Builds the asset path for a pet sprite.
+     * Builds the asset path for a pet sprite the way the animal data files lay them out.
      *
-     * An animal is identified by two ids: the species and the variant it was created with, so both
-     * are used as path segments (for example `cat` + `white` resolves to
-     * `animals/cat/white/idle.webp`).
+     * An animal is identified by two ids: the species and the variant it was created with, and it
+     * grows through several age stages, so all three are used as path segments (for example `cat` +
+     * `white` + `0` resolves to `animals/cat/white/0/idle.webp`).
+     *
+     * This builder assumes the standard `animals/` layout and is meant for previews and demo
+     * content; the running app resolves the path through
+     * [com.legacy.fingame.game.animals.AnimalRegistry.getIdleSpritePath], which uses the path
+     * declared by the animal's data and knows how many age stages that animal has.
      *
      * @param petId species identifier of the animal, used verbatim as a path segment.
      * @param variantId variant identifier of the animal (its colouring or skin), used verbatim as
      *   a path segment.
+     * @param age age stage of the animal, used verbatim as a path segment; defaults to the first
+     *   stage every animal has.
      * @return path relative to `assets/textures/` pointing at the pet's idle sprite.
      */
-    fun pet(petId: String, variantId: String) = "animals/$petId/$variantId/idle.webp"
+    fun pet(petId: String, variantId: String, age: Int = Animal.FIRST_AGE) =
+        "animals/$petId/$variantId/$age/${Animal.IDLE_SPRITE_FILE}"
 
     /**
      * Builds the asset path for a shop item's sprite.

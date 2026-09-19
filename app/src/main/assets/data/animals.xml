@@ -1,8 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <animals>
-    <animal id="cat">
+    <animal id="cat" title="Кот" ages="3">
         <variants path="animals/cat/">
             <variant id="orange" />
+            <variant id="white" />
+        </variants>
+    </animal>
+    <animal id="dog" title="Пёс" ages="2">
+        <variants path="animals/dog/">
+            <variant id="brown" />
         </variants>
     </animal>
 </animals>

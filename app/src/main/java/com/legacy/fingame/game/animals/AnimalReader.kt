@@ -14,9 +14,8 @@ class AnimalReader {
     /**
      * Reads XML document. Doesn't do path data validation.
      * @param inputStream stream that reads XML file.
-     * @return Map of animals. The key is animal id.
-     * The value is map of paths to animal variants.
-     * The key is the animal variant id. The value is the path relative to the /asstets/textures/.
+     * @return Map of animals. The key is animal id. The value is the [Animal] data:
+     * its title, its number of age stages and the map of paths to its variants.
      */
     fun readAnimals(inputStream: InputStream): Map<String, Animal> {
         val animals = mutableMapOf<String, Animal>()
@@ -45,6 +44,17 @@ class AnimalReader {
                 continue
             }
 
+            val animalTitle = animalNode.getAttribute("title")
+            if (animalTitle.isNullOrBlank()) {
+                Log.e(TAG, "Animal with id '$animalId' doesn't have 'title' attribute.")
+                continue
+            }
+
+            val ageCount = getAgeCount(animalNode, animalId)
+            if (ageCount == null) {
+                continue
+            }
+
             val variantsNodes = animalNode.getElementsByTagName("variants")
             if (variantsNodes.length == 0) {
                 Log.e(TAG, "Animal with id '$animalId' doesn't have tag <variants>.")
@@ -68,13 +78,42 @@ class AnimalReader {
                 continue
             }
 
-            animals[animalId] = Animal(id = animalId, variants = variantMap.toMap())
+            animals[animalId] = Animal(
+                id = animalId,
+                title = animalTitle,
+                ageCount = ageCount,
+                variants = variantMap.toMap()
+            )
             totalVariants += variantMap.size
         }
 
         Log.i(TAG, "Loaded animals: ${animals.size}. Loaded animal variants: $totalVariants.")
 
         return animals.toMap()
+    }
+
+    /**
+     * Reads the number of age stages of an animal from the 'ages' attribute of its tag.
+     * An animal that doesn't declare the attribute gets [Animal.DEFAULT_AGE_COUNT] stages.
+     *
+     * @param animalElement tag <animal> of an animal.
+     * @param animalId id of that animal.
+     * @return Number of age stages or null if the attribute is present but isn't a positive number.
+     */
+    private fun getAgeCount(animalElement: Element, animalId: String): Int? {
+        val agesAttribute = animalElement.getAttribute("ages")
+        if (agesAttribute.isNullOrBlank()) {
+            return Animal.DEFAULT_AGE_COUNT
+        }
+
+        val ageCount = agesAttribute.toIntOrNull()
+        if (ageCount == null || ageCount < 1) {
+            Log.e(TAG, "Animal with id '$animalId' doesn't have proper 'ages' attribute: " +
+                    "'$agesAttribute'")
+            return null
+        }
+
+        return ageCount
     }
 
     private fun getVariants(

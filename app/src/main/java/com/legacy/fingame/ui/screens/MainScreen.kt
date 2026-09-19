@@ -80,9 +80,9 @@ private const val DemoGoalProgress = 0.4f
  * @param onPrevSubLocation called when the "previous sub-location" arrow is pressed.
  * @param onNextSubLocation called when the "next sub-location" arrow is pressed.
  * @param modifier modifier applied to the screen root.
- * @param petId species id of the pet to display; defaults to the demo content pet id.
- * @param petVariantId variant id of that pet (its colouring or skin); together with [petId] it
- *   resolves the sprite, defaults to the demo content variant id.
+ * @param petSpritePath path (relative to `assets/textures/`) to the sprite of the player's pet;
+ *   the caller resolves it from the animal the player picked and its current age stage, so this
+ *   screen doesn't have to know how animal assets are laid out. Defaults to the demo content pet.
  * @param subLocationTitles titles for each sub-location, indexed by
  *   [GameUiState.subLocationIndex]; defaults to the demo content titles.
  */
@@ -93,10 +93,12 @@ fun MainScreen(
     onPrevSubLocation: () -> Unit,
     onNextSubLocation: () -> Unit,
     modifier: Modifier = Modifier,
-    // TODO: default pulls from demo content; replace with the player's actually owned/selected pet id.
-    petId: String = DemoContent.petId,
-    // TODO: default pulls from demo content; replace with the variant the player's pet was created with.
-    petVariantId: String = DemoContent.petVariantId,
+    // TODO: default pulls from demo content; replace with the sprite of the pet at its real age stage.
+    petSpritePath: String = Sprites.pet(
+        petId = DemoContent.petId,
+        variantId = DemoContent.petVariantId,
+        age = DemoContent.petAge
+    ),
     // TODO: default pulls from demo content; replace with real sub-location names for the current location.
     subLocationTitles: List<String> = DemoContent.subLocationTitles
 ) {
@@ -113,8 +115,7 @@ fun MainScreen(
         )
 
         PetStage(
-            petId = petId,
-            petVariantId = petVariantId,
+            petSpritePath = petSpritePath,
             subLocationTitle = subLocationTitles.getOrNull(state.subLocationIndex),
             areaSize = petAreaSize,
             modifier = Modifier.align(Alignment.Center)
@@ -205,8 +206,7 @@ fun MainScreen(
 /**
  * Square pet card with the current sub-location badge shown above it.
  *
- * @param petId species id of the pet to render.
- * @param petVariantId variant id of that pet; both ids are required to resolve its sprite.
+ * @param petSpritePath path (relative to `assets/textures/`) to the pet's sprite.
  * @param subLocationTitle title of the current sub-location shown in the badge above the pet,
  *   or `null` to hide the badge.
  * @param areaSize side length of the square pet card; the caller computes it from both the
@@ -215,8 +215,7 @@ fun MainScreen(
  */
 @Composable
 private fun PetStage(
-    petId: String,
-    petVariantId: String,
+    petSpritePath: String,
     subLocationTitle: String?,
     areaSize: Dp,
     modifier: Modifier = Modifier
@@ -241,7 +240,7 @@ private fun PetStage(
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Sprite(
-                    assetPath = Sprites.pet(petId, petVariantId),
+                    assetPath = petSpritePath,
                     contentDescription = "Питомец",
                     modifier = Modifier
                         .fillMaxWidth(0.88f)
