@@ -118,7 +118,8 @@ class ItemReader {
             }
 
             if (variantMap.containsKey(variantId)) {
-                Log.e(TAG, "At least two variants share the same id: '$variantId'")
+                Log.e(TAG, "At least two variants of item with id '$itemId' " +
+                        "share the same id: '$variantId'")
                 continue
             }
 
