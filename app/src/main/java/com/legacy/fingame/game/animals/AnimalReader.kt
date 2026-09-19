@@ -6,7 +6,9 @@ import java.io.InputStream
 import javax.xml.parsers.DocumentBuilderFactory
 
 class AnimalReader {
-    private val TAG = "AnimalReader"
+    companion object {
+        private const val TAG = "AnimalReader"
+    }
 
     /**
      * Reads XML document. Doesn't do path data validation.
