@@ -31,7 +31,7 @@ class AnimalRegistry(context: Context) {
     
     /**
      * @param animalId id of an animal.
-     * @return List of animal variants
+     * @return [Animal] data.
      */
     fun getAnimalVariants(animalId: String): Animal {
         return animalsMap.getValue(animalId)
