@@ -82,7 +82,7 @@ class ItemReader {
                 category = category,
                 variants = variantMap
             )
-            itemsByCategory[category]?.put(itemId, item)
+            itemsByCategory.getValue(category)[itemId] = item
             totalVariants += variantMap.size
         }
 
