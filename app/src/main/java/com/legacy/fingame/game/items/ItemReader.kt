@@ -2,6 +2,7 @@ package com.legacy.fingame.game.items
 
 import android.util.Log
 import org.w3c.dom.Element
+import org.w3c.dom.NodeList
 import java.io.InputStream
 import javax.xml.parsers.DocumentBuilderFactory
 
@@ -67,29 +68,8 @@ class ItemReader {
                 continue
             }
 
-            val variantMap = mutableMapOf<String, String>()
             val variantNodes = variantsElement.getElementsByTagName("variant")
-
-            for (j in 0 until variantNodes.length) {
-                val variantNode = variantNodes.item(j)
-                if (variantNode is Element) {
-                    val variantId = variantNode.getAttribute("id")
-
-                    if (variantId.isNullOrBlank()) {
-                        Log.e(TAG, "<variant> tag of item with id '$itemId' " +
-                                "does not have 'id' attribute.")
-                        continue
-                    }
-
-                    val fullPath = if (variantsPath.endsWith("/")) {
-                        "$variantsPath$variantId"
-                    } else {
-                        "$variantsPath/$variantId"
-                    }
-
-                    variantMap[variantId] = fullPath
-                }
-            }
+            val variantMap = getVariants(variantNodes, itemId, variantsPath)
 
             if (variantMap.isEmpty()) {
                 Log.e(TAG, "<variants> tag of item with id '$itemId' is empty.")
@@ -111,4 +91,37 @@ class ItemReader {
 
         return itemsByCategory
     }
+
+    private fun getVariants(
+        variantNodes: NodeList,
+        itemId: String,
+        variantsPath: String
+    ): Map<String, String> {
+        val variantMap = mutableMapOf<String, String>()
+
+        for (i in 0 until variantNodes.length) {
+            val variantNode = variantNodes.item(i)
+            if (variantNode !is Element) {
+                continue
+            }
+
+            val variantId = variantNode.getAttribute("id")
+            if (variantId.isNullOrBlank()) {
+                Log.e(TAG, "Tag <variant> of item with id '$itemId' " +
+                        "doesn't have 'id' attribute.")
+                continue
+            }
+
+            val fullPath = if (variantsPath.endsWith("/")) {
+                "$variantsPath$variantId"
+            } else {
+                "$variantsPath/$variantId"
+            }
+
+            variantMap[variantId] = fullPath
+        }
+
+        return variantMap.toMap()
+    }
+
 }
