@@ -6,7 +6,11 @@ import java.io.InputStream
 import javax.xml.parsers.DocumentBuilderFactory
 
 class ItemReader {
-    private val TAG = "ItemReader"
+
+    companion object {
+        private const val TAG = "ItemReader"
+    }
+
     /**
      * Считывает XML документ и возвращает словарь, где ключ - это категория,
      * а значение - словарь предметов этой категории (по id предмета).
