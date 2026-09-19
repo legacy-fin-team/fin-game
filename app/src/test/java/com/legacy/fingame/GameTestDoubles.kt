@@ -7,6 +7,8 @@ import com.legacy.fingame.game.economy.GameClock
 import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.items.ItemCategory
+import com.legacy.fingame.game.scene.GameLayer
+import com.legacy.fingame.game.stats.StatKind
 
 /**
  * [PlayerStateStore] that keeps the state in memory instead of in SharedPreferences, so the
@@ -26,7 +28,8 @@ internal class FakePlayerStateStore(var state: PlayerState = PlayerState()) : Pl
 
 /**
  * The items the tests go shopping with: one cheap food item offered in two variants, one plain food
- * item, and two items that are bought once — one of them in several variants.
+ * item, two items that are bought once — one of them in several variants — and a decoration that
+ * stands behind the pet instead of on it.
  */
 internal object TestItems {
 
@@ -36,7 +39,8 @@ internal object TestItems {
         title = "Яблоко",
         price = 15,
         category = ItemCategory.FOOD,
-        variants = mapOf("red" to "items/apple/red", "green" to "items/apple/green")
+        variants = mapOf("red" to "items/apple/red", "green" to "items/apple/green"),
+        effects = mapOf(StatKind.HUNGER to 20, StatKind.HEALTH to 5)
     )
 
     /** Food with a single variant. */
@@ -45,7 +49,8 @@ internal object TestItems {
         title = "Рыбка",
         price = 25,
         category = ItemCategory.FOOD,
-        variants = mapOf("default" to "items/fish/default")
+        variants = mapOf("default" to "items/fish/default"),
+        effects = mapOf(StatKind.HUNGER to 35)
     )
 
     /** Clothes in two variants: owned per variant, so the black one is not the white one. */
@@ -54,20 +59,33 @@ internal object TestItems {
         title = "Шляпа",
         price = 100,
         category = ItemCategory.CLOTHES,
-        variants = mapOf("black" to "items/hat/black", "white" to "items/hat/white")
+        variants = mapOf("black" to "items/hat/black", "white" to "items/hat/white"),
+        effects = mapOf(StatKind.PLEASURE to 10)
     )
 
-    /** A toy with a single variant, bought once. */
+    /** A toy with a single variant, bought once and played with over and over. */
     val BALL = Item(
         id = "ball",
         title = "Мячик",
         price = 60,
         category = ItemCategory.TOYS,
-        variants = mapOf("red" to "items/ball/red")
+        variants = mapOf("red" to "items/ball/red"),
+        effects = mapOf(StatKind.PLEASURE to 20, StatKind.HUNGER to -5)
+    )
+
+    /** A decoration standing in front of the pet: its data names a layer of its own. */
+    val LAMP = Item(
+        id = "lamp",
+        title = "Лампа",
+        price = 150,
+        category = ItemCategory.DECOR,
+        variants = mapOf("default" to "items/lamp/default"),
+        effects = mapOf(StatKind.PLEASURE to 10),
+        layer = GameLayer.ENVIRONMENT_FRONT
     )
 
     /** Every test item, in the order a catalog would list them. */
-    val ALL = listOf(APPLE, FISH, HAT, BALL)
+    val ALL = listOf(APPLE, FISH, HAT, BALL, LAMP)
 }
 
 /**
@@ -85,18 +103,31 @@ internal class FakeItemCatalog(private val items: List<Item> = TestItems.ALL) : 
 }
 
 /**
- * [GameClock] the test moves by hand, so days can pass without waiting for midnight.
+ * [GameClock] the test moves by hand, so days can pass without waiting for midnight and the pet can
+ * be left alone for hours within a single test.
+ *
+ * The day and the moment are moved apart on purpose: a test about the daily bonus has no business
+ * working out timestamps, and a test about the pet getting hungry has none working out calendars.
  *
  * @property day the day the game currently sees, as days since the epoch.
+ * @property millis the moment the game currently sees, in milliseconds.
  */
-internal class FakeGameClock(var day: Long = DEFAULT_DAY) : GameClock {
+internal class FakeGameClock(
+    var day: Long = DEFAULT_DAY,
+    var millis: Long = DEFAULT_MILLIS
+) : GameClock {
 
     companion object {
         /** An arbitrary day the tests start on. */
         const val DEFAULT_DAY = 19_000L
+
+        /** An arbitrary moment the tests start at. */
+        const val DEFAULT_MILLIS = 1_700_000_000_000L
     }
 
     override fun today(): Long = day
+
+    override fun nowMillis(): Long = millis
 }
 
 /**

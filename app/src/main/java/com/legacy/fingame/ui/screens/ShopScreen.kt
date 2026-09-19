@@ -39,6 +39,7 @@ import com.legacy.fingame.game.GameUiState
 import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.items.ItemSelection
+import com.legacy.fingame.game.items.ItemUse
 import com.legacy.fingame.ui.components.BalanceChip
 import com.legacy.fingame.ui.components.PillButton
 import com.legacy.fingame.ui.components.Sprite
@@ -217,12 +218,12 @@ private fun ItemCategory.title(): String = when (this) {
  *
  * @param item the item the card is built for.
  * @param state current game state, for what the player already owns.
- * @return [ShopItemMode.COUNTER] for food, which is bought by the handful over and over;
+ * @return [ShopItemMode.COUNTER] for an item that is used up and bought again, i.e. food;
  * [ShopItemMode.PURCHASED] for anything already owned in the picked variant, since buying it again
  * would pay for nothing; [ShopItemMode.ADDABLE] otherwise.
  */
 private fun modeOf(item: Item, state: GameUiState): ShopItemMode = when {
-    item.category == ItemCategory.FOOD -> ShopItemMode.COUNTER
+    item.category.use == ItemUse.CONSUMED -> ShopItemMode.COUNTER
     state.ownedCountOf(item) > 0 -> ShopItemMode.PURCHASED
     else -> ShopItemMode.ADDABLE
 }

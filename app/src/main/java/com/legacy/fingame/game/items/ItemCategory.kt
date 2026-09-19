@@ -1,10 +1,25 @@
 package com.legacy.fingame.game.items
 
-enum class ItemCategory(val xmlName: String) {
-    FOOD("food"),
-    TOYS("toys"),
-    CLOTHES("clothes"),
-    DECOR("decor");
+import com.legacy.fingame.game.scene.GameLayer
+
+/**
+ * A section of the shop, and with it the way its items behave once the player owns them.
+ *
+ * @property xmlName name the data files use to put an item into this category.
+ * @property use what using an item of this category does to it; see [ItemUse].
+ * @property defaultLayer layer of the game area an item of this category is drawn on while it is
+ * worn, or null for categories whose items are never drawn there. An item may name another layer in
+ * its own data (see [Item.layer]) — a decoration that stands in front of the pet, for one.
+ */
+enum class ItemCategory(
+    val xmlName: String,
+    val use: ItemUse,
+    val defaultLayer: GameLayer?
+) {
+    FOOD("food", ItemUse.CONSUMED, null),
+    TOYS("toys", ItemUse.REUSABLE, null),
+    CLOTHES("clothes", ItemUse.WEARABLE, GameLayer.CLOTHES),
+    DECOR("decor", ItemUse.WEARABLE, GameLayer.ENVIRONMENT_BACK);
 
     companion object {
         /**

@@ -28,9 +28,16 @@ import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.legacy.fingame.game.GameUiState
 import com.legacy.fingame.game.Screen
 import com.legacy.fingame.game.economy.Economy
+import com.legacy.fingame.game.items.ItemCatalog
+import com.legacy.fingame.game.scene.GameLayer
+import com.legacy.fingame.game.scene.GameScene
+import com.legacy.fingame.game.scene.SceneSprite
+import com.legacy.fingame.game.stats.PetStats
+import com.legacy.fingame.game.stats.StatKind
 import com.legacy.fingame.ui.DemoContent
 import com.legacy.fingame.ui.components.BalanceChip
 import com.legacy.fingame.ui.components.GoalCard
@@ -38,6 +45,7 @@ import com.legacy.fingame.ui.components.PillButton
 import com.legacy.fingame.ui.components.Sprite
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
+import com.legacy.fingame.ui.components.StatPanel
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 
@@ -63,8 +71,29 @@ private const val PetAreaWidthFraction = 0.74f
  */
 private const val PetAreaHeightFraction = 0.52f
 
+/**
+ * Fraction of the game area the things standing in it take up, leaving a margin from the rounded
+ * edge of the card the scenery itself fills.
+ */
+private const val StageContentFraction = 0.88f
+
 // TODO: DemoGoalProgress is a hardcoded placeholder for the goal card progress bar. Replace with the real progress value once goal data is exposed from app logic.
 private const val DemoGoalProgress = 0.4f
+
+/**
+ * Game area the previews and the default of [MainScreen] show: the demo content pet standing in the
+ * scenery of the first sub-location, with nothing on.
+ * TODO: replace with the real scene once every caller builds one from the player's own pet.
+ */
+private val DemoScene: GameScene = GameScene.of(
+    background = SceneSprite(assetPath = Sprites.locationBackground(0), description = null),
+    pet = SceneSprite(
+        assetPath = Sprites.pet(petId = DemoContent.petId, variantId = DemoContent.petVariantId),
+        description = "Питомец"
+    ),
+    worn = emptySet(),
+    catalog = ItemCatalog.EMPTY
+)
 
 /**
  * Main game screen: shows the pet, current balance/goal progress, and navigation entry
@@ -83,17 +112,18 @@ private const val DemoGoalProgress = 0.4f
  *   row so the enlarged action buttons cannot overlap each other on narrow screens.
  *
  * @param state current game state; [GameUiState.subLocationIndex] selects which title from
- *   [subLocationTitles] is shown above the pet, [GameUiState.balance] fills the balance chip and
- *   [GameUiState.dailyBonusAvailable] decides whether the bonus button is there at all.
+ *   [subLocationTitles] is shown above the pet, [GameUiState.balance] fills the balance chip,
+ *   [GameUiState.dailyBonusAvailable] decides whether the bonus button is there at all and
+ *   [GameUiState.stats] fills the pet's stat bars.
  * @param onOpenScreen called with the [Screen] that should be opened when a navigation button
  *   (settings, locations, quests, inventory, shop) is pressed.
  * @param onPrevSubLocation called when the "previous sub-location" arrow is pressed.
  * @param onNextSubLocation called when the "next sub-location" arrow is pressed.
  * @param onClaimDailyBonus called when the player takes the daily bonus.
  * @param modifier modifier applied to the screen root.
- * @param petSpritePath path (relative to `assets/textures/`) to the sprite of the player's pet;
- *   the caller resolves it from the animal the player picked and its current age stage, so this
- *   screen doesn't have to know how animal assets are laid out. Defaults to the demo content pet.
+ * @param scene what stands in the game area, already sorted into its layers; the caller builds it
+ *   from the pet, its age stage and what it wears (see [GameScene.of]), so this screen doesn't have
+ *   to know how the assets are laid out. Defaults to the demo content pet alone.
  * @param subLocationTitles titles for each sub-location, indexed by
  *   [GameUiState.subLocationIndex]; defaults to the demo content titles.
  */
@@ -105,12 +135,8 @@ fun MainScreen(
     onNextSubLocation: () -> Unit,
     onClaimDailyBonus: () -> Unit,
     modifier: Modifier = Modifier,
-    // TODO: default pulls from demo content; replace with the sprite of the pet at its real age stage.
-    petSpritePath: String = Sprites.pet(
-        petId = DemoContent.petId,
-        variantId = DemoContent.petVariantId,
-        age = DemoContent.petAge
-    ),
+    // TODO: default pulls from demo content; replace with the real scene of the player's pet.
+    scene: GameScene = DemoScene,
     // TODO: default pulls from demo content; replace with real sub-location names for the current location.
     subLocationTitles: List<String> = DemoContent.subLocationTitles
 ) {
@@ -127,7 +153,7 @@ fun MainScreen(
         )
 
         PetStage(
-            petSpritePath = petSpritePath,
+            scene = scene,
             subLocationTitle = subLocationTitles.getOrNull(state.subLocationIndex),
             areaSize = petAreaSize,
             modifier = Modifier.align(Alignment.Center)
@@ -146,6 +172,10 @@ fun MainScreen(
             }
             GoalCard(
                 progress = DemoGoalProgress,
+                modifier = Modifier.widthIn(max = GoalCardWidth)
+            )
+            StatPanel(
+                stats = state.stats,
                 modifier = Modifier.widthIn(max = GoalCardWidth)
             )
         }
@@ -222,9 +252,15 @@ fun MainScreen(
 }
 
 /**
- * Square pet card with the current sub-location badge shown above it.
+ * Square game area with the current sub-location badge shown above it.
  *
- * @param petSpritePath path (relative to `assets/textures/`) to the pet's sprite.
+ * The area is where the pet lives, and it is stacked out of the five [GameLayer]s: the scenery of the
+ * sub-location, whatever stands behind the pet, the pet itself, whatever stands in front of it and
+ * the clothes it wears. The layers are drawn in [GameLayer.DRAW_ORDER] and each of them also carries
+ * its [GameLayer.zIndex], so what covers what is decided by the layer and not by the order the
+ * sprites happen to be composed in.
+ *
+ * @param scene what stands on each layer of the area.
  * @param subLocationTitle title of the current sub-location shown in the badge above the pet,
  *   or `null` to hide the badge.
  * @param areaSize side length of the square pet card; the caller computes it from both the
@@ -233,7 +269,7 @@ fun MainScreen(
  */
 @Composable
 private fun PetStage(
-    petSpritePath: String,
+    scene: GameScene,
     subLocationTitle: String?,
     areaSize: Dp,
     modifier: Modifier = Modifier
@@ -257,17 +293,31 @@ private fun PetStage(
             shadowElevation = 3.dp
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Sprite(
-                    assetPath = petSpritePath,
-                    contentDescription = "Питомец",
-                    modifier = Modifier
-                        .fillMaxWidth(0.88f)
-                        .aspectRatio(1f)
-                )
+                GameLayer.DRAW_ORDER.forEach { layer ->
+                    scene[layer].forEach { sprite ->
+                        Sprite(
+                            assetPath = sprite.assetPath,
+                            contentDescription = sprite.description,
+                            modifier = Modifier
+                                .zIndex(layer.zIndex)
+                                .fillMaxSize(layer.contentFraction())
+                                .aspectRatio(1f)
+                        )
+                    }
+                }
             }
         }
     }
 }
+
+/**
+ * How much of the game area a layer's sprites take up.
+ *
+ * @return `1f` for the scenery, which fills the whole area, and [StageContentFraction] for
+ * everything standing in it, so the pet and its things keep a margin from the rounded card edge.
+ */
+private fun GameLayer.contentFraction(): Float =
+    if (this == GameLayer.BACKGROUND) 1f else StageContentFraction
 
 /**
  * Pill-shaped badge showing the current sub-location name, displayed above the pet.
@@ -307,7 +357,14 @@ private fun MainScreenLightPreview() {
                 state = GameUiState(
                     balance = 250,
                     dailyBonusAvailable = true,
-                    subLocationIndex = 1
+                    subLocationIndex = 1,
+                    stats = PetStats(
+                        mapOf(
+                            StatKind.HEALTH to 90,
+                            StatKind.HUNGER to 45,
+                            StatKind.PLEASURE to 70
+                        )
+                    )
                 ),
                 onOpenScreen = {},
                 onPrevSubLocation = {},
@@ -325,7 +382,18 @@ private fun MainScreenDarkPreview() {
     FinGameTheme(darkTheme = true) {
         Surface(color = MaterialTheme.colorScheme.background) {
             MainScreen(
-                state = GameUiState(balance = 250, subLocationIndex = 1),
+                state = GameUiState(
+                    balance = 250,
+                    subLocationIndex = 1,
+                    // A pet that has been left alone for a while: the hunger bar warns about it.
+                    stats = PetStats(
+                        mapOf(
+                            StatKind.HEALTH to 60,
+                            StatKind.HUNGER to 10,
+                            StatKind.PLEASURE to 35
+                        )
+                    )
+                ),
                 onOpenScreen = {},
                 onPrevSubLocation = {},
                 onNextSubLocation = {},

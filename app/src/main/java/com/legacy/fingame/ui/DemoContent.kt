@@ -1,7 +1,5 @@
 package com.legacy.fingame.ui
 
-import com.legacy.fingame.game.animals.Animal
-
 /**
  * Hardcoded demo ids and titles used to wire up the UI. This is not a data model —
  * screens accept these values as parameters with these as their defaults, and the
@@ -25,12 +23,4 @@ object DemoContent {
      * TODO: replace with the real variant id from the data layer built by the team.
      */
     const val petVariantId: String = "white"
-
-    /**
-     * Age stage of the player's pet: an animal grows through several stages and each of them has
-     * its own sprites.
-     * TODO: replace with the real age stage from the data layer built by the team once the pet
-     * growth logic exists.
-     */
-    const val petAge: Int = Animal.FIRST_AGE
 }

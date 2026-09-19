@@ -4,13 +4,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.legacy.fingame.game.animals.Animal
 import com.legacy.fingame.game.animals.AnimalSelection
+import com.legacy.fingame.game.animals.Growth
 import com.legacy.fingame.game.economy.Economy
 import com.legacy.fingame.game.economy.GameClock
 import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.items.ItemSelection
+import com.legacy.fingame.game.items.ItemUse
+import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.ui.DemoContent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -65,6 +69,18 @@ enum class Screen {
  * only the view model knows the prices.
  * @property owned how many of each item and variant the player already bought, restored from
  * [PlayerState.owned].
+ * @property worn which of the owned items are on the pet right now, restored from
+ * [PlayerState.worn]. What is drawn on the game area's layers is built out of it (see
+ * [com.legacy.fingame.game.scene.GameScene]).
+ * @property stats the pet's stat bars, restored from [PlayerState.stats] and brought up to date by
+ * [GameViewModel.tick] as time passes.
+ * @property statsUpdatedAtMillis moment [stats] were last brought up to date, kept here so it can be
+ * saved back into [PlayerState]; the screens ask [stats] instead.
+ * @property petAge age stage the pet has grown to, worked out from [petBornAtMillis] rather than
+ * saved (see [Growth.ageAt]). Resolving it against the stages the animal actually has is left to
+ * [com.legacy.fingame.game.animals.Animal.getIdleSpritePath].
+ * @property petBornAtMillis moment the pet was taken in, kept here only so it can be saved back into
+ * [PlayerState]; the screens ask [petAge] instead.
  * @property subLocationIndex index of the currently displayed sub-location within
  * [DemoContent.subLocationTitles], restored from [PlayerState.subLocationIndex].
  */
@@ -79,6 +95,11 @@ data class GameUiState(
     val pickedVariants: Map<String, String> = emptyMap(),
     val cartPrice: Int = 0,
     val owned: Map<ItemSelection, Int> = emptyMap(),
+    val worn: Set<ItemSelection> = emptySet(),
+    val stats: PetStats = PetStats.FULL,
+    val statsUpdatedAtMillis: Long = PlayerState.NEVER_UPDATED,
+    val petAge: Int = Animal.FIRST_AGE,
+    val petBornAtMillis: Long = Growth.NOT_BORN,
     val subLocationIndex: Int = 0
 ) {
     /** Whether the cart holds something the player can actually pay for. */
@@ -99,17 +120,21 @@ data class GameUiState(
 }
 
 /**
- * State holder for the game screen: the pet the player plays with, screen navigation, the shop cart
- * and the player's money.
+ * State holder for the game screen: the pet the player plays with, how it is doing and what it wears,
+ * screen navigation, the shop cart and the player's money.
  *
  * The player's game is restored from [store] when the view model is created and written back to it
  * on every change, so closing the app — or having its process killed — doesn't lose the pet, the
- * sub-location it was left in, the coins earned or the items bought with them.
+ * sub-location it was left in, the coins earned, the items bought with them or the outfit the pet
+ * was left in. The pet, on the other hand, does not stand still while the app is closed: its stat
+ * bars fall and it grows up with the clock, which [tick] catches up with.
  *
  * @param store where the player's state is restored from and saved to.
- * @param catalog what is on sale; the view model needs it to know what the cart costs and to tell
- * food (bought by the handful) from items that are bought once.
- * @param clock where the current day comes from, for the once-a-day bonus.
+ * @param catalog what is on sale; the view model needs it to know what the cart costs, to tell food
+ * (bought by the handful) from items that are bought once, and to know what using an item does to
+ * the pet.
+ * @param clock where the current day comes from, for the once-a-day bonus, and the current moment,
+ * for the pet's stats and its growth.
  */
 class GameViewModel(
     private val store: PlayerStateStore,
@@ -204,11 +229,113 @@ class GameViewModel(
      * Takes the pet the player picked on the animal selection screen, for this run and for every
      * run after it.
      *
+     * A freshly picked pet is a newborn one: it starts at the youngest age stage with full stat bars,
+     * and grows and gets hungry from this moment on.
+     *
      * @param selection the animal and the variant the player picked.
      */
     fun selectAnimal(selection: AnimalSelection) {
-        _state.value = _state.value.copy(selection = selection)
+        val now = clock.nowMillis()
+        _state.value = _state.value.copy(
+            selection = selection,
+            stats = PetStats.FULL,
+            statsUpdatedAtMillis = now,
+            petAge = Animal.FIRST_AGE,
+            petBornAtMillis = now
+        )
         persist()
+    }
+
+    /**
+     * Brings the pet up to date with the clock: lets the stat bars fall for the time that has passed
+     * and lets the pet grow into the age stage it has reached by now.
+     *
+     * Called both when the app comes back — the pet lived on while it was closed — and on a timer
+     * while the player is watching, so the bars go down in front of them. Calling it more often than
+     * the pet actually changes costs nothing and changes nothing: the leftover time below one
+     * [PetStats.TICK_MILLIS] is kept for the next call instead of being dropped.
+     */
+    fun tick() {
+        val current = _state.value
+        val now = clock.nowMillis()
+        val ticks = PetStats.ticksBetween(current.statsUpdatedAtMillis, now)
+        val age = Growth.ageAt(current.petBornAtMillis, now)
+        if (ticks == 0L && age == current.petAge) return
+
+        _state.value = current.copy(
+            stats = current.stats.decayedBy(ticks),
+            statsUpdatedAtMillis = current.statsUpdatedAtMillis + ticks * PetStats.TICK_MILLIS,
+            petAge = age
+        )
+        persist()
+    }
+
+    /**
+     * Uses an item the player owns on the pet: the pet eats the food, plays with the toy, and its
+     * stat bars move by the item's [Item.effects] either way.
+     *
+     * Food is gone once it is eaten, a toy stays in the inventory to be played with again, and
+     * anything the pet can wear is not used at all — it is put on and taken off through
+     * [toggleWorn].
+     *
+     * @param selection the item and the variant of it to use, as the inventory holds it.
+     * @return True when the item was used, false when the player doesn't own it, it is not registered
+     * any more, or it is worn rather than used.
+     */
+    fun useItem(selection: ItemSelection): Boolean {
+        val current = _state.value
+        val item = catalog.findItemById(selection.itemId) ?: return false
+        if (item.isWearable) return false
+
+        val count = current.owned[selection] ?: 0
+        if (count <= 0) return false
+
+        val owned = if (item.category.use == ItemUse.CONSUMED) {
+            if (count == 1) current.owned - selection else current.owned + (selection to count - 1)
+        } else {
+            current.owned
+        }
+
+        _state.value = current.copy(
+            owned = owned,
+            stats = current.stats.changedBy(item.effects)
+        )
+        persist()
+        return true
+    }
+
+    /**
+     * Puts a piece of clothing or a decoration on the pet, or takes it off again. What is on the pet
+     * is the player's own and comes back on the next launch.
+     *
+     * Only one variant of the same item can be on at a time: putting on the white hat takes the black
+     * one off, since the pet has but one head. Putting an item on is using it, so the item's
+     * [Item.effects] are applied then; taking it off does not take them back — the pet was happy to
+     * wear it while it did.
+     *
+     * @param selection the item and the variant of it to put on or take off.
+     * @return True when the item was put on or taken off, false when the player doesn't own it, it is
+     * not registered any more, or it is not something the pet can wear.
+     */
+    fun toggleWorn(selection: ItemSelection): Boolean {
+        val current = _state.value
+        val item = catalog.findItemById(selection.itemId) ?: return false
+        if (!item.isWearable) return false
+        if ((current.owned[selection] ?: 0) <= 0) return false
+
+        val takingOff = selection in current.worn
+        val worn = if (takingOff) {
+            current.worn - selection
+        } else {
+            current.worn.filterNot { it.itemId == selection.itemId }.toSet() + selection
+        }
+
+        _state.value = current.copy(
+            worn = worn,
+            stats = if (takingOff) current.stats else current.stats.changedBy(item.effects)
+        )
+        persist()
+        return true
     }
 
     /**
@@ -367,11 +494,11 @@ class GameViewModel(
      *
      * @param item the item in question.
      * @param state state the picked variants and the owned items are read from.
-     * @return [MAX_ITEM_QUANTITY] for food, which is eaten and bought again; [SINGLE_ITEM_QUANTITY]
-     * for anything else, or zero once the player owns it in the picked variant.
+     * @return [MAX_ITEM_QUANTITY] for an item that is used up and bought again, i.e. food;
+     * [SINGLE_ITEM_QUANTITY] for anything else, or zero once the player owns it in the picked variant.
      */
     private fun maxQuantityOf(item: Item, state: GameUiState): Int = when {
-        item.category == ItemCategory.FOOD -> MAX_ITEM_QUANTITY
+        item.category.use == ItemUse.CONSUMED -> MAX_ITEM_QUANTITY
         state.ownedCountOf(item) > 0 -> 0
         else -> SINGLE_ITEM_QUANTITY
     }
@@ -403,6 +530,17 @@ class GameViewModel(
      */
     private fun restoredState(): GameUiState {
         val saved = store.load()
+        val now = clock.nowMillis()
+        // A pet saved before the game kept track of time starts living now: the alternative is to
+        // treat it as having been neglected since the epoch and greet the player with an empty pet.
+        val statsUpdatedAt = saved.statsUpdatedAtMillis.takeUnless {
+            it == PlayerState.NEVER_UPDATED
+        } ?: now
+        val bornAt = saved.petBornAtMillis.takeUnless {
+            it == Growth.NOT_BORN && saved.selection != null
+        } ?: now
+        val ticks = PetStats.ticksBetween(statsUpdatedAt, now)
+
         return GameUiState(
             selection = saved.selection,
             balance = saved.balance,
@@ -412,8 +550,28 @@ class GameViewModel(
                 today = clock.today()
             ),
             owned = saved.owned,
+            worn = wearableOf(saved.worn, saved.owned),
+            stats = saved.stats.decayedBy(ticks),
+            statsUpdatedAtMillis = statsUpdatedAt + ticks * PetStats.TICK_MILLIS,
+            petAge = Growth.ageAt(bornAt, now),
+            petBornAtMillis = bornAt,
             subLocationIndex = existingSubLocation(saved.subLocationIndex)
         )
+    }
+
+    /**
+     * Keeps on the pet only what it can still be wearing: the items may change between two launches,
+     * and something the player no longer owns — or that is no longer worn at all — cannot stay on.
+     *
+     * @param worn items the pet had on as they were saved.
+     * @param owned items the player owns.
+     * @return The saved items the pet is still allowed to wear.
+     */
+    private fun wearableOf(
+        worn: Set<ItemSelection>,
+        owned: Map<ItemSelection, Int>
+    ): Set<ItemSelection> = worn.filterTo(mutableSetOf()) { selection ->
+        (owned[selection] ?: 0) > 0 && catalog.findItemById(selection.itemId)?.isWearable == true
     }
 
     /**
@@ -442,7 +600,11 @@ class GameViewModel(
                 subLocationIndex = current.subLocationIndex,
                 balance = current.balance,
                 lastDailyBonusDay = current.lastDailyBonusDay,
-                owned = current.owned
+                owned = current.owned,
+                worn = current.worn,
+                stats = current.stats,
+                statsUpdatedAtMillis = current.statsUpdatedAtMillis,
+                petBornAtMillis = current.petBornAtMillis
             )
         )
     }

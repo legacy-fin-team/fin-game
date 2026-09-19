@@ -74,6 +74,16 @@ object Sprites {
         "animals/$petId/$variantId/$age/${Animal.IDLE_SPRITE_FILE}"
 
     /**
+     * Builds the asset path for the scenery of a sub-location, i.e. what is drawn on
+     * [com.legacy.fingame.game.scene.GameLayer.BACKGROUND] while the pet is there.
+     *
+     * @param subLocationIndex index of the sub-location the pet is in, used verbatim as a path
+     *   segment.
+     * @return path (relative to `assets/textures/`) to the sub-location's background.
+     */
+    fun locationBackground(subLocationIndex: Int) = "locations/$subLocationIndex/background.webp"
+
+    /**
      * Builds the asset path for a shop item's sprite.
      *
      * @param itemId identifier of the shop item whose sprite should be resolved; used verbatim as

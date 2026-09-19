@@ -41,6 +41,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.legacy.fingame.game.stats.PetStats
+import com.legacy.fingame.game.stats.StatKind
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
@@ -249,6 +251,86 @@ private val PillHorizontalPadding = 24.dp
 private val PillVerticalPadding = 12.dp
 
 /**
+ * Name of a pet stat as the player reads it.
+ *
+ * @return The Russian title of the stat.
+ */
+fun StatKind.title(): String = when (this) {
+    StatKind.HEALTH -> "Здоровье"
+    StatKind.HUNGER -> "Голод"
+    StatKind.PLEASURE -> "Удовольствие"
+}
+
+/**
+ * Color a stat bar is filled with: it turns from the healthy color to the warning one as the bar
+ * empties, so a pet that needs the player is noticed without reading the numbers.
+ *
+ * @param fraction how full the bar is, in the `0f..1f` range.
+ * @return The color of the bar at that level.
+ */
+@Composable
+private fun statBarColor(fraction: Float): Color =
+    if (fraction <= StatLowLevel) MaterialTheme.colorScheme.error else GameColors.success
+
+/** How empty a stat bar has to get before it is drawn as a warning; see [statBarColor]. */
+private const val StatLowLevel = 0.25f
+
+/**
+ * The pet's stat bars, one row per stat the pet has: its name, the bar itself and the value.
+ *
+ * Every [StatKind] the game knows is drawn, in the order the stats are declared in, so a stat added
+ * to the game shows up here without this component being touched.
+ *
+ * @param stats the pet's stats to show.
+ * @param modifier modifier applied to the outer [Surface].
+ */
+@Composable
+fun StatPanel(
+    stats: PetStats,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, GameColors.cardStroke),
+        shadowElevation = 2.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            StatKind.entries.forEach { stat ->
+                val fraction = stats.fractionOf(stat)
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = stat.title(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        LinearProgressIndicator(
+                            progress = { fraction },
+                            modifier = Modifier.weight(1f),
+                            color = statBarColor(fraction),
+                            trackColor = GameColors.goalProgressTrack
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stats[stat].toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
  * Pill-shaped button with a muted appearance when [enabled] is `false`.
  *
  * The pill takes its size from its label plus [PillHorizontalPadding]/[PillVerticalPadding], both
@@ -362,6 +444,15 @@ private fun PreviewContent() {
             BalanceChip(balance = 12400)
         }
         GoalCard(title = "Велосипед", progress = 0.64f)
+        StatPanel(
+            stats = PetStats(
+                mapOf(
+                    StatKind.HEALTH to 80,
+                    StatKind.HUNGER to 15,
+                    StatKind.PLEASURE to 55
+                )
+            )
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             PillButton(text = "Купить", onClick = {})
             PillButton(text = "Недоступно", onClick = {}, enabled = false)
