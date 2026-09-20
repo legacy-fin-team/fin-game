@@ -16,6 +16,8 @@ import com.legacy.fingame.game.stats.PetStats
  *
  * @property selection the pet the player picked, or null while no pet has been picked yet — that
  * is, before the very first launch is over.
+ * @property petName name the player gave the pet on the second step of the selection, or an empty
+ * string while there is no pet yet — or when the pet comes from a launch that saved no name at all.
  * @property subLocationIndex index of the sub-location the pet was left in, within
  * [com.legacy.fingame.ui.DemoContent.subLocationTitles]. A saved index only means something for
  * the sub-locations that exist now, so [GameViewModel] coerces it into the current range when it
@@ -41,6 +43,7 @@ import com.legacy.fingame.game.stats.PetStats
  */
 data class PlayerState(
     val selection: AnimalSelection? = null,
+    val petName: String = "",
     val subLocationIndex: Int = 0,
     val balance: Int = Economy.STARTING_BALANCE,
     val lastDailyBonusDay: Long = Economy.NEVER_CLAIMED,

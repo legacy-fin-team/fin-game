@@ -26,6 +26,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         private const val PREFERENCES_NAME = "player"
         private const val KEY_ANIMAL_ID = "selected_animal_id"
         private const val KEY_ANIMAL_VARIANT_ID = "selected_animal_variant_id"
+        private const val KEY_PET_NAME = "pet_name"
         private const val KEY_SUB_LOCATION_INDEX = "sub_location_index"
         private const val KEY_BALANCE = "balance"
         private const val KEY_LAST_DAILY_BONUS_DAY = "last_daily_bonus_day"
@@ -66,6 +67,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
 
         return PlayerState(
             selection = selection,
+            petName = preferences.getString(KEY_PET_NAME, null) ?: defaults.petName,
             subLocationIndex = preferences.getInt(KEY_SUB_LOCATION_INDEX, defaults.subLocationIndex),
             balance = preferences.getInt(KEY_BALANCE, defaults.balance),
             lastDailyBonusDay = preferences.getLong(
@@ -92,6 +94,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         val editor = preferences.edit()
             .putString(KEY_ANIMAL_ID, state.selection?.animalId)
             .putString(KEY_ANIMAL_VARIANT_ID, state.selection?.variantId)
+            .putString(KEY_PET_NAME, state.petName)
             .putInt(KEY_SUB_LOCATION_INDEX, state.subLocationIndex)
             .putInt(KEY_BALANCE, state.balance)
             .putLong(KEY_LAST_DAILY_BONUS_DAY, state.lastDailyBonusDay)

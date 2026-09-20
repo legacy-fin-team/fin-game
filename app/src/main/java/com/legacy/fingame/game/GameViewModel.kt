@@ -51,6 +51,8 @@ enum class Screen {
  * comes back to the main screen, not to wherever the app happened to be closed.
  * @property selection the pet the player picked, restored from [PlayerState.selection], or null
  * when no pet has been picked yet and the animal selection screen is shown instead of the game.
+ * @property petName name the player gave the pet, restored from [PlayerState.petName], or an empty
+ * string when the pet goes unnamed; the main screen then only names the sub-location above it.
  * @property balance coins the player can spend right now, restored from [PlayerState.balance].
  * @property dailyBonusAvailable whether the daily bonus is waiting to be claimed; recomputed
  * whenever the player comes back to [Screen.MAIN], so an app left open overnight offers it again.
@@ -87,6 +89,7 @@ enum class Screen {
 data class GameUiState(
     val screen: Screen = Screen.MAIN,
     val selection: AnimalSelection? = null,
+    val petName: String = "",
     val balance: Int = Economy.STARTING_BALANCE,
     val dailyBonusAvailable: Boolean = false,
     val lastDailyBonusDay: Long = Economy.NEVER_CLAIMED,
@@ -233,11 +236,14 @@ class GameViewModel(
      * and grows and gets hungry from this moment on.
      *
      * @param selection the animal and the variant the player picked.
+     * @param name the name the player gave it on the second step of the selection; the surrounding
+     * spaces are dropped, and a name that is nothing but spaces counts as no name at all.
      */
-    fun selectAnimal(selection: AnimalSelection) {
+    fun selectAnimal(selection: AnimalSelection, name: String = "") {
         val now = clock.nowMillis()
         _state.value = _state.value.copy(
             selection = selection,
+            petName = name.trim(),
             stats = PetStats.FULL,
             statsUpdatedAtMillis = now,
             petAge = Animal.FIRST_AGE,
@@ -543,6 +549,7 @@ class GameViewModel(
 
         return GameUiState(
             selection = saved.selection,
+            petName = saved.petName,
             balance = saved.balance,
             lastDailyBonusDay = saved.lastDailyBonusDay,
             dailyBonusAvailable = Economy.isDailyBonusAvailable(
@@ -597,6 +604,7 @@ class GameViewModel(
         store.save(
             PlayerState(
                 selection = current.selection,
+                petName = current.petName,
                 subLocationIndex = current.subLocationIndex,
                 balance = current.balance,
                 lastDailyBonusDay = current.lastDailyBonusDay,

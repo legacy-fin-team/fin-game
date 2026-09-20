@@ -21,8 +21,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
@@ -45,9 +47,10 @@ import com.legacy.fingame.ui.components.PillButton
 import com.legacy.fingame.ui.components.Sprite
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
-import com.legacy.fingame.ui.components.StatPanel
+import com.legacy.fingame.ui.components.StatChip
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
+import com.legacy.fingame.utils.SpriteLoader
 
 private val ScreenPadding = 16.dp
 private val GoalCardWidth = 208.dp
@@ -81,6 +84,15 @@ private const val StageContentFraction = 0.88f
 private const val DemoGoalProgress = 0.4f
 
 /**
+ * Stats shown in a row of their own under the balance: every stat the pet has except
+ * [StatKind.HEALTH], which sits next to the money instead.
+ */
+private val SecondaryStats: List<StatKind> = StatKind.entries.filter { it != StatKind.HEALTH }
+
+/** Separator between the pet's name and the sub-location it is in, in the badge above the pet. */
+private const val StageTitleSeparator = " · "
+
+/**
  * Game area the previews and the default of [MainScreen] show: the demo content pet standing in the
  * scenery of the first sub-location, with nothing on.
  * TODO: replace with the real scene once every caller builds one from the player's own pet.
@@ -100,21 +112,23 @@ private val DemoScene: GameScene = GameScene.of(
  * points to the other screens.
  *
  * Layout:
- * - Center: [PetStage] with the pet sprite and the current sub-location badge above it. The
- *   pet area is sized from both the available width and height ([PetAreaWidthFraction],
+ * - Center: [PetStage] with the pet sprite and the badge naming the pet and the sub-location above
+ *   it, and the daily bonus button right under the pet while the bonus is unclaimed. The pet area
+ *   is sized from both the available width and height ([PetAreaWidthFraction],
  *   [PetAreaHeightFraction]) so it cannot grow past the screen in landscape and cover the
  *   corner buttons.
- * - Top-start: balance chip, the daily bonus button while the bonus is unclaimed, and the goal
- *   progress card.
+ * - Top-start: the balance chip with the pet's health next to it, the rest of the stats
+ *   ([SecondaryStats]) in a row under them, and the goal progress card. Every stat is a
+ *   [StatChip] — an icon and a percentage — so the stats take a corner instead of half the screen.
  * - Top-end: secondary buttons for opening settings and locations.
  * - Bottom: a single row split into two groups — sub-location navigation arrows (start) and
  *   primary action buttons for quests/inventory/shop (end). Both groups are combined into one
  *   row so the enlarged action buttons cannot overlap each other on narrow screens.
  *
- * @param state current game state; [GameUiState.subLocationIndex] selects which title from
- *   [subLocationTitles] is shown above the pet, [GameUiState.balance] fills the balance chip,
+ * @param state current game state; [GameUiState.petName] and [GameUiState.subLocationIndex] make up
+ *   the badge above the pet, [GameUiState.balance] fills the balance chip,
  *   [GameUiState.dailyBonusAvailable] decides whether the bonus button is there at all and
- *   [GameUiState.stats] fills the pet's stat bars.
+ *   [GameUiState.stats] fills the stat chips.
  * @param onOpenScreen called with the [Screen] that should be opened when a navigation button
  *   (settings, locations, quests, inventory, shop) is pressed.
  * @param onPrevSubLocation called when the "previous sub-location" arrow is pressed.
@@ -152,30 +166,50 @@ fun MainScreen(
             maxHeight * PetAreaHeightFraction
         )
 
-        PetStage(
-            scene = scene,
-            subLocationTitle = subLocationTitles.getOrNull(state.subLocationIndex),
-            areaSize = petAreaSize,
-            modifier = Modifier.align(Alignment.Center)
-        )
-
         Column(
-            modifier = Modifier.align(Alignment.TopStart),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier.align(Alignment.Center),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            BalanceChip(balance = state.balance)
+            PetStage(
+                scene = scene,
+                title = stageTitleOf(
+                    petName = state.petName,
+                    subLocationTitle = subLocationTitles.getOrNull(state.subLocationIndex)
+                ),
+                areaSize = petAreaSize
+            )
+
             if (state.dailyBonusAvailable) {
+                Spacer(modifier = Modifier.height(12.dp))
                 PillButton(
                     text = "Бонус дня +${Economy.DAILY_BONUS}",
                     onClick = onClaimDailyBonus
                 )
             }
+        }
+
+        Column(
+            modifier = Modifier.align(Alignment.TopStart),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BalanceChip(balance = state.balance)
+                StatChip(stat = StatKind.HEALTH, stats = state.stats)
+            }
+
+            if (SecondaryStats.isNotEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SecondaryStats.forEach { stat ->
+                        StatChip(stat = stat, stats = state.stats)
+                    }
+                }
+            }
+
             GoalCard(
                 progress = DemoGoalProgress,
-                modifier = Modifier.widthIn(max = GoalCardWidth)
-            )
-            StatPanel(
-                stats = state.stats,
                 modifier = Modifier.widthIn(max = GoalCardWidth)
             )
         }
@@ -252,7 +286,20 @@ fun MainScreen(
 }
 
 /**
- * Square game area with the current sub-location badge shown above it.
+ * Builds the text of the badge above the pet out of what there is to say about it.
+ *
+ * @param petName name the player gave the pet, or an empty string when it has none.
+ * @param subLocationTitle title of the sub-location the pet is in, or `null` when there is none.
+ * @return The pet's name and the sub-location, whichever of them there is, or `null` when the badge
+ * would say nothing at all and is better not shown.
+ */
+private fun stageTitleOf(petName: String, subLocationTitle: String?): String? = listOfNotNull(
+    petName.takeIf { it.isNotBlank() },
+    subLocationTitle?.takeIf { it.isNotBlank() }
+).joinToString(StageTitleSeparator).takeIf { it.isNotEmpty() }
+
+/**
+ * Square game area with the badge naming the pet and its sub-location shown above it.
  *
  * The area is where the pet lives, and it is stacked out of the five [GameLayer]s: the scenery of the
  * sub-location, whatever stands behind the pet, the pet itself, whatever stands in front of it and
@@ -260,9 +307,14 @@ fun MainScreen(
  * its [GameLayer.zIndex], so what covers what is decided by the layer and not by the order the
  * sprites happen to be composed in.
  *
+ * A sprite whose file is not in the assets yet is not drawn here at all: [SpriteLoader] would hand
+ * back the same placeholder for every one of them, and the area would stack a pile of them on top of
+ * each other — the scenery, the pet and everything it wears, all at once. Instead the area draws
+ * what it has and adds a single placeholder over it, so the missing art is still plain to see
+ * without the pile.
+ *
  * @param scene what stands on each layer of the area.
- * @param subLocationTitle title of the current sub-location shown in the badge above the pet,
- *   or `null` to hide the badge.
+ * @param title text of the badge above the pet, or `null` to hide the badge.
  * @param areaSize side length of the square pet card; the caller computes it from both the
  *   available width and height so the pet cannot grow past the screen in landscape.
  * @param modifier modifier applied to the root column.
@@ -270,16 +322,24 @@ fun MainScreen(
 @Composable
 private fun PetStage(
     scene: GameScene,
-    subLocationTitle: String?,
+    title: String?,
     areaSize: Dp,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val loader = remember(context) { SpriteLoader(context) }
+    val (drawn, anythingMissing) = remember(scene, loader) {
+        val all = GameLayer.DRAW_ORDER.flatMap { layer -> scene[layer].map { layer to it } }
+        val present = all.filter { (_, sprite) -> loader.hasSprite(sprite.assetPath) }
+        present to (present.size < all.size)
+    }
+
     Column(
         modifier = modifier.width(areaSize),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (subLocationTitle != null) {
-            SubLocationBadge(title = subLocationTitle)
+        if (title != null) {
+            StageBadge(title = title)
             Spacer(modifier = Modifier.height(12.dp))
         }
 
@@ -293,17 +353,26 @@ private fun PetStage(
             shadowElevation = 3.dp
         ) {
             Box(contentAlignment = Alignment.Center) {
-                GameLayer.DRAW_ORDER.forEach { layer ->
-                    scene[layer].forEach { sprite ->
-                        Sprite(
-                            assetPath = sprite.assetPath,
-                            contentDescription = sprite.description,
-                            modifier = Modifier
-                                .zIndex(layer.zIndex)
-                                .fillMaxSize(layer.contentFraction())
-                                .aspectRatio(1f)
-                        )
-                    }
+                drawn.forEach { (layer, sprite) ->
+                    Sprite(
+                        assetPath = sprite.assetPath,
+                        contentDescription = sprite.description,
+                        modifier = Modifier
+                            .zIndex(layer.zIndex)
+                            .fillMaxSize(layer.contentFraction())
+                            .aspectRatio(1f)
+                    )
+                }
+
+                if (anythingMissing) {
+                    Sprite(
+                        assetPath = SpriteLoader.MISSING_SPRITE,
+                        contentDescription = "Часть картинок ещё не нарисована",
+                        modifier = Modifier
+                            .zIndex(GameLayer.CLOTHES.zIndex)
+                            .fillMaxSize(StageContentFraction)
+                            .aspectRatio(1f)
+                    )
                 }
             }
         }
@@ -320,13 +389,13 @@ private fun GameLayer.contentFraction(): Float =
     if (this == GameLayer.BACKGROUND) 1f else StageContentFraction
 
 /**
- * Pill-shaped badge showing the current sub-location name, displayed above the pet.
+ * Pill-shaped badge naming the pet and the sub-location it is in, displayed above the pet.
  *
- * @param title text to display inside the badge.
+ * @param title text to display inside the badge, as built by [stageTitleOf].
  * @param modifier modifier applied to the badge surface.
  */
 @Composable
-private fun SubLocationBadge(
+private fun StageBadge(
     title: String,
     modifier: Modifier = Modifier
 ) {
@@ -358,6 +427,7 @@ private fun MainScreenLightPreview() {
                     balance = 250,
                     dailyBonusAvailable = true,
                     subLocationIndex = 1,
+                    petName = "Барсик",
                     stats = PetStats(
                         mapOf(
                             StatKind.HEALTH to 90,
@@ -385,7 +455,8 @@ private fun MainScreenDarkPreview() {
                 state = GameUiState(
                     balance = 250,
                     subLocationIndex = 1,
-                    // A pet that has been left alone for a while: the hunger bar warns about it.
+                    petName = "Барсик",
+                    // A pet that has been left alone for a while: the hunger chip warns about it.
                     stats = PetStats(
                         mapOf(
                             StatKind.HEALTH to 60,

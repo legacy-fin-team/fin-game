@@ -1,10 +1,12 @@
 package com.legacy.fingame.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,11 +14,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,6 +47,10 @@ import com.legacy.fingame.ui.theme.GameColors
 
 private val SelectScreenPadding = 16.dp
 private val AnimalCellMinSize = 150.dp
+private val NameFieldMaxWidth = 360.dp
+
+/** How long a pet's name may be, so it still fits into the badge above the pet on the main screen. */
+private const val MaxPetNameLength = 20
 
 /**
  * Stores the picked [AnimalSelection] across configuration changes and process death.
@@ -63,21 +72,26 @@ internal val AnimalSelectionSaver: Saver<AnimalSelection?, Any> = listSaver(
 )
 
 /**
- * First-launch screen where the player picks the animal to play with.
+ * First-launch screen where the player takes in a pet, in two steps.
  *
- * Every variant of every animal is a card of its own, because an animal is identified by its id
- * plus the variant it was created with. Cards show the animal at its first age stage
- * ([Animal.FIRST_AGE]) — that is how the pet starts out.
+ * The first step ([SpeciesStep]) is about *who* the pet is: one card per animal, shown at its first
+ * age stage ([Animal.FIRST_AGE]) — that is how the pet starts out. Tapping a card opens the second
+ * step ([VariantStep]), which is about *what it looks like* and *what it is called*: the variants of
+ * that one animal and a field for its name. Splitting the choice this way keeps the first screen
+ * down to a handful of animals instead of every variant of every one of them at once, and leaves
+ * room for the name where it belongs — next to the pet it is being given to.
  *
- * Layout: title and caption at the top, a scrollable grid of animal cards below them, and a
- * "Выбрать" button at the bottom which stays disabled until a card is picked. When [animals] holds
- * no animal at all — the animal data is broken or empty — there is nothing to pick, so the grid and
- * the button are replaced by a message saying exactly that instead of an empty screen with a
- * button that can never be pressed.
+ * Going back from the second step returns to the first one rather than leaving the game, so a
+ * player who picked the wrong animal is never stuck with it.
+ *
+ * When [animals] holds no animal that can be played at all — the animal data is broken, empty, or
+ * leaves an animal without a single variant — there is nothing to pick, so both steps are replaced
+ * by a message saying exactly that instead of an empty screen with a button that can never be
+ * pressed.
  *
  * @param animals animals the player can choose from, as read from the animal data.
- * @param onSelect called with the picked animal and variant when the player confirms the choice;
- *   the caller is the one that persists it.
+ * @param onSelect called with the picked animal, its variant and the name the player gave it when
+ *   the choice is confirmed; the caller is the one that persists it.
  * @param modifier modifier applied to the screen root.
  * @param previousPetLost whether the player already had a pet that is gone from the animal data,
  *   i.e. this is not the first launch and the earlier choice can no longer be played; the screen
@@ -86,49 +100,65 @@ internal val AnimalSelectionSaver: Saver<AnimalSelection?, Any> = listSaver(
 @Composable
 fun AnimalSelectScreen(
     animals: List<Animal>,
-    onSelect: (AnimalSelection) -> Unit,
+    onSelect: (AnimalSelection, String) -> Unit,
     modifier: Modifier = Modifier,
     previousPetLost: Boolean = false
 ) {
-    val options = remember(animals) {
-        animals.flatMap { animal -> animal.variants.keys.map { variantId -> animal to variantId } }
+    val species = remember(animals) { animals.filter { it.variants.isNotEmpty() } }
+
+    if (species.isEmpty()) {
+        NoAnimalsMessage(modifier = modifier)
+        return
     }
 
-    if (options.isEmpty()) {
-        NoAnimalsMessage(modifier = modifier)
-    } else {
-        AnimalPicker(
-            options = options,
-            onSelect = onSelect,
+    var pickedAnimalId by rememberSaveable { mutableStateOf<String?>(null) }
+    // The animal the id points at may be gone from the data by now, which simply puts the player
+    // back on the first step instead of into a second step about nothing.
+    val pickedAnimal = species.find { it.id == pickedAnimalId }
+
+    if (pickedAnimal == null) {
+        SpeciesStep(
+            species = species,
+            onPick = { animal -> pickedAnimalId = animal.id },
             previousPetLost = previousPetLost,
+            modifier = modifier
+        )
+    } else {
+        BackHandler { pickedAnimalId = null }
+
+        VariantStep(
+            animal = pickedAnimal,
+            onBack = { pickedAnimalId = null },
+            onConfirm = { variantId, name ->
+                onSelect(
+                    AnimalSelection(animalId = pickedAnimal.id, variantId = variantId),
+                    name
+                )
+            },
             modifier = modifier
         )
     }
 }
 
 /**
- * The picker itself: the grid of animal cards plus the button that confirms the choice.
+ * First step: which animal the pet is going to be.
  *
- * The picked card is kept in [rememberSaveable], so rotating the phone or having the process
- * recreated doesn't drop the choice and disable the button again.
+ * Each animal is a single card here no matter how many variants it has — the variant is asked for on
+ * the next step — and the card shows the animal in the first variant its data declares.
  *
- * @param options animal variants to show, as pairs of an animal and one of its variant ids.
- * @param onSelect called with the picked animal and variant when the player confirms the choice.
+ * @param species animals to choose from, each of them with at least one variant.
+ * @param onPick called with the animal whose card was tapped; the caller moves on to the next step.
  * @param previousPetLost whether the player is here because the pet they had is gone from the
  *   animal data; only changes the title and the caption.
  * @param modifier modifier applied to the root column.
  */
 @Composable
-private fun AnimalPicker(
-    options: List<Pair<Animal, String>>,
-    onSelect: (AnimalSelection) -> Unit,
+private fun SpeciesStep(
+    species: List<Animal>,
+    onPick: (Animal) -> Unit,
     previousPetLost: Boolean,
     modifier: Modifier = Modifier
 ) {
-    var selection by rememberSaveable(stateSaver = AnimalSelectionSaver) {
-        mutableStateOf<AnimalSelection?>(null)
-    }
-
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -159,37 +189,140 @@ private fun AnimalPicker(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = AnimalCellMinSize),
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentPadding = PaddingValues(vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(
-                items = options,
-                key = { (animal, variantId) -> "${animal.id}/$variantId" }
-            ) { (animal, variantId) ->
-                val option = AnimalSelection(animalId = animal.id, variantId = variantId)
+        AnimalGrid(modifier = Modifier.weight(1f)) {
+            items(items = species, key = { animal -> animal.id }) { animal ->
                 AnimalCard(
-                    animal = animal,
-                    variantId = variantId,
-                    selected = option == selection,
-                    onClick = { selection = option }
+                    spritePath = animal.getIdleSpritePath(
+                        animal.variants.keys.first(),
+                        Animal.FIRST_AGE
+                    ),
+                    description = animal.title,
+                    title = animal.title,
+                    selected = false,
+                    onClick = { onPick(animal) }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Second step: what the picked animal looks like and what it is called.
+ *
+ * The first variant is picked from the start, so the player who is happy with it only has to name
+ * the pet and confirm. The name starts out as the animal's own title and is the player's to change;
+ * a name wiped out completely falls back to that title rather than leaving the pet nameless.
+ *
+ * @param animal the animal picked on the first step.
+ * @param onBack called when the player wants to pick a different animal after all.
+ * @param onConfirm called with the picked variant and the name when the choice is confirmed.
+ * @param modifier modifier applied to the root column.
+ */
+@Composable
+private fun VariantStep(
+    animal: Animal,
+    onBack: () -> Unit,
+    onConfirm: (variantId: String, name: String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val variantIds = remember(animal) { animal.variants.keys.toList() }
+    var selection by rememberSaveable(animal.id, stateSaver = AnimalSelectionSaver) {
+        mutableStateOf<AnimalSelection?>(
+            AnimalSelection(animalId = animal.id, variantId = variantIds.first())
+        )
+    }
+    var name by rememberSaveable(animal.id) { mutableStateOf(animal.title) }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .systemBarsPadding()
+            .padding(SelectScreenPadding),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = animal.title,
+            style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = "Выбери вид и придумай имя",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        AnimalGrid(modifier = Modifier.weight(1f)) {
+            items(items = variantIds, key = { variantId -> variantId }) { variantId ->
+                AnimalCard(
+                    spritePath = animal.getIdleSpritePath(variantId, Animal.FIRST_AGE),
+                    description = animal.title,
+                    title = null,
+                    selected = variantId == selection?.variantId,
+                    onClick = {
+                        selection = AnimalSelection(
+                            animalId = animal.id,
+                            variantId = variantId
+                        )
+                    }
                 )
             }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        PillButton(
-            text = "Выбрать",
-            onClick = { selection?.let(onSelect) },
-            enabled = selection != null
+        OutlinedTextField(
+            value = name,
+            onValueChange = { typed -> name = typed.take(MaxPetNameLength) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = NameFieldMaxWidth),
+            label = { Text(text = "Имя") },
+            singleLine = true
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            PillButton(text = "Назад", onClick = onBack)
+            PillButton(
+                text = "Выбрать",
+                onClick = {
+                    selection?.let { picked ->
+                        onConfirm(picked.variantId, name.trim().ifBlank { animal.title })
+                    }
+                },
+                enabled = selection != null
+            )
+        }
     }
+}
+
+/**
+ * The grid both steps lay their cards out in, so an animal and a variant are always the same size.
+ *
+ * @param modifier modifier applied to the grid.
+ * @param content the cards of the step, added the way [LazyVerticalGrid] takes them.
+ */
+@Composable
+private fun AnimalGrid(
+    modifier: Modifier = Modifier,
+    content: LazyGridScope.() -> Unit
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = AnimalCellMinSize),
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        content = content
+    )
 }
 
 /**
@@ -232,10 +365,13 @@ private fun NoAnimalsMessage(modifier: Modifier = Modifier) {
 }
 
 /**
- * Card of a single animal variant: its sprite at the first age stage and its name.
+ * Card of a single choice: a sprite and, on the first step, the name of the animal under it. The
+ * variants of one animal are told apart by the sprite alone, so their cards carry no caption —
+ * a variant id is something the data files say, not something the player reads.
  *
- * @param animal animal the card shows.
- * @param variantId variant of that animal the card shows.
+ * @param spritePath path to the sprite the card shows, relative to `assets/textures/`.
+ * @param description what the sprite is, for screen readers.
+ * @param title caption under the sprite, or null for a card that shows the sprite alone.
  * @param selected whether this card is the one the player currently picked; a selected card gets
  *   a thicker, accented border.
  * @param onClick called when the card is tapped.
@@ -243,8 +379,9 @@ private fun NoAnimalsMessage(modifier: Modifier = Modifier) {
  */
 @Composable
 private fun AnimalCard(
-    animal: Animal,
-    variantId: String,
+    spritePath: String,
+    description: String,
+    title: String?,
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -267,22 +404,24 @@ private fun AnimalCard(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Sprite(
-                assetPath = animal.getIdleSpritePath(variantId, Animal.FIRST_AGE),
-                contentDescription = animal.title,
+                assetPath = spritePath,
+                contentDescription = description,
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            if (title != null) {
+                Spacer(modifier = Modifier.height(8.dp))
 
-            Text(
-                text = animal.title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -303,24 +442,39 @@ private val PreviewAnimals = listOf(
     )
 )
 
-/** Preview of [AnimalSelectScreen] in the light theme. */
+/** Preview of the first step of [AnimalSelectScreen] in the light theme. */
 @Preview(name = "AnimalSelectScreen — Light", showBackground = true, widthDp = 411, heightDp = 891)
 @Composable
 private fun AnimalSelectScreenLightPreview() {
     FinGameTheme(darkTheme = false) {
         Surface(color = MaterialTheme.colorScheme.background) {
-            AnimalSelectScreen(animals = PreviewAnimals, onSelect = {})
+            AnimalSelectScreen(animals = PreviewAnimals, onSelect = { _, _ -> })
         }
     }
 }
 
-/** Preview of [AnimalSelectScreen] in the dark theme. */
+/** Preview of the first step of [AnimalSelectScreen] in the dark theme. */
 @Preview(name = "AnimalSelectScreen — Dark", showBackground = true, widthDp = 411, heightDp = 891)
 @Composable
 private fun AnimalSelectScreenDarkPreview() {
     FinGameTheme(darkTheme = true) {
         Surface(color = MaterialTheme.colorScheme.background) {
-            AnimalSelectScreen(animals = PreviewAnimals, onSelect = {})
+            AnimalSelectScreen(animals = PreviewAnimals, onSelect = { _, _ -> })
+        }
+    }
+}
+
+/** Preview of the second step: the variants of one animal and the field for its name. */
+@Preview(name = "AnimalSelectScreen — Variants", showBackground = true, widthDp = 411, heightDp = 891)
+@Composable
+private fun AnimalSelectScreenVariantsPreview() {
+    FinGameTheme {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            VariantStep(
+                animal = PreviewAnimals.first(),
+                onBack = {},
+                onConfirm = { _, _ -> }
+            )
         }
     }
 }
@@ -331,7 +485,11 @@ private fun AnimalSelectScreenDarkPreview() {
 private fun AnimalSelectScreenPetLostPreview() {
     FinGameTheme {
         Surface(color = MaterialTheme.colorScheme.background) {
-            AnimalSelectScreen(animals = PreviewAnimals, onSelect = {}, previousPetLost = true)
+            AnimalSelectScreen(
+                animals = PreviewAnimals,
+                onSelect = { _, _ -> },
+                previousPetLost = true
+            )
         }
     }
 }
@@ -342,7 +500,7 @@ private fun AnimalSelectScreenPetLostPreview() {
 private fun AnimalSelectScreenEmptyPreview() {
     FinGameTheme {
         Surface(color = MaterialTheme.colorScheme.background) {
-            AnimalSelectScreen(animals = emptyList(), onSelect = {})
+            AnimalSelectScreen(animals = emptyList(), onSelect = { _, _ -> })
         }
     }
 }

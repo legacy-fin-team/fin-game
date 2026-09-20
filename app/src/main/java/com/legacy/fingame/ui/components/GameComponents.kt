@@ -262,70 +262,65 @@ fun StatKind.title(): String = when (this) {
 }
 
 /**
- * Color a stat bar is filled with: it turns from the healthy color to the warning one as the bar
+ * Color a stat value is written in: it turns from the healthy color to the warning one as the stat
  * empties, so a pet that needs the player is noticed without reading the numbers.
  *
- * @param fraction how full the bar is, in the `0f..1f` range.
- * @return The color of the bar at that level.
+ * @param fraction how full the stat is, in the `0f..1f` range.
+ * @return The color of the value at that level.
  */
 @Composable
-private fun statBarColor(fraction: Float): Color =
+private fun statValueColor(fraction: Float): Color =
     if (fraction <= StatLowLevel) MaterialTheme.colorScheme.error else GameColors.success
 
-/** How empty a stat bar has to get before it is drawn as a warning; see [statBarColor]. */
+/** How empty a stat has to get before it is shown as a warning; see [statValueColor]. */
 private const val StatLowLevel = 0.25f
 
+/** Side of the stat icon inside a [StatChip]; the chip is sized around it. */
+private val StatIconSize = 24.dp
+
 /**
- * The pet's stat bars, one row per stat the pet has: its name, the bar itself and the value.
+ * One stat of the pet as a chip: the icon of the stat and how full it is, in percent.
  *
- * Every [StatKind] the game knows is drawn, in the order the stats are declared in, so a stat added
- * to the game shows up here without this component being touched.
+ * The stat is never named in words — the icon says which one it is, and the chip stays small
+ * enough for several of them to sit in a row next to the balance instead of taking up half the
+ * screen with bars. The name is still announced to screen readers through the icon's description.
  *
- * @param stats the pet's stats to show.
+ * @param stat the stat to show.
+ * @param stats the pet's stats to read [stat] from.
  * @param modifier modifier applied to the outer [Surface].
  */
 @Composable
-fun StatPanel(
+fun StatChip(
+    stat: StatKind,
     stats: PetStats,
     modifier: Modifier = Modifier
 ) {
+    val fraction = stats.fractionOf(stat)
+    val percentText = "${(fraction * 100).roundToInt()}%"
+
     Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
+        modifier = modifier.wrapContentSize(),
+        shape = RoundedCornerShape(50),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, GameColors.cardStroke),
-        shadowElevation = 2.dp
+        border = BorderStroke(1.dp, GameColors.cardStroke)
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            StatKind.entries.forEach { stat ->
-                val fraction = stats.fractionOf(stat)
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = stat.title(),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        LinearProgressIndicator(
-                            progress = { fraction },
-                            modifier = Modifier.weight(1f),
-                            color = statBarColor(fraction),
-                            trackColor = GameColors.goalProgressTrack
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = stats[stat].toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                }
-            }
+            Sprite(
+                assetPath = Sprites.stat(stat.xmlName),
+                contentDescription = stat.title(),
+                modifier = Modifier.size(StatIconSize)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = percentText,
+                style = MaterialTheme.typography.labelLarge,
+                color = statValueColor(fraction),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -444,15 +439,16 @@ private fun PreviewContent() {
             BalanceChip(balance = 12400)
         }
         GoalCard(title = "Велосипед", progress = 0.64f)
-        StatPanel(
-            stats = PetStats(
-                mapOf(
-                    StatKind.HEALTH to 80,
-                    StatKind.HUNGER to 15,
-                    StatKind.PLEASURE to 55
-                )
+        val stats = PetStats(
+            mapOf(
+                StatKind.HEALTH to 80,
+                StatKind.HUNGER to 15,
+                StatKind.PLEASURE to 55
             )
         )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatKind.entries.forEach { stat -> StatChip(stat = stat, stats = stats) }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             PillButton(text = "Купить", onClick = {})
             PillButton(text = "Недоступно", onClick = {}, enabled = false)

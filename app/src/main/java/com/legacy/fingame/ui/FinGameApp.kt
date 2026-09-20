@@ -41,8 +41,9 @@ private const val TICK_POLLS_PER_TICK = 10L
  * back-press handling to close any non-main screen.
  *
  * Until the player has picked a pet — i.e. on the very first launch — the whole app is replaced by
- * [AnimalSelectScreen]; the choice is saved right away, so the following launches go straight to
- * the game with the pet, and the sub-location it was left in, already restored by [vm]. A saved
+ * [AnimalSelectScreen], where the animal, its variant and its name are chosen in two steps; the
+ * choice is saved right away, so the following launches go straight to the game with the pet, its
+ * name, and the sub-location it was left in, already restored by [vm]. A saved
  * choice that is no longer present in the animal data (e.g. the animal or its variant was renamed
  * or removed) can't be played, so the player picks again — but is told that the pet is gone
  * instead of being greeted as a newcomer, and the saved choice is only replaced once a new pet is
@@ -88,7 +89,7 @@ fun FinGameApp(
         if (pet == null) {
             AnimalSelectScreen(
                 animals = animalRegistry.getAllAnimals(),
-                onSelect = vm::selectAnimal,
+                onSelect = { selection, name -> vm.selectAnimal(selection, name) },
                 previousPetLost = savedSelection != null
             )
         } else {

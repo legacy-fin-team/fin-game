@@ -16,6 +16,15 @@ import java.io.IOException
  */
 class SpriteLoader(private val context: Context) {
 
+    companion object {
+        /**
+         * The sprite drawn in place of one whose file is not in the assets, as a path relative to
+         * /assets/textures/ folder. Callers that would otherwise stack several of these on top of
+         * each other can ask [hasSprite] first and draw this one themselves, just once.
+         */
+        const val MISSING_SPRITE = "error/error.webp"
+    }
+
     private val tag = "SpriteLoader"
 
     /**
@@ -36,12 +45,32 @@ class SpriteLoader(private val context: Context) {
 
     /**
      * @param assetPath path relative to /assets/textures/ folder
+     * @return Full path of the asset, relative to /assets/ folder
+     */
+    private fun fullPathOf(assetPath: String): String = "textures/$assetPath"
+
+    /**
+     * Tells whether a sprite is in the assets at all, i.e. whether [getSprite] would hand back the
+     * sprite itself rather than [MISSING_SPRITE].
+     *
+     * @param assetPath path relative to /assets/textures/ folder
+     * @return True when the file is there and can be opened
+     */
+    fun hasSprite(assetPath: String): Boolean = try {
+        context.assets.open(fullPathOf(assetPath)).close()
+        true
+    } catch (_: IOException) {
+        false
+    }
+
+    /**
+     * @param assetPath path relative to /assets/textures/ folder
      * @return ImageRequest of an asset. If file does not exist returns the ERROR ImageRequest
      */
     fun getSprite(
         assetPath: String,
     ): ImageRequest {
-        val fullPath = "textures/$assetPath"
+        val fullPath = fullPathOf(assetPath)
         try {
             val drawable = getDrawable(fullPath)
 
@@ -54,8 +83,7 @@ class SpriteLoader(private val context: Context) {
             Log.e(tag, "Unable to load sprite from: /assets/$fullPath")
 
             // Assume this file exists
-            val errorPath = "textures/error/error.webp"
-            val drawable = getDrawable(errorPath)
+            val drawable = getDrawable(fullPathOf(MISSING_SPRITE))
 
             return ImageRequest.Builder(context)
                 .crossfade(false)

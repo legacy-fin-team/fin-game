@@ -52,6 +52,17 @@ object Sprites {
     const val COIN = "ui/coin.webp"
 
     /**
+     * Builds the asset path for the icon of a pet stat, the one [StatChip] shows instead of naming
+     * the stat in words.
+     *
+     * @param statId identifier of the stat, as the data files write it (see
+     *   [com.legacy.fingame.game.stats.StatKind.xmlName]); used verbatim as a path segment, so it
+     *   must match the icon's file name.
+     * @return path (relative to `assets/textures/`) to the stat's icon.
+     */
+    fun stat(statId: String) = "ui/stats/$statId.webp"
+
+    /**
      * Builds the asset path for a pet sprite the way the animal data files lay them out.
      *
      * An animal is identified by two ids: the species and the variant it was created with, and it

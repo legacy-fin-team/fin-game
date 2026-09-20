@@ -178,6 +178,42 @@ class GameViewModelTest {
     }
 
     @Test
+    fun `the name given to the pet is saved with it`() {
+        val store = FakePlayerStateStore()
+        val vm = testGameViewModel(store)
+        val pet = AnimalSelection(animalId = "dog", variantId = "brown")
+
+        vm.selectAnimal(pet, "  Бобик ")
+
+        assertEquals("Бобик", store.state.petName)
+        assertEquals("Бобик", vm.state.value.petName)
+    }
+
+    @Test
+    fun `a pet named with nothing but spaces stays nameless`() {
+        val store = FakePlayerStateStore()
+        val vm = testGameViewModel(store)
+
+        vm.selectAnimal(AnimalSelection(animalId = "dog", variantId = "brown"), "   ")
+
+        assertEquals("", store.state.petName)
+    }
+
+    @Test
+    fun `the name the pet was given in an earlier run is there on start`() {
+        val store = FakePlayerStateStore(
+            PlayerState(
+                selection = AnimalSelection(animalId = "cat", variantId = "orange"),
+                petName = "Барсик"
+            )
+        )
+
+        val vm = testGameViewModel(store)
+
+        assertEquals("Барсик", vm.state.value.petName)
+    }
+
+    @Test
     fun `the sub-location the pet was left in is restored`() {
         val store = FakePlayerStateStore(PlayerState(subLocationIndex = 2))
 
