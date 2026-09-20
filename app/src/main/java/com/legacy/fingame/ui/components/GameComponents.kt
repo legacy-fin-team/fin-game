@@ -168,7 +168,7 @@ fun BalanceChip(
         border = BorderStroke(1.dp, GameColors.cardStroke)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Sprite(
