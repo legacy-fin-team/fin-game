@@ -31,6 +31,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.legacy.fingame.DemoMode
 import com.legacy.fingame.game.GameUiState
 import com.legacy.fingame.game.Screen
 import com.legacy.fingame.game.economy.Economy
@@ -120,7 +121,8 @@ private val DemoScene: GameScene = GameScene.of(
  * - Top-start: the balance chip with the pet's health next to it, the rest of the stats
  *   ([SecondaryStats]) in a row under them, and the goal progress card. Every stat is a
  *   [StatChip] — an icon and a percentage — so the stats take a corner instead of half the screen.
- * - Top-end: secondary buttons for opening settings and locations.
+ * - Top-end: secondary buttons for opening settings and locations, and — in a demo build only — the
+ *   button that skips [DemoMode.FAST_FORWARD_HOURS] hours of the pet's life.
  * - Bottom: a single row split into two groups — sub-location navigation arrows (start) and
  *   primary action buttons for quests/inventory/shop (end). Both groups are combined into one
  *   row so the enlarged action buttons cannot overlap each other on narrow screens.
@@ -135,6 +137,9 @@ private val DemoScene: GameScene = GameScene.of(
  * @param onNextSubLocation called when the "next sub-location" arrow is pressed.
  * @param onClaimDailyBonus called when the player takes the daily bonus.
  * @param modifier modifier applied to the screen root.
+ * @param onFastForward called when the demo's time button is pressed, or `null` — the default — when
+ *   there is to be no such button at all, which is every build that is not a demo one (see
+ *   [DemoMode.ENABLED]). A screen that gets `null` here is the screen the player sees.
  * @param scene what stands in the game area, already sorted into its layers; the caller builds it
  *   from the pet, its age stage and what it wears (see [GameScene.of]), so this screen doesn't have
  *   to know how the assets are laid out. Defaults to the demo content pet alone.
@@ -149,6 +154,7 @@ fun MainScreen(
     onNextSubLocation: () -> Unit,
     onClaimDailyBonus: () -> Unit,
     modifier: Modifier = Modifier,
+    onFastForward: (() -> Unit)? = null,
     // TODO: default pulls from demo content; replace with the real scene of the player's pet.
     scene: GameScene = DemoScene,
     // TODO: default pulls from demo content; replace with real sub-location names for the current location.
@@ -231,6 +237,13 @@ fun MainScreen(
                 onClick = { onOpenScreen(Screen.LOCATIONS) },
                 size = SecondaryActionSize
             )
+
+            if (onFastForward != null) {
+                PillButton(
+                    text = "Вперёд ${DemoMode.FAST_FORWARD_HOURS} ч",
+                    onClick = onFastForward
+                )
+            }
         }
 
         Row(
@@ -440,6 +453,28 @@ private fun MainScreenLightPreview() {
                 onPrevSubLocation = {},
                 onNextSubLocation = {},
                 onClaimDailyBonus = {}
+            )
+        }
+    }
+}
+
+/** Preview of [MainScreen] as a demo build shows it: with the time button in the top corner. */
+@Preview(name = "MainScreen — Demo", showBackground = true, widthDp = 411, heightDp = 891)
+@Composable
+private fun MainScreenDemoPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            MainScreen(
+                state = GameUiState(
+                    balance = 250,
+                    subLocationIndex = 1,
+                    petName = "Барсик"
+                ),
+                onOpenScreen = {},
+                onPrevSubLocation = {},
+                onNextSubLocation = {},
+                onClaimDailyBonus = {},
+                onFastForward = {}
             )
         }
     }

@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.legacy.fingame.DemoMode
 import com.legacy.fingame.FinGameApplication
 import com.legacy.fingame.game.GameViewModel
 import com.legacy.fingame.game.Screen
@@ -56,7 +57,9 @@ private const val TICK_POLLS_PER_TICK = 10L
  *
  * While there is a pet to look after, this is also where its life goes on: a loop asks
  * [GameViewModel.tick] to catch up with the clock, so the stat bars fall and the pet grows up in
- * front of the player instead of only between launches.
+ * front of the player instead of only between launches. In a demo build ([DemoMode.ENABLED]) the
+ * main screen also gets the button that pushes that same clock forward, so a demo can show a day of
+ * the pet's life without waiting one out.
  *
  * @param modifier modifier applied to the root surface.
  * @param vm view model providing [GameUiState] and the navigation/action callbacks passed down
@@ -117,6 +120,13 @@ fun FinGameApp(
                         onPrevSubLocation = vm::prevSubLocation,
                         onNextSubLocation = vm::nextSubLocation,
                         onClaimDailyBonus = { vm.claimDailyBonus() },
+                        // Only a demo build gets the time button; the player waits for the pet to
+                        // get hungry and to grow up, as the game is meant to be played.
+                        onFastForward = if (DemoMode.ENABLED) {
+                            { vm.fastForward(DemoMode.FAST_FORWARD_MILLIS) }
+                        } else {
+                            null
+                        },
                         scene = GameScene.of(
                             background = SceneSprite(
                                 assetPath = Sprites.locationBackground(state.subLocationIndex),

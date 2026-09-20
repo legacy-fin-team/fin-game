@@ -8,6 +8,7 @@ import com.legacy.fingame.game.animals.Animal
 import com.legacy.fingame.game.animals.AnimalSelection
 import com.legacy.fingame.game.animals.Growth
 import com.legacy.fingame.game.economy.Economy
+import com.legacy.fingame.game.economy.FastForwardClock
 import com.legacy.fingame.game.economy.GameClock
 import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCatalog
@@ -137,13 +138,21 @@ data class GameUiState(
  * (bought by the handful) from items that are bought once, and to know what using an item does to
  * the pet.
  * @param clock where the current day comes from, for the once-a-day bonus, and the current moment,
- * for the pet's stats and its growth.
+ * for the pet's stats and its growth. The view model reads it through a [FastForwardClock], so a
+ * demo build can push the game's time forward (see [fastForward]) without the rest of the game
+ * knowing about it.
  */
 class GameViewModel(
     private val store: PlayerStateStore,
     private val catalog: ItemCatalog,
-    private val clock: GameClock = GameClock.DEVICE
+    clock: GameClock = GameClock.DEVICE
 ) : ViewModel() {
+
+    /**
+     * The clock the game is played by: the one it was given, plus whatever [fastForward] has pushed
+     * it by. Untouched, it is the given clock itself.
+     */
+    private val clock = FastForwardClock(clock)
 
     /**
      * Constant limits for [GameViewModel]'s UI state, and the way it is built outside of tests.
@@ -274,6 +283,34 @@ class GameViewModel(
             petAge = age
         )
         persist()
+    }
+
+    /**
+     * Skips the given amount of time: the game's clock is pushed forward and the pet is brought up
+     * to date with it, so it gets as hungry, grows as much and comes as close to its next daily
+     * bonus as it would have by the player simply waiting.
+     *
+     * This is what the demo build's time button does (see
+     * [com.legacy.fingame.DemoMode.FAST_FORWARD_MILLIS]) and it is the only thing it does: nothing is
+     * written into the pet by hand, the stats fall through the very same [tick] the waiting player's
+     * pet falls through. The skipped time lives for as long as the app is open; the moments saved
+     * for the next launch are the skipped-to ones, so a pet pushed into the future simply stands
+     * still until the device's own clock catches up with it.
+     *
+     * @param millis how much time to skip; zero or less skips nothing.
+     */
+    fun fastForward(millis: Long) {
+        if (millis <= 0) return
+        clock.fastForward(millis)
+
+        val current = _state.value
+        _state.value = current.copy(
+            dailyBonusAvailable = Economy.isDailyBonusAvailable(
+                lastClaimedDay = current.lastDailyBonusDay,
+                today = clock.today()
+            )
+        )
+        tick()
     }
 
     /**

@@ -3,6 +3,16 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+// Whether this build is a demo one, i.e. whether the game shows the tools a demo is given instead
+// of the wait the player is given — the time button, for one (see `DemoMode`).
+//
+// The debug build is a demo build and the release one is not, which is what a demo is usually built
+// from; `-Pfingame.demoMode=true` (or `false`) overrides that for either of them, so a demo can be
+// handed over as a release build as well without touching this file.
+val demoModeOverride: Boolean? = providers.gradleProperty("fingame.demoMode")
+    .orNull
+    ?.toBooleanStrictOrNull()
+
 android {
     namespace = "com.legacy.fingame"
     compileSdk {
@@ -20,7 +30,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("boolean", "DEMO_MODE", (demoModeOverride ?: true).toString())
+        }
         release {
+            buildConfigField("boolean", "DEMO_MODE", (demoModeOverride ?: false).toString())
             optimization {
                 enable = false
             }
@@ -32,6 +46,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     testOptions {
         unitTests.isReturnDefaultValues = true
