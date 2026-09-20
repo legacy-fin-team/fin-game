@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -54,14 +53,13 @@ import com.legacy.fingame.ui.components.PillButton
 import com.legacy.fingame.ui.components.Sprite
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
-import com.legacy.fingame.ui.components.title
+import com.legacy.fingame.ui.components.StatValueChip
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
 
 private val CloseButtonSize = 64.dp
 private val ItemCellMinSize = 140.dp
-private val PopupSpriteSize = 96.dp
 private val PopupMaxWidth = 260.dp
 private val PopupCloseButtonSize = 44.dp
 
@@ -319,8 +317,11 @@ private fun ItemActionPopup(
 }
 
 /**
- * The block the item window is made of: the item's sprite and name, what it does to the pet's
- * stats, the action the item allows, and the cross that closes it.
+ * The block the item window is made of: what the item does to the pet's stats, the action the item
+ * allows, and the cross that closes it.
+ *
+ * The item is neither pictured nor named here — the player has just tapped its cell and knows what
+ * it is, so the window only says what will happen and lets it happen.
  *
  * The cross sits on the top-right corner and hangs half-way over the edge of the card, so it reads
  * as a way out of the block rather than as one more action inside it.
@@ -357,20 +358,6 @@ private fun ItemActionBlock(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Sprite(
-                    assetPath = entry.spritePath,
-                    contentDescription = entry.item.title,
-                    modifier = Modifier.size(PopupSpriteSize)
-                )
-
-                Text(
-                    text = entry.item.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
                 if (entry.item.effects.isNotEmpty()) {
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -451,7 +438,9 @@ private fun Item.useActionTitle(): String = when (category.use) {
 }
 
 /**
- * One of an item's effects, as a chip saying which bar it moves and by how much.
+ * One of an item's effects, in the same shape the main screen shows a stat in: the icon of the stat
+ * and, next to it, how much the item moves that stat. The stat is not named in words — the icon
+ * already says which one it is, and the window stays small enough to sit next to a cell.
  *
  * @param stat the stat the effect is on.
  * @param value how much the effect adds to it; a negative value is shown with its minus sign.
@@ -464,24 +453,16 @@ private fun EffectChip(
     modifier: Modifier = Modifier
 ) {
     val sign = if (value > 0) "+" else ""
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        border = BorderStroke(1.dp, GameColors.cardStroke)
-    ) {
-        Text(
-            text = "${stat.title()} $sign$value",
-            style = MaterialTheme.typography.labelMedium,
-            color = if (value < 0) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-            maxLines = 1
-        )
-    }
+    StatValueChip(
+        stat = stat,
+        value = "$sign$value",
+        valueColor = if (value < 0) {
+            MaterialTheme.colorScheme.error
+        } else {
+            GameColors.success
+        },
+        modifier = modifier
+    )
 }
 
 /** Inventory the previews show, standing in for what the player's state holds. */

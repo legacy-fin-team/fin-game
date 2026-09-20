@@ -301,11 +301,9 @@ private const val StatLowLevel = 0.25f
 private val StatIconSize = 24.dp
 
 /**
- * One stat of the pet as a chip: the icon of the stat and how full it is, in percent.
+ * One stat of the pet as a [StatValueChip]: the icon of the stat and how full it is, in percent.
  *
- * The stat is never named in words — the icon says which one it is, and the chip stays small
- * enough for several of them to sit in a row next to the balance instead of taking up half the
- * screen with bars. The name is still announced to screen readers through the icon's description.
+ * Several of these sit in a row next to the balance instead of taking up half the screen with bars.
  *
  * @param stat the stat to show.
  * @param stats the pet's stats to read [stat] from.
@@ -318,8 +316,35 @@ fun StatChip(
     modifier: Modifier = Modifier
 ) {
     val fraction = stats.fractionOf(stat)
-    val percentText = "${(fraction * 100).roundToInt()}%"
 
+    StatValueChip(
+        stat = stat,
+        value = "${(fraction * 100).roundToInt()}%",
+        valueColor = statValueColor(fraction),
+        modifier = modifier
+    )
+}
+
+/**
+ * Chip made of a stat's icon and one short value next to it, the shape every stat is shown in —
+ * how full it is on the main screen, how much an item moves it in the inventory.
+ *
+ * The stat is never named in words here: the icon says which one it is, so the chip stays small
+ * enough for several of them to sit in a row. The name is still announced to screen readers
+ * through the icon's description.
+ *
+ * @param stat the stat whose icon the chip carries.
+ * @param value the text written next to the icon, already formatted for the player.
+ * @param valueColor color of that text.
+ * @param modifier modifier applied to the outer [Surface].
+ */
+@Composable
+fun StatValueChip(
+    stat: StatKind,
+    value: String,
+    valueColor: Color,
+    modifier: Modifier = Modifier
+) {
     Surface(
         modifier = modifier.wrapContentSize(),
         shape = RoundedCornerShape(50),
@@ -337,9 +362,9 @@ fun StatChip(
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
-                text = percentText,
+                text = value,
                 style = MaterialTheme.typography.labelLarge,
-                color = statValueColor(fraction),
+                color = valueColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
