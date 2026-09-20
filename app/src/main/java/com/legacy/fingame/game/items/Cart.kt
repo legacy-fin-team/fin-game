@@ -65,7 +65,7 @@ object Cart {
         .sortedWith(
             compareBy(
                 { it.item.category.ordinal },
-                { it.item.title },
+                { it.item.name },
                 { it.variantId }
             )
         )

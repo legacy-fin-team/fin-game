@@ -36,7 +36,7 @@ internal object TestItems {
     /** Food in two variants: bought by the handful, and gives the variants something to pick from. */
     val APPLE = Item(
         id = "apple",
-        title = "Яблоко",
+        name = "Яблоко",
         price = 15,
         category = ItemCategory.FOOD,
         variants = mapOf("red" to "items/apple/red", "green" to "items/apple/green"),
@@ -46,7 +46,7 @@ internal object TestItems {
     /** Food with a single variant. */
     val FISH = Item(
         id = "fish",
-        title = "Рыбка",
+        name = "Рыбка",
         price = 25,
         category = ItemCategory.FOOD,
         variants = mapOf("default" to "items/fish/default"),
@@ -56,7 +56,7 @@ internal object TestItems {
     /** Clothes in two variants: owned per variant, so the black one is not the white one. */
     val HAT = Item(
         id = "hat",
-        title = "Шляпа",
+        name = "Шляпа",
         price = 100,
         category = ItemCategory.CLOTHES,
         variants = mapOf("black" to "items/hat/black", "white" to "items/hat/white"),
@@ -66,7 +66,7 @@ internal object TestItems {
     /** A toy with a single variant, bought once and played with over and over. */
     val BALL = Item(
         id = "ball",
-        title = "Мячик",
+        name = "Мячик",
         price = 60,
         category = ItemCategory.TOYS,
         variants = mapOf("red" to "items/ball/red"),
@@ -76,7 +76,7 @@ internal object TestItems {
     /** A decoration standing in front of the pet: its data names a layer of its own. */
     val LAMP = Item(
         id = "lamp",
-        title = "Лампа",
+        name = "Лампа",
         price = 150,
         category = ItemCategory.DECOR,
         variants = mapOf("default" to "items/lamp/default"),

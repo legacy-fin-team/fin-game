@@ -13,12 +13,12 @@ class AnimalReaderTest {
     }
 
     @Test
-    fun `reads animal title, age count and variant paths`() {
+    fun `reads animal name, age count and variant paths`() {
         val animals = readAnimals(
             """
             <?xml version="1.0" encoding="utf-8"?>
             <animals>
-                <animal id="cat" title="Кот" ages="3">
+                <animal id="cat" name="Кот" ages="3">
                     <variants path="animals/cat/">
                         <variant id="orange" />
                         <variant id="white" />
@@ -29,7 +29,7 @@ class AnimalReaderTest {
         )
 
         val cat = animals.getValue("cat")
-        assertEquals("Кот", cat.title)
+        assertEquals("Кот", cat.name)
         assertEquals(3, cat.ageCount)
         assertEquals(
             mapOf("orange" to "animals/cat/orange", "white" to "animals/cat/white"),
@@ -43,12 +43,12 @@ class AnimalReaderTest {
             """
             <?xml version="1.0" encoding="utf-8"?>
             <animals>
-                <animal id="cat" title="Кот" ages="3">
+                <animal id="cat" name="Кот" ages="3">
                     <variants path="animals/cat/">
                         <variant id="orange" />
                     </variants>
                 </animal>
-                <animal id="dog" title="Пёс" ages="2">
+                <animal id="dog" name="Пёс" ages="2">
                     <variants path="animals/dog/">
                         <variant id="brown" />
                     </variants>
@@ -67,7 +67,7 @@ class AnimalReaderTest {
             """
             <?xml version="1.0" encoding="utf-8"?>
             <animals>
-                <animal id="cat" title="Кот">
+                <animal id="cat" name="Кот">
                     <variants path="animals/cat/">
                         <variant id="orange" />
                     </variants>
@@ -85,12 +85,12 @@ class AnimalReaderTest {
             """
             <?xml version="1.0" encoding="utf-8"?>
             <animals>
-                <animal id="cat" title="Кот" ages="0">
+                <animal id="cat" name="Кот" ages="0">
                     <variants path="animals/cat/">
                         <variant id="orange" />
                     </variants>
                 </animal>
-                <animal id="dog" title="Пёс" ages="many">
+                <animal id="dog" name="Пёс" ages="many">
                     <variants path="animals/dog/">
                         <variant id="brown" />
                     </variants>
@@ -103,7 +103,7 @@ class AnimalReaderTest {
     }
 
     @Test
-    fun `animal without title is skipped`() {
+    fun `animal without name is skipped`() {
         val animals = readAnimals(
             """
             <?xml version="1.0" encoding="utf-8"?>
@@ -137,7 +137,7 @@ class AnimalReaderTest {
     fun `idle sprite path contains the age stage`() {
         val cat = Animal(
             id = "cat",
-            title = "Кот",
+            name = "Кот",
             ageCount = 3,
             variants = mapOf("orange" to "animals/cat/orange")
         )
@@ -150,7 +150,7 @@ class AnimalReaderTest {
     fun `idle sprite path coerces the age into the stages the animal has`() {
         val dog = Animal(
             id = "dog",
-            title = "Пёс",
+            name = "Пёс",
             ageCount = 2,
             variants = mapOf("brown" to "animals/dog/brown")
         )

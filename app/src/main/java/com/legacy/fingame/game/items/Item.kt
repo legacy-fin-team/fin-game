@@ -8,7 +8,7 @@ import com.legacy.fingame.game.stats.StatKind
  * game area.
  *
  * @property id id of the item.
- * @property title name of the item shown to the player.
+ * @property name name of the item shown to the player.
  * @property price what the item costs, in coins, the same for every one of its variants.
  * @property category section of the shop the item belongs to, which also says how the item is used
  * once the player owns it (see [ItemCategory.use]).
@@ -25,7 +25,7 @@ import com.legacy.fingame.game.stats.StatKind
  */
 data class Item(
     val id: String,
-    val title: String,
+    val name: String,
     val price: Int,
     val category: ItemCategory,
     val variants: Map<String, String>,

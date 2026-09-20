@@ -405,11 +405,11 @@ private fun CartLineRow(
     ) {
         Sprite(
             assetPath = line.spritePath,
-            contentDescription = line.item.title,
+            contentDescription = line.item.name,
             modifier = Modifier.size(ConfirmLineSpriteSize)
         )
         Text(
-            text = line.item.title,
+            text = line.item.name,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
@@ -573,7 +573,7 @@ private fun ShopItemCard(
             ) {
                 Sprite(
                     assetPath = item.getSpritePath(pickedVariantId),
-                    contentDescription = item.title,
+                    contentDescription = item.name,
                     modifier = Modifier.fillMaxSize()
                 )
                 SpriteButton(
@@ -588,7 +588,7 @@ private fun ShopItemCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = item.title,
+                text = item.name,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -696,34 +696,59 @@ private fun ShopItemCard(
     }
 }
 
-/** Items the previews go shopping with, standing in for what the catalog reads from the assets. */
+/** Food the previews go shopping with, standing in for what the catalog reads from the assets. */
 private val PreviewItems = listOf(
     Item(
         id = "apple",
-        title = "Яблоко",
+        name = "Яблоко",
         price = 15,
         category = ItemCategory.FOOD,
-        variants = mapOf("red" to "items/apple/red", "green" to "items/apple/green")
+        variants = mapOf("default" to "items/apple/default")
     ),
     Item(
         id = "fish",
-        title = "Рыбка",
+        name = "Рыбка",
         price = 25,
         category = ItemCategory.FOOD,
         variants = mapOf("default" to "items/fish/default")
     ),
     Item(
         id = "cake",
-        title = "Пирожное",
+        name = "Пирожное",
         price = 40,
         category = ItemCategory.FOOD,
         variants = mapOf("default" to "items/cake/default")
     )
 )
 
-/** The cart the previews go to the till with: two apples of the green sort and one fish. */
+/**
+ * Clothes the previews go shopping with: the category where a thing really does come in several
+ * sorts, so this is what the variant picker on a card is previewed on.
+ */
+private val PreviewClothes = listOf(
+    Item(
+        id = "hat",
+        name = "Шляпа",
+        price = 100,
+        category = ItemCategory.CLOTHES,
+        variants = mapOf(
+            "black" to "items/hat/black",
+            "white" to "items/hat/white",
+            "violet" to "items/hat/violet"
+        )
+    ),
+    Item(
+        id = "scarf",
+        name = "Шарф",
+        price = 80,
+        category = ItemCategory.CLOTHES,
+        variants = mapOf("red" to "items/scarf/red", "green" to "items/scarf/green")
+    )
+)
+
+/** The cart the previews go to the till with: two apples and one fish. */
 private val PreviewCartLines = listOf(
-    CartLine(item = PreviewItems[0], variantId = "green", quantity = 2),
+    CartLine(item = PreviewItems[0], variantId = "default", quantity = 2),
     CartLine(item = PreviewItems[1], variantId = "default", quantity = 1)
 )
 
@@ -737,7 +762,6 @@ private fun ShopScreenLightPreview() {
                 state = GameUiState(
                     balance = 300,
                     quantities = mapOf("apple" to 2),
-                    pickedVariants = mapOf("apple" to "green"),
                     cartPrice = 30
                 ),
                 items = PreviewItems,
@@ -753,7 +777,7 @@ private fun ShopScreenLightPreview() {
     }
 }
 
-/** Preview of [ShopScreen] in the dark theme, with an item the player already owns. */
+/** Preview of [ShopScreen] in the dark theme: the clothes rack, with a hat the player already owns. */
 @Preview(name = "Shop — Dark", showBackground = true)
 @Composable
 private fun ShopScreenDarkPreview() {
@@ -767,7 +791,7 @@ private fun ShopScreenDarkPreview() {
                     cartPrice = 25,
                     owned = mapOf(ItemSelection("hat", "black") to 1)
                 ),
-                items = emptyList(),
+                items = PreviewClothes,
                 cartLines = listOf(PreviewCartLines.last()),
                 onSelectCategory = {},
                 onPickVariant = { _, _ -> },

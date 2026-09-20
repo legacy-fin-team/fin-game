@@ -2,13 +2,12 @@
 <items>
     <item
         id="apple"
-        title="Яблоко"
+        name="Яблоко"
         price="15"
         category="food"
     >
         <variants path="items/apple/">
-            <variant id="red" />
-            <variant id="green" />
+            <variant id="default" />
         </variants>
         <effects>
             <effect stat="hunger" value="20" />
@@ -17,9 +16,8 @@
     </item>
     <item
         id="fish"
-        title="Рыбка"
+        name="Рыбка"
         price="25"
-        type="single"
         category="food"
     >
         <variants path="items/fish/">
@@ -32,9 +30,8 @@
     </item>
     <item
         id="cake"
-        title="Пирожное"
+        name="Пирожное"
         price="40"
-        type="single"
         category="food"
     >
         <variants path="items/cake/">
@@ -48,7 +45,7 @@
     </item>
     <item
         id="ball"
-        title="Мячик"
+        name="Мячик"
         price="60"
         category="toys"
     >
@@ -63,9 +60,8 @@
     </item>
     <item
         id="teddy"
-        title="Мишка"
+        name="Мишка"
         price="120"
-        type="single"
         category="toys"
     >
         <variants path="items/teddy/">
@@ -78,8 +74,7 @@
     <item
         id="hat"
         price="100"
-        title="Шляпа"
-        type="single"
+        name="Шляпа"
         category="clothes"
     >
         <variants path="items/hat/">
@@ -93,7 +88,7 @@
     </item>
     <item
         id="scarf"
-        title="Шарф"
+        name="Шарф"
         price="80"
         category="clothes"
     >
@@ -108,9 +103,8 @@
     </item>
     <item
         id="lamp"
-        title="Лампа"
+        name="Лампа"
         price="150"
-        type="single"
         category="decor"
         layer="environment-front"
     >
@@ -123,7 +117,7 @@
     </item>
     <item
         id="rug"
-        title="Коврик"
+        name="Коврик"
         price="90"
         category="decor"
     >

@@ -64,7 +64,7 @@ data class GameScene(val sprites: Map<GameLayer, List<SceneSprite>> = emptyMap()
                 sprites.getOrPut(layer) { mutableListOf() }.add(
                     SceneSprite(
                         assetPath = item.getSpritePath(selection.variantId),
-                        description = item.title
+                        description = item.name
                     )
                 )
             }

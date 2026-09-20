@@ -215,7 +215,7 @@ private fun InventoryCell(
             ) {
                 Sprite(
                     assetPath = entry.spritePath,
-                    contentDescription = entry.item.title,
+                    contentDescription = entry.item.name,
                     modifier = Modifier.fillMaxSize()
                 )
                 if (entry.count > 1) {
@@ -229,7 +229,7 @@ private fun InventoryCell(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = entry.item.title,
+                text = entry.item.name,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -470,20 +470,20 @@ private val PreviewEntries = listOf(
     InventoryEntry(
         item = Item(
             id = "apple",
-            title = "Яблоко",
+            name = "Яблоко",
             price = 15,
             category = ItemCategory.FOOD,
-            variants = mapOf("red" to "items/apple/red"),
+            variants = mapOf("default" to "items/apple/default"),
             effects = mapOf(StatKind.HUNGER to 20, StatKind.HEALTH to 5)
         ),
-        variantId = "red",
+        variantId = "default",
         count = 3,
         worn = false
     ),
     InventoryEntry(
         item = Item(
             id = "ball",
-            title = "Мячик",
+            name = "Мячик",
             price = 60,
             category = ItemCategory.TOYS,
             variants = mapOf("red" to "items/ball/red"),
@@ -496,7 +496,7 @@ private val PreviewEntries = listOf(
     InventoryEntry(
         item = Item(
             id = "hat",
-            title = "Шляпа",
+            name = "Шляпа",
             price = 100,
             category = ItemCategory.CLOTHES,
             variants = mapOf("black" to "items/hat/black"),

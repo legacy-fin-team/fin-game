@@ -4,7 +4,7 @@ package com.legacy.fingame.game.animals
  * An animal the player can keep as a pet.
  *
  * @property id id of the animal.
- * @property title name of the animal shown to the player.
+ * @property name name of the animal shown to the player.
  * @property ageCount number of age (growth) stages the animal has. Stages are numbered from
  * [FIRST_AGE] to `ageCount - 1`, every animal has its own number of them.
  * @property variants map of paths to animal variants. The key is the animal variant id.
@@ -13,7 +13,7 @@ package com.legacy.fingame.game.animals
  */
 data class Animal(
     val id: String,
-    val title: String,
+    val name: String,
     val ageCount: Int,
     val variants: Map<String, String>
 ) {

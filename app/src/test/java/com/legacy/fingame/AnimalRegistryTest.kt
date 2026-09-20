@@ -11,7 +11,7 @@ class AnimalRegistryTest {
 
     private val cat = Animal(
         id = "cat",
-        title = "Кот",
+        name = "Кот",
         ageCount = 3,
         variants = mapOf("orange" to "animals/cat/orange")
     )

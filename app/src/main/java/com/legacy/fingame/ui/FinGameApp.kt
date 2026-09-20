@@ -94,7 +94,7 @@ fun FinGameApp(
             AnimalSelectScreen(
                 animals = animalRegistry.getAllAnimals(),
                 onSelect = { selection, name -> vm.selectAnimal(selection, name) },
-                previousPetLost = savedSelection != null
+                previousPetMissingFromData = savedSelection != null
             )
         } else {
             // The pet lives on while the player watches it: the loop keeps asking the view model to

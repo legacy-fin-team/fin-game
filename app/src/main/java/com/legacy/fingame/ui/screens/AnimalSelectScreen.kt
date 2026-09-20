@@ -93,16 +93,18 @@ internal val AnimalSelectionSaver: Saver<AnimalSelection?, Any> = listSaver(
  * @param onSelect called with the picked animal, its variant and the name the player gave it when
  *   the choice is confirmed; the caller is the one that persists it.
  * @param modifier modifier applied to the screen root.
- * @param previousPetLost whether the player already had a pet that is gone from the animal data,
- *   i.e. this is not the first launch and the earlier choice can no longer be played; the screen
- *   then explains that instead of greeting the player as a newcomer.
+ * @param previousPetMissingFromData whether the pet the player picked earlier is no longer described
+ *   by the animal data, so its sprites cannot be drawn and the saved choice cannot be played on.
+ *   Nothing the player did leads here — a pet is never lost by playing badly; this only happens when
+ *   the animal or the variant is dropped from the game's own data between versions. The screen then
+ *   says so instead of greeting the player as a newcomer.
  */
 @Composable
 fun AnimalSelectScreen(
     animals: List<Animal>,
     onSelect: (AnimalSelection, String) -> Unit,
     modifier: Modifier = Modifier,
-    previousPetLost: Boolean = false
+    previousPetMissingFromData: Boolean = false
 ) {
     val species = remember(animals) { animals.filter { it.variants.isNotEmpty() } }
 
@@ -120,7 +122,7 @@ fun AnimalSelectScreen(
         SpeciesStep(
             species = species,
             onPick = { animal -> pickedAnimalId = animal.id },
-            previousPetLost = previousPetLost,
+            previousPetMissingFromData = previousPetMissingFromData,
             modifier = modifier
         )
     } else {
@@ -148,15 +150,15 @@ fun AnimalSelectScreen(
  *
  * @param species animals to choose from, each of them with at least one variant.
  * @param onPick called with the animal whose card was tapped; the caller moves on to the next step.
- * @param previousPetLost whether the player is here because the pet they had is gone from the
- *   animal data; only changes the title and the caption.
+ * @param previousPetMissingFromData whether the player is here because the animal data no longer
+ *   describes the pet they picked earlier; only changes the heading and the caption.
  * @param modifier modifier applied to the root column.
  */
 @Composable
 private fun SpeciesStep(
     species: List<Animal>,
     onPick: (Animal) -> Unit,
-    previousPetLost: Boolean,
+    previousPetMissingFromData: Boolean,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -167,7 +169,7 @@ private fun SpeciesStep(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = if (previousPetLost) "Выбери нового питомца" else "Выбери питомца",
+            text = if (previousPetMissingFromData) "Выбери питомца заново" else "Выбери питомца",
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
@@ -176,9 +178,10 @@ private fun SpeciesStep(
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = if (previousPetLost) {
-                "Питомца, с которым ты играл раньше, больше нет в игре. " +
-                    "Новый будет расти вместе с твоими накоплениями"
+            text = if (previousPetMissingFromData) {
+                "Твой питомец никуда не делся — просто обновилась игра, " +
+                    "и такого питомца в ней больше нет. Выбери другого: " +
+                    "он будет расти вместе с твоими накоплениями"
             } else {
                 "Он будет расти вместе с твоими накоплениями"
             },
@@ -196,8 +199,8 @@ private fun SpeciesStep(
                         animal.variants.keys.first(),
                         Animal.FIRST_AGE
                     ),
-                    description = animal.title,
-                    title = animal.title,
+                    description = animal.name,
+                    title = animal.name,
                     selected = false,
                     onClick = { onPick(animal) }
                 )
@@ -210,8 +213,8 @@ private fun SpeciesStep(
  * Second step: what the picked animal looks like and what it is called.
  *
  * The first variant is picked from the start, so the player who is happy with it only has to name
- * the pet and confirm. The name starts out as the animal's own title and is the player's to change;
- * a name wiped out completely falls back to that title rather than leaving the pet nameless.
+ * the pet and confirm. The name starts out as the animal's own name and is the player's to change;
+ * a name wiped out completely falls back to that name rather than leaving the pet nameless.
  *
  * @param animal the animal picked on the first step.
  * @param onBack called when the player wants to pick a different animal after all.
@@ -231,7 +234,7 @@ private fun VariantStep(
             AnimalSelection(animalId = animal.id, variantId = variantIds.first())
         )
     }
-    var name by rememberSaveable(animal.id) { mutableStateOf(animal.title) }
+    var name by rememberSaveable(animal.id) { mutableStateOf(animal.name) }
 
     Column(
         modifier = modifier
@@ -241,7 +244,7 @@ private fun VariantStep(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = animal.title,
+            text = animal.name,
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
@@ -262,7 +265,7 @@ private fun VariantStep(
             items(items = variantIds, key = { variantId -> variantId }) { variantId ->
                 AnimalCard(
                     spritePath = animal.getIdleSpritePath(variantId, Animal.FIRST_AGE),
-                    description = animal.title,
+                    description = animal.name,
                     title = null,
                     selected = variantId == selection?.variantId,
                     onClick = {
@@ -295,7 +298,7 @@ private fun VariantStep(
                 text = "Выбрать",
                 onClick = {
                     selection?.let { picked ->
-                        onConfirm(picked.variantId, name.trim().ifBlank { animal.title })
+                        onConfirm(picked.variantId, name.trim().ifBlank { animal.name })
                     }
                 },
                 enabled = selection != null
@@ -430,13 +433,13 @@ private fun AnimalCard(
 private val PreviewAnimals = listOf(
     Animal(
         id = "cat",
-        title = "Кот",
+        name = "Кот",
         ageCount = 3,
         variants = mapOf("orange" to "animals/cat/orange", "white" to "animals/cat/white")
     ),
     Animal(
         id = "dog",
-        title = "Пёс",
+        name = "Пёс",
         ageCount = 2,
         variants = mapOf("brown" to "animals/dog/brown")
     )
@@ -480,15 +483,20 @@ private fun AnimalSelectScreenVariantsPreview() {
 }
 
 /** Preview of [AnimalSelectScreen] shown to a player whose pet is gone from the animal data. */
-@Preview(name = "AnimalSelectScreen — Pet lost", showBackground = true, widthDp = 411, heightDp = 891)
+@Preview(
+    name = "AnimalSelectScreen — Pet missing from data",
+    showBackground = true,
+    widthDp = 411,
+    heightDp = 891
+)
 @Composable
-private fun AnimalSelectScreenPetLostPreview() {
+private fun AnimalSelectScreenPetMissingPreview() {
     FinGameTheme {
         Surface(color = MaterialTheme.colorScheme.background) {
             AnimalSelectScreen(
                 animals = PreviewAnimals,
                 onSelect = { _, _ -> },
-                previousPetLost = true
+                previousPetMissingFromData = true
             )
         }
     }

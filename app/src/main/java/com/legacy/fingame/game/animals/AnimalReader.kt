@@ -15,7 +15,7 @@ class AnimalReader {
      * Reads XML document. Doesn't do path data validation.
      * @param inputStream stream that reads XML file.
      * @return Map of animals. The key is animal id. The value is the [Animal] data:
-     * its title, its number of age stages and the map of paths to its variants.
+     * its name, its number of age stages and the map of paths to its variants.
      */
     fun readAnimals(inputStream: InputStream): Map<String, Animal> {
         val animals = mutableMapOf<String, Animal>()
@@ -44,9 +44,9 @@ class AnimalReader {
                 continue
             }
 
-            val animalTitle = animalNode.getAttribute("title")
-            if (animalTitle.isNullOrBlank()) {
-                Log.e(TAG, "Animal with id '$animalId' doesn't have 'title' attribute.")
+            val animalName = animalNode.getAttribute("name")
+            if (animalName.isNullOrBlank()) {
+                Log.e(TAG, "Animal with id '$animalId' doesn't have 'name' attribute.")
                 continue
             }
 
@@ -80,7 +80,7 @@ class AnimalReader {
 
             animals[animalId] = Animal(
                 id = animalId,
-                title = animalTitle,
+                name = animalName,
                 ageCount = ageCount,
                 variants = variantMap.toMap()
             )
