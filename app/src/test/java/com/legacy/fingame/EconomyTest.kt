@@ -3,6 +3,7 @@ package com.legacy.fingame
 import com.legacy.fingame.game.PlayerState
 import com.legacy.fingame.game.Screen
 import com.legacy.fingame.game.economy.Economy
+import com.legacy.fingame.game.items.Cart
 import com.legacy.fingame.game.items.ItemSelection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -212,6 +213,60 @@ class EconomyTest {
         assertFalse(vm.state.value.dailyBonusAvailable)
         assertFalse(vm.claimDailyBonus())
         assertEquals(Economy.STARTING_BALANCE + Economy.DAILY_BONUS, vm.state.value.balance)
+    }
+
+    @Test
+    fun `paying for the cart closes the shop`() {
+        val vm = testGameViewModel()
+
+        vm.openScreen(Screen.SHOP)
+        vm.increaseQty(TestItems.APPLE.id)
+        assertTrue(vm.buyCart())
+
+        assertEquals(Screen.MAIN, vm.state.value.screen)
+    }
+
+    @Test
+    fun `a cart that cannot be paid for leaves the player in the shop`() {
+        val store = FakePlayerStateStore(PlayerState(balance = TestItems.HAT.price - 1))
+        val vm = testGameViewModel(store)
+
+        vm.openScreen(Screen.SHOP)
+        vm.increaseQty(TestItems.HAT.id)
+        assertFalse(vm.buyCart())
+
+        assertEquals(Screen.SHOP, vm.state.value.screen)
+        assertEquals(1, vm.state.value.quantities[TestItems.HAT.id])
+    }
+
+    @Test
+    fun `the cart is listed item by item, each in the variant picked for it`() {
+        val vm = testGameViewModel()
+
+        vm.pickVariant(TestItems.APPLE.id, "green")
+        vm.increaseQty(TestItems.APPLE.id)
+        vm.increaseQty(TestItems.APPLE.id)
+        vm.increaseQty(TestItems.HAT.id)
+
+        val state = vm.state.value
+        val lines = Cart.linesOf(state.quantities, state.pickedVariants, FakeItemCatalog())
+
+        assertEquals(listOf(TestItems.APPLE, TestItems.HAT), lines.map { it.item })
+        assertEquals(listOf("green", "black"), lines.map { it.variantId })
+        assertEquals(listOf(2, 1), lines.map { it.quantity })
+        assertEquals(state.cartPrice, lines.sumOf { it.price })
+    }
+
+    @Test
+    fun `the cart listing leaves out what is not on sale any more`() {
+        val lines = Cart.linesOf(
+            quantities = mapOf(TestItems.APPLE.id to 1, "item_nobody_sells" to 3),
+            pickedVariants = emptyMap(),
+            catalog = FakeItemCatalog()
+        )
+
+        assertEquals(listOf(TestItems.APPLE.id), lines.map { it.item.id })
+        assertEquals("red", lines.single().variantId)
     }
 
     @Test

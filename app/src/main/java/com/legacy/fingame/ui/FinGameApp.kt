@@ -18,6 +18,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.legacy.fingame.FinGameApplication
 import com.legacy.fingame.game.GameViewModel
 import com.legacy.fingame.game.Screen
+import com.legacy.fingame.game.items.Cart
 import com.legacy.fingame.game.items.Inventory
 import com.legacy.fingame.game.scene.GameScene
 import com.legacy.fingame.game.scene.SceneSprite
@@ -137,6 +138,11 @@ fun FinGameApp(
                     Screen.SHOP -> ShopScreen(
                         state = state,
                         items = itemRegistry.getItemsByCategory(state.selectedCategory),
+                        cartLines = Cart.linesOf(
+                            quantities = state.quantities,
+                            pickedVariants = state.pickedVariants,
+                            catalog = itemRegistry
+                        ),
                         onSelectCategory = vm::selectCategory,
                         onPickVariant = vm::pickVariant,
                         onIncrease = vm::increaseQty,

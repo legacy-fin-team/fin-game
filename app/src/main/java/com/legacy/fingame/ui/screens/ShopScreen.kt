@@ -13,14 +13,18 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -31,11 +35,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.legacy.fingame.game.GameUiState
+import com.legacy.fingame.game.items.CartLine
 import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.items.ItemSelection
@@ -45,8 +54,10 @@ import com.legacy.fingame.ui.components.PillButton
 import com.legacy.fingame.ui.components.Sprite
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
+import com.legacy.fingame.ui.components.spriteButtonHeight
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
+import com.legacy.fingame.ui.theme.GameDimens
 
 /**
  * Sizes of the shop buttons on a phone; [com.legacy.fingame.ui.components.SpriteButton] enlarges
@@ -57,8 +68,20 @@ private val CategoryButtonSize = 56.dp
 private val CounterButtonSize = 48.dp
 private val StarButtonSize = 40.dp
 private val VariantButtonSize = 36.dp
-private val PriceIconSize = 16.dp
+private val PriceIconSize = 24.dp
 private val ItemCellMinSize = 170.dp
+
+/** Sizes of the window that asks the player to confirm the purchase. */
+private val ConfirmMaxWidth = 320.dp
+private val ConfirmCloseButtonSize = 44.dp
+private val ConfirmLineSpriteSize = 40.dp
+private val ConfirmCoinSize = 20.dp
+
+/**
+ * How tall the list of items in the confirmation window is allowed to grow before it starts to
+ * scroll, so a big cart never pushes the total and the button off the screen.
+ */
+private val ConfirmLinesMaxHeight = 260.dp
 
 /** How a card exposes its purchase controls. Presentation-only, never stored in the ViewModel. */
 enum class ShopItemMode { COUNTER, ADDABLE, PURCHASED }
@@ -74,15 +97,20 @@ enum class ShopItemMode { COUNTER, ADDABLE, PURCHASED }
  * - Bottom: one button per category in a row that scrolls horizontally (so the row can hold any
  *   number of categories) next to the "Купить" button, which shows what the cart costs and stays
  *   disabled while the cart is empty or the player cannot afford it.
+ * - Over all of it, once "Купить" is pressed: [PurchaseConfirmDialog], where the player sees what
+ *   the cart holds and what it costs before the coins are gone. The money is only spent from there,
+ *   so a pressed button is never a spent balance.
  *
  * @param state current game state: the balance to show, which category is selected, what is in the
  *   cart with what it costs, and which items the player already owns.
  * @param items the items of [GameUiState.selectedCategory], as the catalog registered them.
+ * @param cartLines everything in the cart, from every category and not just the shown one, as
+ *   [com.legacy.fingame.game.items.Cart] built it; this is what the confirmation lists.
  * @param onSelectCategory called with the category whose button was pressed.
  * @param onPickVariant called with an item id and the id of the variant picked for it.
  * @param onIncrease called with the id of the item to put one more of into the cart.
  * @param onDecrease called with the id of the item to take one of out of the cart.
- * @param onBuy called when the player pays for the cart.
+ * @param onBuy called when the player confirms the purchase and pays for the cart.
  * @param onClose called when the close button is pressed.
  * @param modifier modifier applied to the screen root.
  * @param categories categories the shop is split into; every [ItemCategory] by default, so a
@@ -92,6 +120,7 @@ enum class ShopItemMode { COUNTER, ADDABLE, PURCHASED }
 fun ShopScreen(
     state: GameUiState,
     items: List<Item>,
+    cartLines: List<CartLine>,
     onSelectCategory: (ItemCategory) -> Unit,
     onPickVariant: (String, String) -> Unit,
     onIncrease: (String) -> Unit,
@@ -101,6 +130,13 @@ fun ShopScreen(
     modifier: Modifier = Modifier,
     categories: List<ItemCategory> = ItemCategory.entries
 ) {
+    // Whether the player asked to pay and is being shown what for. Presentation-only: a cart that is
+    // still unconfirmed is no different from any other cart to the rest of the game.
+    var confirming by remember { mutableStateOf(false) }
+    // Cards of one screen are cut to the same pattern, so they end up the same height: room for a
+    // variant picker is kept on every card of a category where any item has variants at all.
+    val reserveVariantRow = items.any { item -> item.hasSeveralVariants }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -160,6 +196,7 @@ fun ShopScreen(
                             pickedVariantId = state.pickedVariantOf(item),
                             quantity = state.quantities[item.id] ?: 0,
                             mode = modeOf(item, state),
+                            reserveVariantRow = reserveVariantRow,
                             onPickVariant = { variantId -> onPickVariant(item.id, variantId) },
                             onIncrease = { onIncrease(item.id) },
                             onDecrease = { onDecrease(item.id) }
@@ -194,10 +231,263 @@ fun ShopScreen(
             Spacer(modifier = Modifier.width(12.dp))
             PillButton(
                 text = if (state.cartPrice > 0) "Купить · ${state.cartPrice}" else "Купить",
-                onClick = onBuy,
+                onClick = { confirming = true },
                 enabled = state.canBuyCart
             )
         }
+    }
+
+    // The window goes away by itself if the cart stops being payable while it is open — there would
+    // be nothing left to confirm.
+    if (confirming && state.canBuyCart) {
+        PurchaseConfirmDialog(
+            lines = cartLines,
+            total = state.cartPrice,
+            balance = state.balance,
+            onConfirm = {
+                confirming = false
+                onBuy()
+            },
+            onDismiss = { confirming = false }
+        )
+    }
+}
+
+/**
+ * Window that asks the player to confirm a purchase: what is in the cart, item by item, and what it
+ * all costs together. Nothing is paid for until the button in it is pressed.
+ *
+ * The cross in the corner, a tap outside the window and the system back gesture all close it and
+ * leave the cart untouched, so the player can go back and change their mind about an item.
+ *
+ * @param lines what the cart holds, as [com.legacy.fingame.game.items.Cart] built it.
+ * @param total what the whole cart costs.
+ * @param balance the coins the player has, shown next to the total so the purchase can be weighed
+ *   against what is left.
+ * @param onConfirm called when the player pays for the cart.
+ * @param onDismiss called when the window should be closed without buying anything.
+ */
+@Composable
+private fun PurchaseConfirmDialog(
+    lines: List<CartLine>,
+    total: Int,
+    balance: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    // The window is sized by what is in it, not by the platform's dialog width, so the card keeps
+    // the proportions of the rest of the game's windows.
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            PurchaseConfirmBlock(
+                lines = lines,
+                total = total,
+                balance = balance,
+                onConfirm = onConfirm,
+                onDismiss = onDismiss
+            )
+        }
+    }
+}
+
+/**
+ * The block the purchase window is made of: what the cart holds, what it costs, what the player is
+ * left with, the button that pays for it and the cross that closes it.
+ *
+ * The cross sits on the top-right corner and hangs half-way over the edge of the card, the way the
+ * inventory's item window wears it.
+ *
+ * @param lines what the cart holds.
+ * @param total what the whole cart costs.
+ * @param balance the coins the player has.
+ * @param onConfirm called when the player pays for the cart.
+ * @param onDismiss called when the cross is pressed.
+ * @param modifier modifier applied to the block root.
+ */
+@Composable
+private fun PurchaseConfirmBlock(
+    lines: List<CartLine>,
+    total: Int,
+    balance: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Half of the cross hangs outside the card, so the card keeps that much room around itself.
+    val overhang = GameDimens.buttonSize(ConfirmCloseButtonSize) / 2
+
+    Box(modifier = modifier) {
+        Surface(
+            modifier = Modifier
+                .padding(top = overhang, end = overhang)
+                .widthIn(max = ConfirmMaxWidth),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, GameColors.cardStroke),
+            shadowElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Покупка",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = ConfirmLinesMaxHeight)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    lines.forEach { line -> CartLineRow(line = line) }
+                }
+
+                HorizontalDivider(color = GameColors.cardStroke)
+
+                PriceRow(
+                    label = "Итого",
+                    price = total,
+                    labelStyle = MaterialTheme.typography.titleMedium,
+                    labelColor = MaterialTheme.colorScheme.onSurface
+                )
+                PriceRow(
+                    label = "Останется",
+                    price = balance - total,
+                    labelStyle = MaterialTheme.typography.bodyMedium,
+                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                PillButton(text = "Купить", onClick = onConfirm)
+            }
+        }
+
+        SpriteButton(
+            assetPath = Sprites.CLOSE,
+            contentDescription = "Отменить покупку",
+            onClick = onDismiss,
+            size = ConfirmCloseButtonSize,
+            modifier = Modifier.align(Alignment.TopEnd)
+        )
+    }
+}
+
+/**
+ * One line of the cart in [PurchaseConfirmDialog]: the sprite of the picked variant, the name of the
+ * item, how many of it are being bought and what that line costs.
+ *
+ * @param line the cart line to show.
+ * @param modifier modifier applied to the row.
+ */
+@Composable
+private fun CartLineRow(
+    line: CartLine,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Sprite(
+            assetPath = line.spritePath,
+            contentDescription = line.item.title,
+            modifier = Modifier.size(ConfirmLineSpriteSize)
+        )
+        Text(
+            text = line.item.title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        if (line.quantity > 1) {
+            Text(
+                text = "×${line.quantity}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+        CoinAmount(amount = line.price)
+    }
+}
+
+/**
+ * A named sum in [PurchaseConfirmDialog]: the label on the left, the coins on the right.
+ *
+ * @param label what the sum is.
+ * @param price the sum itself, in coins.
+ * @param labelStyle text style of the label, which is how the total is told apart from the rest.
+ * @param labelColor color of the label.
+ * @param modifier modifier applied to the row.
+ */
+@Composable
+private fun PriceRow(
+    label: String,
+    price: Int,
+    labelStyle: TextStyle,
+    labelColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = labelStyle,
+            color = labelColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        CoinAmount(amount = price)
+    }
+}
+
+/**
+ * An amount of money: the coin sprite and the number of coins.
+ *
+ * @param amount coins to show.
+ * @param modifier modifier applied to the row.
+ */
+@Composable
+private fun CoinAmount(
+    amount: Int,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Sprite(
+            assetPath = Sprites.COIN,
+            contentDescription = null,
+            modifier = Modifier.size(ConfirmCoinSize)
+        )
+        Text(
+            text = amount.toString(),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1
+        )
     }
 }
 
@@ -233,10 +523,18 @@ private fun modeOf(item: Item, state: GameUiState): ShopItemMode = when {
  * item's name and price, a variant picker for items offered in several variants, and a purchase
  * control that depends on [mode].
  *
+ * The card is built out of slots of a fixed height rather than out of whatever its item happens to
+ * need, so the cards of one shelf line up with each other instead of ending at three different
+ * heights: an item with one variant keeps the room the variant picker takes (as long as its
+ * neighbours have one, see [reserveVariantRow]), and the purchase control sits in a slot as tall as
+ * the tallest of them.
+ *
  * @param item the item to show.
  * @param pickedVariantId variant the item is shown and would be bought in.
  * @param quantity how many of this item are in the cart; shown by [ShopItemMode.COUNTER].
  * @param mode which purchase control to show; see [ShopItemMode].
+ * @param reserveVariantRow whether the card keeps room for a variant picker even when its item has
+ *   but one variant; true when any item on the same shelf has several of them.
  * @param onPickVariant called with the id of the variant the player picked.
  * @param onIncrease called to put one more of this item into the cart.
  * @param onDecrease called to take one of this item out of the cart.
@@ -248,6 +546,7 @@ private fun ShopItemCard(
     pickedVariantId: String,
     quantity: Int,
     mode: ShopItemMode,
+    reserveVariantRow: Boolean,
     onPickVariant: (String) -> Unit,
     onIncrease: () -> Unit,
     onDecrease: () -> Unit,
@@ -296,9 +595,11 @@ private fun ShopItemCard(
                 overflow = TextOverflow.Ellipsis
             )
 
+            Spacer(modifier = Modifier.height(4.dp))
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Sprite(
                     assetPath = Sprites.COIN,
@@ -307,74 +608,88 @@ private fun ShopItemCard(
                 )
                 Text(
                     text = item.price.toString(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
-            if (item.hasSeveralVariants) {
+            if (reserveVariantRow) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                Box(
+                    modifier = Modifier.height(spriteButtonHeight(VariantButtonSize)),
+                    contentAlignment = Alignment.Center
                 ) {
-                    item.variantIds.forEach { variantId ->
-                        SpriteButton(
-                            assetPath = item.getSpritePath(variantId),
-                            contentDescription = "Вариант «$variantId»",
-                            onClick = { onPickVariant(variantId) },
-                            size = VariantButtonSize,
-                            selected = variantId == pickedVariantId
-                        )
+                    if (item.hasSeveralVariants) {
+                        Row(
+                            modifier = Modifier.horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            item.variantIds.forEach { variantId ->
+                                SpriteButton(
+                                    assetPath = item.getSpritePath(variantId),
+                                    contentDescription = "Вариант «$variantId»",
+                                    onClick = { onPickVariant(variantId) },
+                                    size = VariantButtonSize,
+                                    selected = variantId == pickedVariantId
+                                )
+                            }
+                        }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            when (mode) {
-                ShopItemMode.COUNTER -> Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    SpriteButton(
-                        assetPath = Sprites.MINUS,
-                        contentDescription = "Уменьшить количество",
-                        onClick = { if (quantity > 0) onDecrease() },
-                        size = CounterButtonSize
-                    )
-                    Text(
-                        text = quantity.toString(),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.width(28.dp)
-                    )
-                    SpriteButton(
-                        assetPath = Sprites.PLUS,
-                        contentDescription = "Увеличить количество",
-                        onClick = onIncrease,
-                        size = CounterButtonSize
-                    )
-                }
+            // The counter is the tallest of the three controls, so its height is the one they all
+            // get: a card with a button ends where a card with a counter does.
+            Box(
+                modifier = Modifier.heightIn(min = spriteButtonHeight(CounterButtonSize)),
+                contentAlignment = Alignment.Center
+            ) {
+                when (mode) {
+                    ShopItemMode.COUNTER -> Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SpriteButton(
+                            assetPath = Sprites.MINUS,
+                            contentDescription = "Уменьшить количество",
+                            onClick = { if (quantity > 0) onDecrease() },
+                            size = CounterButtonSize
+                        )
+                        Text(
+                            text = quantity.toString(),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.width(28.dp)
+                        )
+                        SpriteButton(
+                            assetPath = Sprites.PLUS,
+                            contentDescription = "Увеличить количество",
+                            onClick = onIncrease,
+                            size = CounterButtonSize
+                        )
+                    }
 
-                ShopItemMode.ADDABLE -> PillButton(
-                    text = if (quantity > 0) "Убрать" else "Добавить",
-                    onClick = { if (quantity > 0) onDecrease() else onIncrease() }
-                )
-
-                ShopItemMode.PURCHASED -> Surface(
-                    shape = RoundedCornerShape(50),
-                    color = GameColors.disabledContainer
-                ) {
-                    Text(
-                        text = "Куплено",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = GameColors.disabledContent,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                    ShopItemMode.ADDABLE -> PillButton(
+                        text = if (quantity > 0) "Убрать" else "Добавить",
+                        onClick = { if (quantity > 0) onDecrease() else onIncrease() }
                     )
+
+                    ShopItemMode.PURCHASED -> Surface(
+                        shape = RoundedCornerShape(50),
+                        color = GameColors.disabledContainer
+                    ) {
+                        Text(
+                            text = "Куплено",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = GameColors.disabledContent,
+                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                        )
+                    }
                 }
             }
         }
@@ -406,6 +721,12 @@ private val PreviewItems = listOf(
     )
 )
 
+/** The cart the previews go to the till with: two apples of the green sort and one fish. */
+private val PreviewCartLines = listOf(
+    CartLine(item = PreviewItems[0], variantId = "green", quantity = 2),
+    CartLine(item = PreviewItems[1], variantId = "default", quantity = 1)
+)
+
 /** Preview of [ShopScreen] in the light theme. */
 @Preview(name = "Shop — Light", showBackground = true)
 @Composable
@@ -420,6 +741,7 @@ private fun ShopScreenLightPreview() {
                     cartPrice = 30
                 ),
                 items = PreviewItems,
+                cartLines = listOf(PreviewCartLines.first()),
                 onSelectCategory = {},
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
@@ -446,12 +768,31 @@ private fun ShopScreenDarkPreview() {
                     owned = mapOf(ItemSelection("hat", "black") to 1)
                 ),
                 items = emptyList(),
+                cartLines = listOf(PreviewCartLines.last()),
                 onSelectCategory = {},
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
                 onBuy = {},
                 onClose = {}
+            )
+        }
+    }
+}
+
+/** Preview of the window the player confirms a purchase in. */
+@Preview(name = "Shop — Purchase confirmation", showBackground = true)
+@Composable
+private fun PurchaseConfirmDialogPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            PurchaseConfirmBlock(
+                lines = PreviewCartLines,
+                total = PreviewCartLines.sumOf { line -> line.price },
+                balance = 300,
+                onConfirm = {},
+                onDismiss = {},
+                modifier = Modifier.padding(16.dp)
             )
         }
     }

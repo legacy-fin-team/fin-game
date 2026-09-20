@@ -413,6 +413,10 @@ class GameViewModel(
      * An empty cart, or one the player cannot afford, buys nothing at all: a purchase is never
      * partial, so the player either gets the whole cart or keeps the money.
      *
+     * A paid-for cart ends the visit: the shop closes and the player is back on [Screen.MAIN] with
+     * the pet, which is what the purchase was for. The cart is emptied either way, so nothing of it
+     * is left to be paid for twice.
+     *
      * @return True when the purchase went through, false when there was nothing to buy or not
      * enough money for it.
      */
@@ -428,10 +432,11 @@ class GameViewModel(
             owned[key] = (owned[key] ?: 0) + quantity
         }
 
-        _state.value = current.copy(
+        _state.value = stateForNavigatingTo(Screen.MAIN).copy(
             balance = current.balance - current.cartPrice,
             owned = owned.toMap(),
             quantities = emptyMap(),
+            pickedVariants = emptyMap(),
             cartPrice = 0
         )
         persist()

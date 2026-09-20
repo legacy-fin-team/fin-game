@@ -21,6 +21,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -104,6 +105,27 @@ fun Sprite(
 /** Translucent black laid over a sprite while its button is held down. */
 private val PressedOverlayColor = Color(0x59000000)
 
+/** Gap between the sprite of a [SpriteButton] and the underline that marks it as selected. */
+private val SpriteButtonUnderlineGap = 4.dp
+
+/** Thickness of the underline a selected [SpriteButton] is marked with. */
+private val SpriteButtonUnderlineThickness = 2.dp
+
+/**
+ * How tall a [SpriteButton] ends up being, underline included.
+ *
+ * Lets a layout reserve exactly the room such a button takes without repeating what the button is
+ * built of — which is what the shop cards do to come out the same height whether or not they have
+ * a row of variants to show.
+ *
+ * @param size the size the button's sprite is asked for, i.e. the phone-sized value.
+ * @return The full height of the button on the current screen.
+ */
+@Composable
+@ReadOnlyComposable
+fun spriteButtonHeight(size: Dp): Dp =
+    GameDimens.buttonSize(size) + SpriteButtonUnderlineGap + SpriteButtonUnderlineThickness
+
 @Composable
 fun SpriteButton(
     assetPath: String,
@@ -138,11 +160,11 @@ fun SpriteButton(
             modifier = Modifier.size(spriteSize),
             colorFilter = pressFilter
         )
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(SpriteButtonUnderlineGap))
         Box(
             modifier = Modifier
                 .width(spriteSize * 0.4f)
-                .height(2.dp)
+                .height(SpriteButtonUnderlineThickness)
                 .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
         )
     }
