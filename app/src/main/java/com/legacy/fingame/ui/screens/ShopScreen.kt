@@ -68,7 +68,7 @@ private val CategoryButtonSize = 56.dp
 private val CounterButtonSize = 48.dp
 private val StarButtonSize = 40.dp
 private val VariantButtonSize = 36.dp
-private val PriceIconSize = 24.dp
+private val PriceIconSize = 32.dp
 private val ItemCellMinSize = 170.dp
 
 /** Sizes of the window that asks the player to confirm the purchase. */
