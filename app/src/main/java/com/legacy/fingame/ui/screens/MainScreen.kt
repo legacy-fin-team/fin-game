@@ -75,12 +75,6 @@ private const val PetAreaWidthFraction = 0.74f
  */
 private const val PetAreaHeightFraction = 0.52f
 
-/**
- * Fraction of the game area the things standing in it take up, leaving a margin from the rounded
- * edge of the card the scenery itself fills.
- */
-private const val StageContentFraction = 0.88f
-
 // TODO: DemoGoalProgress is a hardcoded placeholder for the goal card progress bar. Replace with the real progress value once goal data is exposed from app logic.
 private const val DemoGoalProgress = 0.4f
 
@@ -320,6 +314,11 @@ private fun stageTitleOf(petName: String, subLocationTitle: String?): String? = 
  * its [GameLayer.zIndex], so what covers what is decided by the layer and not by the order the
  * sprites happen to be composed in.
  *
+ * The scenery is stretched over the whole area and everything standing in it is drawn at its
+ * layer's [GameLayer.sizeFraction] of that — a quarter of the area for the pet, which is painted at
+ * a quarter of the resolution of the room. That way the room is stretched four times as much as the
+ * pet is, and a pixel of the one ends up exactly as big on the screen as a pixel of the other.
+ *
  * A sprite whose file is not in the assets yet is not drawn here at all: [SpriteLoader] would hand
  * back the same placeholder for every one of them, and the area would stack a pile of them on top of
  * each other — the scenery, the pet and everything it wears, all at once. Instead the area draws
@@ -372,7 +371,7 @@ private fun PetStage(
                         contentDescription = sprite.description,
                         modifier = Modifier
                             .zIndex(layer.zIndex)
-                            .fillMaxSize(layer.contentFraction())
+                            .fillMaxSize(layer.sizeFraction)
                             .aspectRatio(1f)
                     )
                 }
@@ -383,7 +382,7 @@ private fun PetStage(
                         contentDescription = "Часть картинок ещё не нарисована",
                         modifier = Modifier
                             .zIndex(GameLayer.CLOTHES.zIndex)
-                            .fillMaxSize(StageContentFraction)
+                            .fillMaxSize(GameLayer.ANIMAL.sizeFraction)
                             .aspectRatio(1f)
                     )
                 }
@@ -391,15 +390,6 @@ private fun PetStage(
         }
     }
 }
-
-/**
- * How much of the game area a layer's sprites take up.
- *
- * @return `1f` for the scenery, which fills the whole area, and [StageContentFraction] for
- * everything standing in it, so the pet and its things keep a margin from the rounded card edge.
- */
-private fun GameLayer.contentFraction(): Float =
-    if (this == GameLayer.BACKGROUND) 1f else StageContentFraction
 
 /**
  * Pill-shaped badge naming the pet and the sub-location it is in, displayed above the pet.

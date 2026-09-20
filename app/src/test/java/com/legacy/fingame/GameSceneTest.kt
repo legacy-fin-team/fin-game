@@ -47,6 +47,20 @@ class GameSceneTest {
     }
 
     @Test
+    fun `the scenery is drawn four times bigger than what stands in it, so pixels match`() {
+        assertEquals(1f, GameLayer.BACKGROUND.sizeFraction, 0f)
+
+        GameLayer.DRAW_ORDER.filter { it != GameLayer.BACKGROUND }.forEach { layer ->
+            assertEquals(
+                "$layer is not drawn on the same pixel grid as the scenery",
+                0.25f,
+                layer.sizeFraction,
+                0f
+            )
+        }
+    }
+
+    @Test
     fun `the scenery and the pet stand on their own layers`() {
         val scene = sceneWith(emptySet())
 
