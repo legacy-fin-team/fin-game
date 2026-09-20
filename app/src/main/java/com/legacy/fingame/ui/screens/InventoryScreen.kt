@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -31,11 +32,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
 import com.legacy.fingame.game.items.InventoryEntry
 import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCategory
@@ -49,23 +57,33 @@ import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.components.title
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
+import com.legacy.fingame.ui.theme.GameDimens
 
 private val CloseButtonSize = 64.dp
 private val ItemCellMinSize = 140.dp
-private val DialogSpriteSize = 120.dp
+private val PopupSpriteSize = 96.dp
+private val PopupMaxWidth = 260.dp
+private val PopupCloseButtonSize = 44.dp
+
+/** Gap between the tapped cell and the item window that pops up next to it. */
+private val PopupGap = 8.dp
+
+/** How close to the edge of the screen the item window is allowed to come. */
+private val PopupScreenMargin = 12.dp
 
 /**
- * Inventory screen: everything the player bought, in a grid, and a modal window with what can be
- * done with the item that was tapped.
+ * Inventory screen: everything the player bought, in a grid, and a window with what can be done with
+ * the item that was tapped.
  *
  * Layout:
  * - Top: the screen title and a close button.
  * - Below that: a scrollable grid of item cards ([InventoryCell]), one per owned item and variant,
  *   each showing how many of it there are and whether it is on the pet right now. An empty inventory
  *   says so instead of showing an empty grid.
- * - Over everything: [ItemActionDialog] for the tapped item, until the player closes it.
+ * - Over the grid: [ItemActionPopup] for the tapped item, right next to the cell it was opened from,
+ *   until the player closes it.
  *
- * The dialog offers exactly what the item allows (see [ItemUse]): food is eaten and is gone, a toy is
+ * The window offers exactly what the item allows (see [ItemUse]): food is eaten and is gone, a toy is
  * played with and stays, and clothes and decorations are put on and taken off. The window stays open
  * while the item is still there, so the player can feed the pet several apples in a row; it closes
  * itself once the last one is eaten, since there is nothing left to act on.
@@ -142,20 +160,23 @@ fun InventoryScreen(
                         items = entries,
                         key = { entry -> "${entry.item.id}:${entry.variantId}" }
                     ) { entry ->
-                        InventoryCell(entry = entry, onClick = { picked = entry.selection })
+                        // The window is opened from inside the cell so that it knows where that cell
+                        // is and can pop up right next to it.
+                        Box {
+                            InventoryCell(entry = entry, onClick = { picked = entry.selection })
+                            if (pickedEntry != null && pickedEntry.selection == entry.selection) {
+                                ItemActionPopup(
+                                    entry = pickedEntry,
+                                    onUse = { onUseItem(pickedEntry.selection) },
+                                    onToggleWorn = { onToggleWorn(pickedEntry.selection) },
+                                    onDismiss = { picked = null }
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
-    }
-
-    if (pickedEntry != null) {
-        ItemActionDialog(
-            entry = pickedEntry,
-            onUse = { onUseItem(pickedEntry.selection) },
-            onToggleWorn = { onToggleWorn(pickedEntry.selection) },
-            onDismiss = { picked = null }
-        )
     }
 }
 
@@ -164,7 +185,7 @@ fun InventoryScreen(
  * note about it being on the pet.
  *
  * @param entry the owned item this cell stands for.
- * @param onClick called when the cell is tapped, which is what opens [ItemActionDialog].
+ * @param onClick called when the cell is tapped, which is what opens [ItemActionPopup].
  * @param modifier modifier applied to the card surface.
  */
 @Composable
@@ -255,39 +276,91 @@ private fun CountBadge(
 }
 
 /**
- * Modal window with what can be done with one inventory item: its sprite and name, what it does to
- * the pet's stats, the action the item allows, and a way out.
+ * Window with what can be done with one inventory item, floating next to the cell it was opened
+ * from — see [ItemActionBlock] for what it holds and [CellAnchoredPositionProvider] for where it
+ * ends up.
+ *
+ * It takes the taps of the screen while it is open, so a tap anywhere outside it — as well as the
+ * system back gesture — closes it and nothing else happens.
  *
  * @param entry the item the window was opened for.
  * @param onUse called when the pet should eat the item or play with it; only offered for items that
  *   are used that way (see [ItemUse.CONSUMED] and [ItemUse.REUSABLE]).
  * @param onToggleWorn called when the item should be put on or taken off; only offered for items the
  *   pet can wear.
- * @param onDismiss called when the window should be closed, by the button or by tapping outside it.
+ * @param onDismiss called when the window should be closed, by the cross or by tapping outside it.
  */
 @Composable
-private fun ItemActionDialog(
+private fun ItemActionPopup(
     entry: InventoryEntry,
     onUse: () -> Unit,
     onToggleWorn: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    val density = LocalDensity.current
+    val gapPx = with(density) { PopupGap.roundToPx() }
+    val marginPx = with(density) { PopupScreenMargin.roundToPx() }
+    val positionProvider = remember(gapPx, marginPx) {
+        CellAnchoredPositionProvider(gapPx = gapPx, marginPx = marginPx)
+    }
+
+    Popup(
+        popupPositionProvider = positionProvider,
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = true)
+    ) {
+        ItemActionBlock(
+            entry = entry,
+            onUse = onUse,
+            onToggleWorn = onToggleWorn,
+            onDismiss = onDismiss
+        )
+    }
+}
+
+/**
+ * The block the item window is made of: the item's sprite and name, what it does to the pet's
+ * stats, the action the item allows, and the cross that closes it.
+ *
+ * The cross sits on the top-right corner and hangs half-way over the edge of the card, so it reads
+ * as a way out of the block rather than as one more action inside it.
+ *
+ * @param entry the item the window was opened for.
+ * @param onUse called when the pet should eat the item or play with it.
+ * @param onToggleWorn called when the item should be put on or taken off.
+ * @param onDismiss called when the cross is pressed.
+ * @param modifier modifier applied to the block root.
+ */
+@Composable
+private fun ItemActionBlock(
+    entry: InventoryEntry,
+    onUse: () -> Unit,
+    onToggleWorn: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // Half of the cross hangs outside the card, so the card keeps that much room around itself.
+    val overhang = GameDimens.buttonSize(PopupCloseButtonSize) / 2
+
+    Box(modifier = modifier) {
         Surface(
+            modifier = Modifier
+                .padding(top = overhang, end = overhang)
+                .widthIn(max = PopupMaxWidth),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, GameColors.cardStroke),
             shadowElevation = 6.dp
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier.padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Sprite(
                     assetPath = entry.spritePath,
                     contentDescription = entry.item.title,
-                    modifier = Modifier.size(DialogSpriteSize)
+                    modifier = Modifier.size(PopupSpriteSize)
                 )
 
                 Text(
@@ -317,10 +390,53 @@ private fun ItemActionDialog(
                 } else {
                     PillButton(text = entry.item.useActionTitle(), onClick = onUse)
                 }
-
-                PillButton(text = "Закрыть", onClick = onDismiss)
             }
         }
+
+        SpriteButton(
+            assetPath = Sprites.CLOSE,
+            contentDescription = "Закрыть окно предмета",
+            onClick = onDismiss,
+            size = PopupCloseButtonSize,
+            modifier = Modifier.align(Alignment.TopEnd)
+        )
+    }
+}
+
+/**
+ * Puts the item window next to the cell it was opened from: under the cell if there is room for it
+ * there, above the cell otherwise, and horizontally centred on the cell.
+ *
+ * The window is always kept inside the screen with [marginPx] to spare, so a cell at the very edge
+ * of the grid still gets a window the player can read and reach in full.
+ *
+ * @param gapPx distance between the cell and the window, in pixels.
+ * @param marginPx how close to the edge of the screen the window may come, in pixels.
+ */
+private class CellAnchoredPositionProvider(
+    private val gapPx: Int,
+    private val marginPx: Int
+) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize
+    ): IntOffset {
+        val maxX = (windowSize.width - popupContentSize.width - marginPx).coerceAtLeast(0)
+        val x = (anchorBounds.center.x - popupContentSize.width / 2)
+            .coerceIn(minOf(marginPx, maxX), maxX)
+
+        val below = anchorBounds.bottom + gapPx
+        val above = anchorBounds.top - gapPx - popupContentSize.height
+        val maxY = (windowSize.height - popupContentSize.height - marginPx).coerceAtLeast(0)
+        val y = when {
+            below <= maxY -> below
+            above >= marginPx -> above
+            else -> maxY
+        }
+
+        return IntOffset(x, y)
     }
 }
 
@@ -443,17 +559,18 @@ private fun InventoryScreenEmptyPreview() {
     }
 }
 
-/** Preview of the modal window that opens on an item the pet can wear. */
+/** Preview of the window that opens on an item the pet can wear. */
 @Preview(name = "Inventory — Item actions", showBackground = true)
 @Composable
-private fun ItemActionDialogPreview() {
+private fun ItemActionBlockPreview() {
     FinGameTheme(darkTheme = false) {
         Surface(color = MaterialTheme.colorScheme.background) {
-            ItemActionDialog(
+            ItemActionBlock(
                 entry = PreviewEntries.last(),
                 onUse = {},
                 onToggleWorn = {},
-                onDismiss = {}
+                onDismiss = {},
+                modifier = Modifier.padding(16.dp)
             )
         }
     }
