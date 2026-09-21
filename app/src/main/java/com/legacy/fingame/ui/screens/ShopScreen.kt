@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +53,7 @@ import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.items.ItemUse
 import com.legacy.fingame.ui.components.BalanceChip
 import com.legacy.fingame.ui.components.PillButton
+import com.legacy.fingame.ui.components.PillButtonMinFontSize
 import com.legacy.fingame.ui.components.Sprite
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
@@ -70,7 +72,19 @@ private val CounterButtonSize = 48.dp
 private val StarButtonSize = 40.dp
 private val VariantButtonSize = 36.dp
 private val PriceIconSize = 32.dp
-private val ItemCellMinSize = 170.dp
+
+/**
+ * Smallest width a vertical shop card's cell is allowed to shrink to. Bounded from above by the
+ * screen's own 16.dp padding on both sides plus [ShopScreen]'s 12.dp gap between columns: on the
+ * narrowest phone the layout still promises two columns to (360.dp wide, see the
+ * "Shop — Narrow 320dp" preview), `GridCells.Adaptive` only keeps two columns while
+ * `2 * minSize + 12.dp <= 328.dp`
+ * (`360.dp` minus the screen's own padding), i.e. up to `158.dp`; this stays a few dp under that so
+ * rounding to pixels never tips it over into one. A card this wide still is not always enough room
+ * for the widest button label at its normal size — [PurchaseControl]'s own label shrinks to make up
+ * the rest, see [com.legacy.fingame.ui.components.PillButton].
+ */
+private val ItemCellMinSize = 152.dp
 
 /**
  * Sizes the shop swaps in on a short screen — a phone held sideways — where a card is laid out
@@ -78,9 +92,11 @@ private val ItemCellMinSize = 170.dp
  *
  * The cell is wider, because a card now has to hold the sprite and the widest of the purchase
  * controls next to each other; the sprite and the coin are smaller, because the height a card may
- * take is all the height the screen has.
+ * take is all the height the screen has. Unlike [ItemCellMinSize] this is not bound by a
+ * two-column promise — a phone held sideways is wide enough on its own — so it is sized purely for
+ * the label to have room.
  */
-private val ShortScreenItemCellMinSize = 264.dp
+private val ShortScreenItemCellMinSize = 288.dp
 private val ShortScreenCardSpriteSize = 96.dp
 private val ShortScreenStarButtonSize = 28.dp
 private val ShortScreenPriceIconSize = 24.dp
@@ -885,10 +901,17 @@ private fun PurchaseControl(
                 shape = RoundedCornerShape(50),
                 color = GameColors.disabledContainer
             ) {
+                val labelStyle = MaterialTheme.typography.labelLarge
                 Text(
                     text = "Куплено",
-                    style = MaterialTheme.typography.labelLarge,
+                    style = labelStyle,
                     color = GameColors.disabledContent,
+                    maxLines = 1,
+                    softWrap = false,
+                    autoSize = TextAutoSize.StepBased(
+                        minFontSize = PillButtonMinFontSize,
+                        maxFontSize = labelStyle.fontSize
+                    ),
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
                 )
             }
@@ -991,6 +1014,67 @@ private fun ShopScreenLandscapePreview() {
                 ),
                 items = PreviewClothes,
                 cartLines = listOf(PreviewCartLines.last()),
+                onSelectCategory = {},
+                onPickVariant = { _, _ -> },
+                onIncrease = {},
+                onDecrease = {},
+                onBuy = {},
+                onClose = {}
+            )
+        }
+    }
+}
+
+/**
+ * Preview of [ShopScreen] at 320.dp — near the narrowest a phone in portrait gets — checking that
+ * [ItemCellMinSize] still keeps two columns and that a card's "Добавить" button stays one line
+ * rather than breaking the word across two.
+ */
+@Preview(name = "Shop — Narrow 320dp", showBackground = true, widthDp = 320, heightDp = 640)
+@Composable
+private fun ShopScreenNarrowPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ShopScreen(
+                state = GameUiState(
+                    balance = 300,
+                    selectedCategory = ItemCategory.CLOTHES
+                ),
+                items = PreviewClothes,
+                cartLines = emptyList(),
+                onSelectCategory = {},
+                onPickVariant = { _, _ -> },
+                onIncrease = {},
+                onDecrease = {},
+                onBuy = {},
+                onClose = {}
+            )
+        }
+    }
+}
+
+/**
+ * Preview of [ShopScreen] with the system font scaled up to 1.5x — the top of the range the game
+ * promises "Добавить" stays a single line for (see [PillButtonMinFontSize]).
+ */
+@Preview(
+    name = "Shop — Large font scale",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 640,
+    fontScale = 1.5f
+)
+@Composable
+private fun ShopScreenLargeFontScalePreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ShopScreen(
+                state = GameUiState(
+                    balance = 300,
+                    selectedCategory = ItemCategory.CLOTHES
+                ),
+                items = PreviewClothes,
+                cartLines = emptyList(),
                 onSelectCategory = {},
                 onPickVariant = { _, _ -> },
                 onIncrease = {},

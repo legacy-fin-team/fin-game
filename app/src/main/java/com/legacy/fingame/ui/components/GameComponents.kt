@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -41,6 +42,7 @@ import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.game.stats.StatKind
@@ -273,6 +275,13 @@ private val PillHorizontalPadding = 24.dp
 private val PillVerticalPadding = 12.dp
 
 /**
+ * Smallest a pill's label is ever allowed to shrink to (see [PillButton]'s `autoSize`) before the
+ * pixel font would stop being legible. Also used for the "Куплено" label in the shop, which is
+ * built the same way as a pill but is not clickable, so it is not [PillButton] itself.
+ */
+val PillButtonMinFontSize = 10.sp
+
+/**
  * Name of a pet stat as the player reads it.
  *
  * @return The Russian title of the stat.
@@ -384,6 +393,12 @@ fun StatValueChip(
  * @param modifier modifier applied to the outer [Surface].
  * @param enabled whether the button responds to taps; when `false`, the button is rendered with
  *   the disabled container/content colors and taps are ignored.
+ *
+ * The label is always kept to a single line ([Text]'s `maxLines = 1`, `softWrap = false`): a card
+ * narrow enough that the label does not fit at its normal size shrinks the label's font instead of
+ * breaking a word across two lines (down to [PillButtonMinFontSize], the floor it stays legible
+ * above), via `autoSize`. At a width wide enough for the label, this changes nothing — `autoSize`
+ * picks the same size the label's [MaterialTheme.typography] style already asks for.
  */
 @Composable
 fun PillButton(
@@ -424,7 +439,13 @@ fun PillButton(
                 text = text,
                 style = textStyle,
                 fontWeight = FontWeight.Bold,
-                color = contentColor
+                color = contentColor,
+                maxLines = 1,
+                softWrap = false,
+                autoSize = TextAutoSize.StepBased(
+                    minFontSize = PillButtonMinFontSize,
+                    maxFontSize = textStyle.fontSize
+                )
             )
         }
     }
