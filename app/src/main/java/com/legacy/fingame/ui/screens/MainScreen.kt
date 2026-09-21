@@ -98,6 +98,7 @@ private val DemoScene: GameScene = GameScene.of(
         assetPath = Sprites.pet(petId = DemoContent.petId, variantId = DemoContent.petVariantId),
         description = "Питомец"
     ),
+    animalId = DemoContent.petId,
     worn = emptySet(),
     catalog = ItemCatalog.EMPTY
 )

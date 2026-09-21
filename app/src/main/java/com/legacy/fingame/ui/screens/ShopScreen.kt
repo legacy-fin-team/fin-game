@@ -404,7 +404,7 @@ private fun CartLineRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Sprite(
-            assetPath = line.spritePath,
+            assetPath = line.iconPath,
             contentDescription = line.item.name,
             modifier = Modifier.size(ConfirmLineSpriteSize)
         )
@@ -519,9 +519,13 @@ private fun modeOf(item: Item, state: GameUiState): ShopItemMode = when {
 }
 
 /**
- * Single shop item card: the sprite of the picked variant with an "add to goals" star toggle, the
- * item's name and price, a variant picker for items offered in several variants, and a purchase
- * control that depends on [mode].
+ * Single shop item card: the item's icon with an "add to goals" star toggle, the item's name and
+ * price, a variant picker for items offered in several variants, and a purchase control that
+ * depends on [mode].
+ *
+ * The icon stands for the item as a whole and not for the variant picked in it (see
+ * [com.legacy.fingame.game.items.ItemSprites.icon]), so the variant picker tells its buttons apart
+ * by which of them is selected rather than by what they show.
  *
  * The card is built out of slots of a fixed height rather than out of whatever its item happens to
  * need, so the cards of one shelf line up with each other instead of ending at three different
@@ -572,7 +576,7 @@ private fun ShopItemCard(
                     .aspectRatio(1f)
             ) {
                 Sprite(
-                    assetPath = item.getSpritePath(pickedVariantId),
+                    assetPath = item.iconPath,
                     contentDescription = item.name,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -628,7 +632,7 @@ private fun ShopItemCard(
                         ) {
                             item.variantIds.forEach { variantId ->
                                 SpriteButton(
-                                    assetPath = item.getSpritePath(variantId),
+                                    assetPath = item.iconPath,
                                     contentDescription = "Вариант «$variantId»",
                                     onClick = { onPickVariant(variantId) },
                                     size = VariantButtonSize,
@@ -703,21 +707,21 @@ private val PreviewItems = listOf(
         name = "Яблоко",
         price = 15,
         category = ItemCategory.FOOD,
-        variants = mapOf("default" to "items/apple/default")
+        variantIds = listOf("default")
     ),
     Item(
         id = "fish",
         name = "Рыбка",
         price = 25,
         category = ItemCategory.FOOD,
-        variants = mapOf("default" to "items/fish/default")
+        variantIds = listOf("default")
     ),
     Item(
         id = "cake",
         name = "Пирожное",
         price = 40,
         category = ItemCategory.FOOD,
-        variants = mapOf("default" to "items/cake/default")
+        variantIds = listOf("default")
     )
 )
 
@@ -731,18 +735,14 @@ private val PreviewClothes = listOf(
         name = "Шляпа",
         price = 100,
         category = ItemCategory.CLOTHES,
-        variants = mapOf(
-            "black" to "items/hat/black",
-            "white" to "items/hat/white",
-            "violet" to "items/hat/violet"
-        )
+        variantIds = listOf("black", "white", "violet")
     ),
     Item(
         id = "scarf",
         name = "Шарф",
         price = 80,
         category = ItemCategory.CLOTHES,
-        variants = mapOf("red" to "items/scarf/red", "green" to "items/scarf/green")
+        variantIds = listOf("red", "green")
     )
 )
 

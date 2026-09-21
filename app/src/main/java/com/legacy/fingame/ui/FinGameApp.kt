@@ -140,6 +140,7 @@ fun FinGameApp(
                                 ),
                                 description = "Питомец"
                             ),
+                            animalId = pet.animalId,
                             worn = state.worn,
                             catalog = itemRegistry
                         )

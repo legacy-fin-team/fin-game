@@ -39,7 +39,7 @@ internal object TestItems {
         name = "Яблоко",
         price = 15,
         category = ItemCategory.FOOD,
-        variants = mapOf("red" to "items/apple/red", "green" to "items/apple/green"),
+        variantIds = listOf("red", "green"),
         effects = mapOf(StatKind.HUNGER to 20, StatKind.HEALTH to 5)
     )
 
@@ -49,7 +49,7 @@ internal object TestItems {
         name = "Рыбка",
         price = 25,
         category = ItemCategory.FOOD,
-        variants = mapOf("default" to "items/fish/default"),
+        variantIds = listOf("default"),
         effects = mapOf(StatKind.HUNGER to 35)
     )
 
@@ -59,7 +59,7 @@ internal object TestItems {
         name = "Шляпа",
         price = 100,
         category = ItemCategory.CLOTHES,
-        variants = mapOf("black" to "items/hat/black", "white" to "items/hat/white"),
+        variantIds = listOf("black", "white"),
         effects = mapOf(StatKind.PLEASURE to 10)
     )
 
@@ -69,7 +69,7 @@ internal object TestItems {
         name = "Мячик",
         price = 60,
         category = ItemCategory.TOYS,
-        variants = mapOf("red" to "items/ball/red"),
+        variantIds = listOf("red"),
         effects = mapOf(StatKind.PLEASURE to 20, StatKind.HUNGER to -5)
     )
 
@@ -79,7 +79,7 @@ internal object TestItems {
         name = "Лампа",
         price = 150,
         category = ItemCategory.DECOR,
-        variants = mapOf("default" to "items/lamp/default"),
+        variantIds = listOf("default"),
         effects = mapOf(StatKind.PLEASURE to 10),
         layer = GameLayer.ENVIRONMENT_FRONT
     )

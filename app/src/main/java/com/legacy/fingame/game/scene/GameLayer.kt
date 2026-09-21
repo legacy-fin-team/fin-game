@@ -7,9 +7,9 @@ package com.legacy.fingame.game.scene
 private const val SCENERY_SPRITE_PIXELS = 128
 
 /**
- * Side, in its own pixels, of the art of everything standing in the scenery — the pet, the things
- * around it and the clothes it wears. Four times smaller than [SCENERY_SPRITE_PIXELS], because a
- * room is drawn with four times as many pixels as the pet living in it.
+ * Side, in its own pixels, of the art of the pet and of the clothes it wears. Four times smaller
+ * than [SCENERY_SPRITE_PIXELS], because a room is drawn with four times as many pixels as the pet
+ * living in it — and a hat is painted on the pet's own grid, not on the room's.
  */
 private const val STAGE_SPRITE_PIXELS = 32
 
@@ -34,14 +34,20 @@ enum class GameLayer(val xmlName: String, val zIndex: Float, val spritePixels: I
     /** The farthest layer: the scenery of the sub-location the pet is in. */
     BACKGROUND("background", 0f, SCENERY_SPRITE_PIXELS),
 
-    /** Things standing behind the pet, e.g. a rug or furniture it sits on. */
-    ENVIRONMENT_BACK("environment-back", 1f, STAGE_SPRITE_PIXELS),
+    /**
+     * Things standing behind the pet, e.g. a rug or furniture it sits on. Part of the room, so
+     * drawn from art as coarse as the scenery's rather than as fine as the pet's.
+     */
+    ENVIRONMENT_BACK("environment-back", 1f, SCENERY_SPRITE_PIXELS),
 
     /** The pet itself. */
     ANIMAL("animal", 2f, STAGE_SPRITE_PIXELS),
 
-    /** Things standing in front of the pet and covering it, e.g. a lamp at the front of the room. */
-    ENVIRONMENT_FRONT("environment-front", 3f, STAGE_SPRITE_PIXELS),
+    /**
+     * Things standing in front of the pet and covering it, e.g. a lamp at the front of the room.
+     * Part of the room just as [ENVIRONMENT_BACK] is, and drawn from art of the same size.
+     */
+    ENVIRONMENT_FRONT("environment-front", 3f, SCENERY_SPRITE_PIXELS),
 
     /** The nearest layer: what the pet wears, drawn over the pet and over the whole room. */
     CLOTHES("clothes", 4f, STAGE_SPRITE_PIXELS);

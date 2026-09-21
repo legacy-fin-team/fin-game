@@ -35,6 +35,9 @@ data class GameScene(val sprites: Map<GameLayer, List<SceneSprite>> = emptyMap()
          * @param background scenery of the sub-location the pet is in, or null while there is none.
          * @param pet the pet itself, at the age stage it has grown to, or null while no pet has been
          * picked yet.
+         * @param animalId species id of that pet, or null while there is none: clothes are cut to
+         * fit the animal they sit on, so they cannot be drawn without knowing which animal that is
+         * (see [com.legacy.fingame.game.items.Item.getEquippedSpritePath]).
          * @param worn items the player put on the pet; an item that is not drawn in the game area at
          * all (see [com.legacy.fingame.game.items.Item.layer]) is skipped, as is one the catalog no
          * longer registers.
@@ -46,6 +49,7 @@ data class GameScene(val sprites: Map<GameLayer, List<SceneSprite>> = emptyMap()
         fun of(
             background: SceneSprite?,
             pet: SceneSprite?,
+            animalId: String?,
             worn: Set<ItemSelection>,
             catalog: ItemCatalog
         ): GameScene {
@@ -61,9 +65,11 @@ data class GameScene(val sprites: Map<GameLayer, List<SceneSprite>> = emptyMap()
             worn.sortedWith(compareBy({ it.itemId }, { it.variantId })).forEach { selection ->
                 val item = catalog.findItemById(selection.itemId) ?: return@forEach
                 val layer = item.layer ?: return@forEach
+                val assetPath = item.getEquippedSpritePath(selection.variantId, animalId)
+                    ?: return@forEach
                 sprites.getOrPut(layer) { mutableListOf() }.add(
                     SceneSprite(
-                        assetPath = item.getSpritePath(selection.variantId),
+                        assetPath = assetPath,
                         description = item.name
                     )
                 )

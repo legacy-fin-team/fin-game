@@ -7,7 +7,7 @@ package com.legacy.fingame.game.items
  * a white one are bought, owned and worn apart from each other, so both ids are needed to name one.
  *
  * @property itemId id of the item, as in [Item.id].
- * @property variantId id of the variant, one of the keys of [Item.variants].
+ * @property variantId id of the variant, one of [Item.variantIds].
  */
 data class ItemSelection(
     val itemId: String,

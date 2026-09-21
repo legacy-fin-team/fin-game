@@ -214,7 +214,7 @@ private fun InventoryCell(
                     .aspectRatio(1f)
             ) {
                 Sprite(
-                    assetPath = entry.spritePath,
+                    assetPath = entry.iconPath,
                     contentDescription = entry.item.name,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -473,7 +473,7 @@ private val PreviewEntries = listOf(
             name = "Яблоко",
             price = 15,
             category = ItemCategory.FOOD,
-            variants = mapOf("default" to "items/apple/default"),
+            variantIds = listOf("default"),
             effects = mapOf(StatKind.HUNGER to 20, StatKind.HEALTH to 5)
         ),
         variantId = "default",
@@ -486,7 +486,7 @@ private val PreviewEntries = listOf(
             name = "Мячик",
             price = 60,
             category = ItemCategory.TOYS,
-            variants = mapOf("red" to "items/ball/red"),
+            variantIds = listOf("red"),
             effects = mapOf(StatKind.PLEASURE to 20, StatKind.HUNGER to -5)
         ),
         variantId = "red",
@@ -499,7 +499,7 @@ private val PreviewEntries = listOf(
             name = "Шляпа",
             price = 100,
             category = ItemCategory.CLOTHES,
-            variants = mapOf("black" to "items/hat/black"),
+            variantIds = listOf("black"),
             effects = mapOf(StatKind.PLEASURE to 10)
         ),
         variantId = "black",

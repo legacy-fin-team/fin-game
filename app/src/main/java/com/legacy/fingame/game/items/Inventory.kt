@@ -20,8 +20,8 @@ data class InventoryEntry(
     /** The item and the variant as one value, the way the player's state keys them. */
     val selection: ItemSelection get() = ItemSelection(item.id, variantId)
 
-    /** Path to the sprite of the owned variant, relative to /assets/textures/. */
-    val spritePath: String get() = item.getSpritePath(variantId)
+    /** Path to the item's icon, relative to /assets/textures/; see [Item.iconPath]. */
+    val iconPath: String get() = item.iconPath
 }
 
 /**

@@ -434,7 +434,7 @@ class GameViewModel(
     fun pickVariant(itemId: String, variantId: String) {
         val current = _state.value
         val item = catalog.findItemById(itemId) ?: return
-        if (!item.variants.containsKey(variantId)) return
+        if (variantId !in item.variantIds) return
 
         val picked = current.copy(pickedVariants = current.pickedVariants + (itemId to variantId))
         val quantity = picked.quantities[itemId] ?: 0

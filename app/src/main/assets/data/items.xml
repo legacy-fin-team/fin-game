@@ -6,7 +6,7 @@
         price="15"
         category="food"
     >
-        <variants path="items/apple/">
+        <variants>
             <variant id="default" />
         </variants>
         <effects>
@@ -20,7 +20,7 @@
         price="25"
         category="food"
     >
-        <variants path="items/fish/">
+        <variants>
             <variant id="default" />
         </variants>
         <effects>
@@ -34,7 +34,7 @@
         price="40"
         category="food"
     >
-        <variants path="items/cake/">
+        <variants>
             <variant id="default" />
         </variants>
         <effects>
@@ -49,7 +49,7 @@
         price="60"
         category="toys"
     >
-        <variants path="items/ball/">
+        <variants>
             <variant id="red" />
             <variant id="blue" />
         </variants>
@@ -64,7 +64,7 @@
         price="120"
         category="toys"
     >
-        <variants path="items/teddy/">
+        <variants>
             <variant id="default" />
         </variants>
         <effects>
@@ -77,7 +77,7 @@
         name="Шляпа"
         category="clothes"
     >
-        <variants path="items/hat/">
+        <variants>
             <variant id="black" />
             <variant id="white" />
             <variant id="violet" />
@@ -92,7 +92,7 @@
         price="80"
         category="clothes"
     >
-        <variants path="items/scarf/">
+        <variants>
             <variant id="red" />
             <variant id="green" />
         </variants>
@@ -108,7 +108,7 @@
         category="decor"
         layer="environment-front"
     >
-        <variants path="items/lamp/">
+        <variants>
             <variant id="default" />
         </variants>
         <effects>
@@ -121,7 +121,7 @@
         price="90"
         category="decor"
     >
-        <variants path="items/rug/">
+        <variants>
             <variant id="beige" />
             <variant id="blue" />
         </variants>

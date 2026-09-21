@@ -12,9 +12,9 @@ import com.legacy.fingame.game.stats.StatKind
  * @property price what the item costs, in coins, the same for every one of its variants.
  * @property category section of the shop the item belongs to, which also says how the item is used
  * once the player owns it (see [ItemCategory.use]).
- * @property variants map of paths to the item variants, in the order the data declares them. The
- * key is the variant id, the value is the path to the variant folder relative to /assets/textures/,
- * which holds the item's sprite. Never empty: an item with no variant at all could not be drawn.
+ * @property variantIds ids of the item's variants, in the order the data declares them. Never
+ * empty: an item with no variant at all could not be drawn. The sprites themselves are not listed
+ * here — their paths are built out of the item's id and the variant id by [ItemSprites].
  * @property effects what using the item does to the pet's stats, keyed by stat: a positive value
  * fills the bar, a negative one empties it (a cake that is sweet but not healthy). Empty for an item
  * the pet feels nothing about.
@@ -28,43 +28,55 @@ data class Item(
     val name: String,
     val price: Int,
     val category: ItemCategory,
-    val variants: Map<String, String>,
+    val variantIds: List<String>,
     val effects: Map<StatKind, Int> = emptyMap(),
     val layer: GameLayer? = category.defaultLayer
 ) {
-    companion object {
-        /** Name of the sprite file inside a variant folder. */
-        const val SPRITE_FILE = "item.webp"
-    }
-
     init {
-        require(variants.isNotEmpty()) { "Item '$id' has no variants." }
+        require(variantIds.isNotEmpty()) { "Item '$id' has no variants." }
     }
 
     /** Whether the item is put on and taken off instead of being used up; see [ItemUse.WEARABLE]. */
     val isWearable: Boolean get() = category.use == ItemUse.WEARABLE && layer != null
 
-    /** Ids of the item's variants, in the order the data declares them. */
-    val variantIds: List<String> get() = variants.keys.toList()
-
     /** Variant the item is shown and bought in until the player picks another one. */
-    val defaultVariantId: String get() = variants.keys.first()
+    val defaultVariantId: String get() = variantIds.first()
 
     /**
      * Whether the item is offered in more than one variant, i.e. whether the player has a choice to
      * make before buying it.
      */
-    val hasSeveralVariants: Boolean get() = variants.size > 1
+    val hasSeveralVariants: Boolean get() = variantIds.size > 1
 
     /**
-     * Builds the path to the sprite of one of the item's variants.
+     * Path to the icon the shop and the inventory show the item by, relative to /assets/textures/,
+     * e.g. 'items/hat/icon.webp'. The same for every variant; see [ItemSprites.icon].
+     */
+    val iconPath: String get() = ItemSprites.icon(id)
+
+    /**
+     * Builds the path to the sprite of the item as it is worn, i.e. what the game area draws on the
+     * item's [layer].
+     *
+     * Which sprite that is depends on the layer: something worn by the pet is painted per species
+     * (see [ItemSprites.equippedOnAnimal]), while a decoration belongs to the room and is painted
+     * once for all pets (see [ItemSprites.equippedInScenery]).
      *
      * @param variantId id of a variant. A variant this item doesn't have falls back to
      * [defaultVariantId], so a variant id saved before the data changed still draws the item.
-     * @return Path to the sprite relative to /assets/textures/, e.g. 'items/hat/black/item.webp'.
+     * @param animalId species id of the pet the item is worn by, or null when there is no pet;
+     * needed by clothes alone, which are cut to fit the animal they sit on.
+     * @return Path to the sprite relative to /assets/textures/, e.g. 'items/hat/equipped-cat-black.webp'
+     * for clothes and 'items/rug/equipped-beige.webp' for a decoration; null for an item that is not
+     * drawn in the game area at all — food and toys, which have no worn look — and for clothes with
+     * no pet to put them on.
      */
-    fun getSpritePath(variantId: String): String {
-        val variantPath = variants[variantId] ?: variants.getValue(defaultVariantId)
-        return "$variantPath/$SPRITE_FILE"
+    fun getEquippedSpritePath(variantId: String, animalId: String?): String? {
+        val variant = if (variantId in variantIds) variantId else defaultVariantId
+        return when (layer) {
+            null -> null
+            GameLayer.CLOTHES -> animalId?.let { ItemSprites.equippedOnAnimal(id, it, variant) }
+            else -> ItemSprites.equippedInScenery(id, variant)
+        }
     }
 }

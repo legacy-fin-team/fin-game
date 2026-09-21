@@ -2,6 +2,7 @@ package com.legacy.fingame
 
 import com.legacy.fingame.game.items.Inventory
 import com.legacy.fingame.game.items.ItemSelection
+import com.legacy.fingame.game.items.ItemSprites
 import com.legacy.fingame.game.scene.GameLayer
 import com.legacy.fingame.game.scene.GameScene
 import com.legacy.fingame.game.scene.SceneSprite
@@ -19,6 +20,7 @@ class GameSceneTest {
     private val catalog = FakeItemCatalog()
     private val background = SceneSprite(assetPath = "locations/0/background.webp", description = null)
     private val pet = SceneSprite(assetPath = "animals/cat/white/0/idle.webp", description = "Питомец")
+    private val animalId = "cat"
 
     /**
      * @param worn items the pet has on.
@@ -27,6 +29,7 @@ class GameSceneTest {
     private fun sceneWith(worn: Set<ItemSelection>) = GameScene.of(
         background = background,
         pet = pet,
+        animalId = animalId,
         worn = worn,
         catalog = catalog
     )
@@ -47,10 +50,19 @@ class GameSceneTest {
     }
 
     @Test
-    fun `the scenery is drawn four times bigger than what stands in it, so pixels match`() {
-        assertEquals(1f, GameLayer.BACKGROUND.sizeFraction, 0f)
+    fun `the pet is drawn four times smaller than the room, so pixels match`() {
+        // The room and everything standing in it are painted at the same resolution, so they take
+        // up the area as a whole.
+        listOf(
+            GameLayer.BACKGROUND,
+            GameLayer.ENVIRONMENT_BACK,
+            GameLayer.ENVIRONMENT_FRONT
+        ).forEach { layer ->
+            assertEquals("$layer is not drawn at the size of the room", 1f, layer.sizeFraction, 0f)
+        }
 
-        GameLayer.DRAW_ORDER.filter { it != GameLayer.BACKGROUND }.forEach { layer ->
+        // The pet and what it wears are painted four times finer, hence a quarter of the area.
+        listOf(GameLayer.ANIMAL, GameLayer.CLOTHES).forEach { layer ->
             assertEquals(
                 "$layer is not drawn on the same pixel grid as the scenery",
                 0.25f,
@@ -77,11 +89,11 @@ class GameSceneTest {
         val scene = sceneWith(setOf(hat, lamp))
 
         assertEquals(
-            listOf(TestItems.HAT.getSpritePath("black")),
+            listOf(ItemSprites.equippedOnAnimal(TestItems.HAT.id, animalId, "black")),
             scene[GameLayer.CLOTHES].map { it.assetPath }
         )
         assertEquals(
-            listOf(TestItems.LAMP.getSpritePath("default")),
+            listOf(ItemSprites.equippedInScenery(TestItems.LAMP.id, "default")),
             scene[GameLayer.ENVIRONMENT_FRONT].map { it.assetPath }
         )
         assertTrue(scene[GameLayer.ENVIRONMENT_BACK].isEmpty())
@@ -103,11 +115,33 @@ class GameSceneTest {
         val scene = GameScene.of(
             background = null,
             pet = null,
+            animalId = null,
             worn = emptySet(),
             catalog = catalog
         )
 
         GameLayer.entries.forEach { layer -> assertTrue(scene[layer].isEmpty()) }
+    }
+
+    @Test
+    fun `clothes are not drawn while there is no pet to cut them for`() {
+        val scene = GameScene.of(
+            background = background,
+            pet = null,
+            animalId = null,
+            worn = setOf(
+                ItemSelection(TestItems.HAT.id, "black"),
+                ItemSelection(TestItems.LAMP.id, "default")
+            ),
+            catalog = catalog
+        )
+
+        assertTrue(scene[GameLayer.CLOTHES].isEmpty())
+        // A decoration belongs to the room and stands there pet or no pet.
+        assertEquals(
+            listOf(ItemSprites.equippedInScenery(TestItems.LAMP.id, "default")),
+            scene[GameLayer.ENVIRONMENT_FRONT].map { it.assetPath }
+        )
     }
 
     @Test
@@ -126,7 +160,7 @@ class GameSceneTest {
         assertEquals(3, entries.first().count)
         assertFalse(entries.first().worn)
         assertTrue(entries.last().worn)
-        assertEquals(TestItems.APPLE.getSpritePath("red"), entries.first().spritePath)
+        assertEquals(ItemSprites.icon(TestItems.APPLE.id), entries.first().iconPath)
     }
 
     @Test

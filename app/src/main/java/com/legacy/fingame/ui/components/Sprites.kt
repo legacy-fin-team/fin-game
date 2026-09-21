@@ -8,6 +8,9 @@ import com.legacy.fingame.game.animals.Animal
  * Every path here is resolved by [com.legacy.fingame.utils.SpriteLoader]. If the referenced file
  * does not exist yet, the loader falls back to `error.webp` — that is expected behavior while
  * assets are being produced, not a bug.
+ *
+ * The sprites of the shop items themselves are not here: they are laid out per item rather than per
+ * screen, so their paths are built by [com.legacy.fingame.game.items.ItemSprites].
  */
 object Sprites {
     // TODO: asset file names are provisional — confirm the final naming convention with the art team.
@@ -93,15 +96,6 @@ object Sprites {
      * @return path (relative to `assets/textures/`) to the sub-location's background.
      */
     fun locationBackground(subLocationIndex: Int) = "locations/$subLocationIndex/background.webp"
-
-    /**
-     * Builds the asset path for a shop item's sprite.
-     *
-     * @param itemId identifier of the shop item whose sprite should be resolved; used verbatim as
-     *   a path segment, so it must match the item's asset file name.
-     * @return path (relative to `assets/textures/`) to the shop item's sprite.
-     */
-    fun shopItem(itemId: String) = "shop/items/$itemId.webp"
 
     /**
      * Builds the asset path for a shop category's sprite.

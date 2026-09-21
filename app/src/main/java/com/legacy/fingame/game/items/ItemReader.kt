@@ -15,7 +15,8 @@ class ItemReader {
     }
 
     /**
-     * Reads XML document. Doesn't do path data validation.
+     * Reads XML document. An item whose data is broken is skipped with a log line rather than
+     * taken along half-read.
      * @param inputStream stream that reads XML file.
      * @return Map of items. The key is item id.
      */
@@ -67,18 +68,10 @@ class ItemReader {
             }
 
             val variantsElement = variantsNodes.item(0) as Element
-            val variantsPath = variantsElement.getAttribute("path")
-
-            if (variantsPath.isNullOrBlank()) {
-                Log.e(TAG, "<variants> tag of item with id '$itemId' " +
-                        "does not have 'path' attribute.")
-                continue
-            }
-
             val variantNodes = variantsElement.getElementsByTagName("variant")
-            val variantMap = getVariants(variantNodes, itemId, variantsPath)
+            val variantIds = getVariants(variantNodes, itemId)
 
-            if (variantMap.isEmpty()) {
+            if (variantIds.isEmpty()) {
                 Log.e(TAG, "<variants> tag of item with id '$itemId' is empty.")
                 continue
             }
@@ -91,12 +84,12 @@ class ItemReader {
                 name = name,
                 price = price,
                 category = category,
-                variants = variantMap,
+                variantIds = variantIds,
                 effects = getEffects(itemNode, itemId),
                 layer = getLayer(itemNode, itemId, category)
             )
             itemsByCategory.getValue(category)[itemId] = item
-            totalVariants += variantMap.size
+            totalVariants += variantIds.size
         }
 
         val totalItems = itemsByCategory.values.sumOf { it.size }
@@ -180,12 +173,21 @@ class ItemReader {
         return layer
     }
 
+    /**
+     * Reads the ids of the item's variants out of its `<variants>` tag.
+     *
+     * The variants carry no paths of their own: an item's sprites are named after the item and the
+     * variant (see [ItemSprites]), so the id is all the data has to tell.
+     *
+     * @param variantNodes the `<variant>` tags of the item.
+     * @param itemId id of the item, for the log messages.
+     * @return The variant ids, in the order the data declares them, without repeats.
+     */
     private fun getVariants(
         variantNodes: NodeList,
-        itemId: String,
-        variantsPath: String
-    ): Map<String, String> {
-        val variantMap = mutableMapOf<String, String>()
+        itemId: String
+    ): List<String> {
+        val variantIds = mutableListOf<String>()
 
         for (i in 0 until variantNodes.length) {
             val variantNode = variantNodes.item(i)
@@ -200,22 +202,16 @@ class ItemReader {
                 continue
             }
 
-            if (variantMap.containsKey(variantId)) {
+            if (variantIds.contains(variantId)) {
                 Log.e(TAG, "At least two variants of item with id '$itemId' " +
                         "share the same id: '$variantId'")
                 continue
             }
 
-            val fullPath = if (variantsPath.endsWith("/")) {
-                "$variantsPath$variantId"
-            } else {
-                "$variantsPath/$variantId"
-            }
-
-            variantMap[variantId] = fullPath
+            variantIds.add(variantId)
         }
 
-        return variantMap.toMap()
+        return variantIds.toList()
     }
 
 }

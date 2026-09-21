@@ -39,16 +39,6 @@ class ItemRegistry(context: Context) : ItemCatalog {
 
     /**
      * @param itemId id of an item.
-     * @param variantId id of an item variant.
-     * @return The asset path to variant.
-     */
-    fun getVariantPath(itemId: String, variantId: String): String {
-        val item = itemsById.getValue(itemId)
-        return item.variants.getValue(variantId)
-    }
-
-    /**
-     * @param itemId id of an item.
      * @return [Item] data.
      */
     fun getItemById(itemId: String): Item {
