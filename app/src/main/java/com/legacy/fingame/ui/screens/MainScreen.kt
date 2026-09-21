@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,7 +22,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,6 +33,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -69,6 +69,8 @@ import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
 import com.legacy.fingame.utils.SpriteLoader
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 private val ScreenPadding = 16.dp
@@ -84,6 +86,32 @@ private val SecondaryActionSize = 64.dp
 /** Gap between two buttons standing next to each other. */
 private val ActionGap = 8.dp
 
+/** Gap between the chips and the goal card stacked in the corner with the player's things. */
+private val ChipGap = 10.dp
+
+/** Gap between the settings, locations and time buttons. */
+private val ControlGap = 12.dp
+
+/**
+ * Smallest gap between the two groups of the bottom row — the arrows and the action buttons. Wider
+ * than [ActionGap], which separates buttons of one group, so the two groups still read as two even
+ * when the row has been squeezed (see [bottomRowFit]).
+ */
+private val BottomGroupGap = 16.dp
+
+/**
+ * Smallest a button of the bottom row may be squeezed to. Below this a button stops being
+ * comfortable to hit, so the row is allowed to run wider instead of shrinking any further — which
+ * on any screen this game is meant for it never has to (see [bottomRowFit]).
+ */
+private val MinTouchTarget = 40.dp
+
+/**
+ * Gap left between the blocks standing in the corners of the screen and what is laid out between
+ * them.
+ */
+private val BlockGap = 12.dp
+
 /**
  * Gap between the parts of the middle column: the badge, the game area under it and the daily
  * bonus button under that.
@@ -96,38 +124,6 @@ private val StageGap = 12.dp
  * comes out, and it keeps clear of the edges of the screen instead of running into them.
  */
 private const val PetAreaWidthFraction = 0.74f
-
-/**
- * Narrowest the pet area is ever squeezed to. It only ever comes up on a window so small that the
- * corner columns leave next to nothing between them, where nothing can be laid out side by side
- * anyway and a pet that can still be seen beats a sliver of one.
- */
-private val PetAreaMinWidth = 120.dp
-
-/**
- * Width each of the two corner columns — the stats with the goal card on one side, the buttons on
- * the other — is assumed to take. On a screen wide enough for the columns to stand beside the pet
- * rather than above and below it, the middle they leave between them is all the badge above the pet
- * may take, so it can never run under what is in the corners.
- */
-private val CornerColumnWidth = GoalCardWidth
-
-/**
- * How much of the width everything standing beside the pet on a wide screen takes at either end:
- * the corner columns at the top and, along the bottom, the group of action buttons — the widest of
- * the two, once a tablet has enlarged the buttons.
- *
- * The pet area comes down into the bottom row on a screen like that, where it is given the whole
- * height between the badge and the bonus button, so it has to keep out of both.
- *
- * @return The width to leave free at either side of the pet area.
- */
-@Composable
-@ReadOnlyComposable
-private fun sideOfStageWidth(): Dp = maxOf(
-    CornerColumnWidth,
-    GameDimens.buttonSize(PrimaryActionSize) * 3 + ActionGap * 2
-)
 
 /**
  * How big one pixel of the game art is drawn in the game area to begin with. The scene is blown up
@@ -194,27 +190,138 @@ private val DemoScene: GameScene = GameScene.of(
 )
 
 /**
+ * How much of their full size the buttons along the bottom of the screen may keep.
+ *
+ * The row holds the same buttons on every screen, and on a narrow one they add up to more than
+ * there is width. Rather than let the last of them be squeezed into a dot by what the ones before
+ * it took — which is what a plain row does — every button and every gap of the row is multiplied by
+ * this one number, so the row shrinks as a whole and the buttons stay the size of one another.
+ *
+ * @param availableWidth width the row has, in dp.
+ * @param neededWidth width the row takes at full size, gaps included, in dp.
+ * @param smallestButton size of the smallest button of the row at full size, in dp.
+ * @param minTouchTarget smallest that button may end up being, in dp.
+ * @return How much of its full size each part of the row keeps: `1` when the row fits as it is, and
+ * never so little that the smallest button of it would come out under [minTouchTarget] — a row that
+ * would have to shrink further is left sticking out instead, since a button too small to hit is of
+ * no use to anyone.
+ */
+internal fun bottomRowFit(
+    availableWidth: Float,
+    neededWidth: Float,
+    smallestButton: Float,
+    minTouchTarget: Float
+): Float {
+    if (neededWidth <= 0f || availableWidth >= neededWidth) return 1f
+    val smallest =
+        if (smallestButton > 0f) (minTouchTarget / smallestButton).coerceAtMost(1f) else 1f
+    return (availableWidth / neededWidth).coerceIn(smallest, 1f)
+}
+
+/**
+ * Size of one of the four blocks standing in the corners of the main screen, in screen pixels.
+ *
+ * @property width how wide the block came out.
+ * @property height how tall it came out.
+ */
+internal data class CornerBlock(val width: Int, val height: Int)
+
+/**
+ * The room the corner blocks of the main screen leave in the middle of it for the pet, in screen
+ * pixels from the start and the top of the screen.
+ *
+ * @property left where the room begins across.
+ * @property top where it begins down the screen.
+ * @property right where it ends across.
+ * @property bottom where it ends down the screen.
+ */
+internal data class StageBand(val left: Int, val top: Int, val right: Int, val bottom: Int) {
+
+    /** How wide the room is. */
+    val width: Int get() = right - left
+
+    /** How tall it is. */
+    val height: Int get() = bottom - top
+}
+
+/**
+ * Works out what the corner blocks leave the pet.
+ *
+ * Which way the blocks stand beside it depends on the shape of the screen. On one taller than it is
+ * wide they take the top and the bottom of it and the pet gets the band between them, the whole
+ * width across — that is the upright phone everyone knows. On a wide one they stand along the sides
+ * instead, two to each, and the pet gets the column between them, the whole height down — a phone
+ * held sideways has no height to give away, and taking the corners out of it would leave the pet a
+ * sliver.
+ *
+ * @param width width of the screen, in screen pixels.
+ * @param height height of the screen, in screen pixels.
+ * @param topStart size of the block in the top start corner.
+ * @param topEnd size of the block in the top end corner.
+ * @param bottomStart size of the block in the bottom start corner.
+ * @param bottomEnd size of the block in the bottom end corner.
+ * @param gap how much room to leave between the blocks and the pet.
+ * @return The band left in the middle. A screen with less room than the blocks alone need leaves a
+ * band of no size at all rather than an upside-down one, sitting where the blocks meet.
+ */
+internal fun stageBandOf(
+    width: Int,
+    height: Int,
+    topStart: CornerBlock,
+    topEnd: CornerBlock,
+    bottomStart: CornerBlock,
+    bottomEnd: CornerBlock,
+    gap: Int
+): StageBand = if (height >= width) {
+    val (top, bottom) = heldApart(
+        start = max(topStart.height, topEnd.height) + gap,
+        end = height - max(bottomStart.height, bottomEnd.height) - gap
+    )
+    StageBand(left = 0, top = top, right = width, bottom = bottom)
+} else {
+    val (left, right) = heldApart(
+        start = max(topStart.width, bottomStart.width) + gap,
+        end = width - max(topEnd.width, bottomEnd.width) - gap
+    )
+    StageBand(left = left, top = 0, right = right, bottom = height)
+}
+
+/**
+ * Keeps the two ends of a band in order.
+ *
+ * @param start where the band begins.
+ * @param end where it ends.
+ * @return The two as they are, or — when the blocks on either side have taken more than the screen
+ * has, so that the end would come before the start — the point halfway between them, twice: a band
+ * of no size where the two sides meet.
+ */
+private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
+    if (start <= end) start to end else ((start + end) / 2).let { it to it }
+
+/**
  * Main game screen: shows the pet, current balance/goal progress, and navigation entry
  * points to the other screens.
  *
- * Layout:
- * - Center: one column with the badge naming the pet and the sub-location, the [PetStage] under it
- *   and the daily bonus button under that while the bonus is unclaimed. The column is measured
- *   rather than guessed at: the badge and the button take the height they need and the game area is
- *   handed every last bit of what is left between them, so a screen held sideways shows a pet as
- *   large as an upright one does instead of a needlessly small one. Across, the area takes its
- *   share of the width ([PetAreaWidthFraction]) and, on a screen wide enough for everything else to
- *   stand beside it, no more than the middle that leaves ([sideOfStageWidth]); the badge is held to
- *   the middle the top corners leave ([CornerColumnWidth]) instead, which is wider, so the name of
- *   the place is readable on a screen where the area itself has to be small.
+ * Layout: four blocks in the corners and the pet in whatever they leave, laid out by
+ * [MainScreenStage] from the sizes the blocks actually come out at rather than from guesses about
+ * them — a screen that has to say more, because the text is set larger or the pet has a long name,
+ * hands the pet less room instead of running one thing over another.
  * - Top-start: the balance chip with the pet's health next to it, the rest of the stats
  *   ([SecondaryStats]) in a row under them, and the goal progress card. Every stat is a
  *   [StatChip] — an icon and a percentage — so the stats take a corner instead of half the screen.
- * - Top-end: secondary buttons for opening settings and locations, and — in a demo build only — the
- *   button that skips [DemoMode.FAST_FORWARD_HOURS] hours of the pet's life.
- * - Bottom: a single row split into two groups — sub-location navigation arrows (start) and
- *   primary action buttons for quests/inventory/shop (end). Both groups are combined into one
- *   row so the enlarged action buttons cannot overlap each other on narrow screens.
+ *   On an upright screen the demo build's time button stands under the card as well, where there
+ *   is width for it (see [PlayerCorner]).
+ * - Top-end: buttons for opening settings and locations, stacked into a column on an upright
+ *   screen and laid along the top on a wide one — where they are joined by the time button, since
+ *   the corner has the action buttons right under it and no height to stack anything (see
+ *   [ControlsCorner]).
+ * - Bottom-start and bottom-end: the sub-location arrows and the action buttons for
+ *   quests/inventory/shop. Both groups shrink together by [bottomRowFit] on a screen too narrow
+ *   for them, so the buttons stay the size of one another instead of the last one being squeezed.
+ * - Middle: the badge naming the pet and the sub-location, the [PetStage] under it and the daily
+ *   bonus button under that while the bonus is unclaimed ([PetColumn]). The badge and the button
+ *   take the room they need and the game area is handed every last bit of what is left, so a screen
+ *   held sideways shows a pet as large as an upright one does.
  *
  * @param state current game state; [GameUiState.petName] and [GameUiState.subLocationIndex] make up
  *   the badge above the pet, [GameUiState.balance] fills the balance chip,
@@ -256,159 +363,411 @@ fun MainScreen(
             .systemBarsPadding()
             .padding(ScreenPadding)
     ) {
-        val stageMaxWidth: Dp
-        val stageBadgeMaxWidth: Dp
-        if (maxHeight >= maxWidth) {
-            // A screen taller than it is wide keeps the corner columns above and below the middle
-            // of it rather than beside it, so nothing there has to make room for them.
-            stageMaxWidth = maxWidth * PetAreaWidthFraction
-            stageBadgeMaxWidth = stageMaxWidth
-        } else {
-            // A wide one stands them right next to the pet, and what they leave between them is
-            // all the middle of the screen there is. The badge only ever reaches the top corners;
-            // the area itself comes down into the bottom row as well (see [sideOfStageWidth]).
-            stageMaxWidth = minOf(
-                maxWidth * PetAreaWidthFraction,
-                maxOf(maxWidth - sideOfStageWidth() * 2, PetAreaMinWidth)
+        val upright = maxHeight >= maxWidth
+        val arrowSize = GameDimens.buttonSize(SecondaryActionSize)
+        val actionSize = GameDimens.buttonSize(PrimaryActionSize)
+        val fit = bottomRowFit(
+            availableWidth = maxWidth.value,
+            neededWidth = (
+                arrowSize * 2 + actionSize * 3 + ActionGap * 3 + BottomGroupGap
+                ).value,
+            smallestButton = arrowSize.value,
+            minTouchTarget = MinTouchTarget.value
+        )
+
+        MainScreenStage(
+            modifier = Modifier.fillMaxSize(),
+            // The demo build's time button goes wherever there is width for it: under the goal card
+            // on an upright screen, and beside the other buttons on a wide one, where the corner it
+            // would stand in has the action buttons right under it instead.
+            topStart = {
+                PlayerCorner(
+                    state = state,
+                    onFastForward = onFastForward.takeIf { upright }
+                )
+            },
+            topEnd = {
+                ControlsCorner(
+                    inRow = !upright,
+                    onOpenScreen = onOpenScreen,
+                    onFastForward = onFastForward.takeIf { !upright }
+                )
+            },
+            bottomStart = {
+                SubLocationArrows(
+                    size = SecondaryActionSize * fit,
+                    gap = ActionGap * fit,
+                    onPrevSubLocation = onPrevSubLocation,
+                    onNextSubLocation = onNextSubLocation
+                )
+            },
+            bottomEnd = {
+                PrimaryActions(
+                    size = PrimaryActionSize * fit,
+                    gap = ActionGap * fit,
+                    onOpenScreen = onOpenScreen
+                )
+            },
+            center = {
+                PetColumn(
+                    scene = scene,
+                    title = stageTitleOf(
+                        petName = state.petName,
+                        subLocationTitle = subLocationTitles.getOrNull(state.subLocationIndex)
+                    ),
+                    // Only an upright screen holds the area to a share of the width: on a wide one
+                    // the band between the corner blocks is narrow enough as it is.
+                    stageMaxWidth = if (upright) {
+                        maxWidth * PetAreaWidthFraction
+                    } else {
+                        Dp.Unspecified
+                    },
+                    dailyBonusAvailable = state.dailyBonusAvailable,
+                    onClaimDailyBonus = onClaimDailyBonus
+                )
+            }
+        )
+    }
+}
+
+/**
+ * Lays the main screen out: a block in each corner and the pet in whatever they leave.
+ *
+ * Everything is placed from what the blocks measure, so nothing has to assume how wide the goal
+ * card is or how tall a button with a longer label comes out:
+ * - the two top blocks share one line. The one with the player's things keeps at least the width it
+ *   needs to say them and the buttons beside it take what is left, wrapping their labels rather
+ *   than running under the goal card;
+ * - the bottom blocks take the room they ask for, having already been sized to the screen by
+ *   [bottomRowFit];
+ * - the pet gets the band the four of them leave ([stageBandOf]) and is centered in it.
+ *
+ * @param topStart block for the top start corner, e.g. [PlayerCorner].
+ * @param topEnd block for the top end corner, e.g. [ControlsCorner].
+ * @param bottomStart block for the bottom start corner, e.g. [SubLocationArrows].
+ * @param bottomEnd block for the bottom end corner, e.g. [PrimaryActions].
+ * @param center what goes in the middle, e.g. [PetColumn]. Laid out last, out of what the corners
+ *   leave.
+ * @param modifier modifier applied to the layout; the screen always states its size here, since a
+ *   layout of corners has no size of its own to speak of.
+ * @param gap how much room to leave between the corner blocks and the middle.
+ */
+@Composable
+private fun MainScreenStage(
+    topStart: @Composable () -> Unit,
+    topEnd: @Composable () -> Unit,
+    bottomStart: @Composable () -> Unit,
+    bottomEnd: @Composable () -> Unit,
+    center: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    gap: Dp = BlockGap
+) {
+    Layout(
+        contents = listOf(topStart, topEnd, bottomStart, bottomEnd, center),
+        modifier = modifier
+    ) { (topStartAt, topEndAt, bottomStartAt, bottomEndAt, centerAt), constraints ->
+        val width = constraints.maxWidth
+        val height = constraints.maxHeight
+        val gapPx = gap.roundToPx()
+        val loose = Constraints(maxWidth = width, maxHeight = height)
+
+        val topStartOne = topStartAt.first()
+        val topEndOne = topEndAt.first()
+        val topEndRoom = (width - gapPx - topStartOne.minIntrinsicWidth(height)).coerceIn(0, width)
+        val topEndPlaced = topEndOne.measure(
+            loose.copy(maxWidth = min(topEndOne.maxIntrinsicWidth(height), topEndRoom))
+        )
+        val topStartPlaced = topStartOne.measure(
+            loose.copy(maxWidth = (width - gapPx - topEndPlaced.width).coerceAtLeast(0))
+        )
+        val bottomStartPlaced = bottomStartAt.first().measure(loose)
+        val bottomEndPlaced = bottomEndAt.first().measure(loose)
+
+        val band = stageBandOf(
+            width = width,
+            height = height,
+            topStart = topStartPlaced.block,
+            topEnd = topEndPlaced.block,
+            bottomStart = bottomStartPlaced.block,
+            bottomEnd = bottomEndPlaced.block,
+            gap = gapPx
+        )
+        val centerPlaced = centerAt.first().measure(
+            Constraints(maxWidth = band.width, maxHeight = band.height)
+        )
+
+        layout(width, height) {
+            topStartPlaced.place(x = 0, y = 0)
+            topEndPlaced.place(x = width - topEndPlaced.width, y = 0)
+            bottomStartPlaced.place(x = 0, y = height - bottomStartPlaced.height)
+            bottomEndPlaced.place(
+                x = width - bottomEndPlaced.width,
+                y = height - bottomEndPlaced.height
             )
-            stageBadgeMaxWidth = maxOf(maxWidth - CornerColumnWidth * 2, PetAreaMinWidth)
+            centerPlaced.place(
+                x = band.left + (band.width - centerPlaced.width) / 2,
+                y = band.top + (band.height - centerPlaced.height) / 2
+            )
+        }
+    }
+}
+
+/** The size a measured corner block came out at, as [stageBandOf] wants it stated. */
+private val Placeable.block: CornerBlock get() = CornerBlock(width = width, height = height)
+
+/**
+ * The corner with what the player has: the money with the pet's health beside it, the rest of the
+ * stats under them and the goal the player is saving towards.
+ *
+ * On an upright screen it also carries the demo build's time button, under the goal card. The
+ * corner opposite is two sprite buttons wide there, and a screen 320dp across has nothing left
+ * beside a goal card for a button with a label on it — down here the card's own width is room
+ * enough (see [MainScreenStage]).
+ *
+ * @param state game state the chips and the card are filled from.
+ * @param onFastForward called when the demo's time button is pressed, or `null` when this corner is
+ *   not the one carrying that button — or when the build is not a demo one at all.
+ * @param modifier modifier applied to the column.
+ */
+@Composable
+private fun PlayerCorner(
+    state: GameUiState,
+    onFastForward: (() -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(ChipGap)
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(ActionGap),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BalanceChip(balance = state.balance)
+            StatChip(stat = StatKind.HEALTH, stats = state.stats)
         }
 
-        Column(
-            modifier = Modifier.align(Alignment.Center),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            val title = stageTitleOf(
-                petName = state.petName,
-                subLocationTitle = subLocationTitles.getOrNull(state.subLocationIndex)
-            )
-            if (title != null) {
-                StageBadge(
-                    title = title,
-                    modifier = Modifier.widthIn(max = stageBadgeMaxWidth)
-                )
-                Spacer(modifier = Modifier.height(StageGap))
-            }
-
-            // The area is given the height the badge and the button leave and takes as much of it
-            // as its width allows: whatever it does not need is not held back from anything else,
-            // since the column is only as tall as what is in it.
-            PetStage(
-                scene = scene,
-                modifier = Modifier
-                    .weight(1f, fill = false)
-                    .widthIn(max = stageMaxWidth)
-            )
-
-            if (state.dailyBonusAvailable) {
-                Spacer(modifier = Modifier.height(StageGap))
-                PillButton(
-                    text = "Бонус дня +${Economy.DAILY_BONUS}",
-                    onClick = onClaimDailyBonus
-                )
-            }
-        }
-
-        Column(
-            modifier = Modifier.align(Alignment.TopStart),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                BalanceChip(balance = state.balance)
-                StatChip(stat = StatKind.HEALTH, stats = state.stats)
-            }
-
-            if (SecondaryStats.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SecondaryStats.forEach { stat ->
-                        StatChip(stat = stat, stats = state.stats)
-                    }
+        if (SecondaryStats.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(ActionGap)) {
+                SecondaryStats.forEach { stat ->
+                    StatChip(stat = stat, stats = state.stats)
                 }
             }
-
-            GoalCard(
-                progress = DemoGoalProgress,
-                modifier = Modifier.widthIn(max = GoalCardWidth)
-            )
         }
 
+        GoalCard(
+            progress = DemoGoalProgress,
+            modifier = Modifier.widthIn(max = GoalCardWidth)
+        )
+
+        if (onFastForward != null) {
+            PillButton(
+                text = "Вперёд ${DemoMode.FAST_FORWARD_HOURS} ч",
+                onClick = onFastForward
+            )
+        }
+    }
+}
+
+/**
+ * The corner with the buttons that lead out of the game area: settings and locations, joined on a
+ * wide screen by the demo build's button that skips a while of the pet's life.
+ *
+ * Which way they are laid out is decided by the shape of the screen, since the corner has to fit
+ * next to the other blocks either way. An upright screen has height to spare and stacks them into a
+ * column; a wide one has none — the action buttons sit right under this corner there — and lays
+ * them along the top instead, counted from the corner outwards in the same order the column has
+ * them from the top down.
+ *
+ * @param inRow whether to lay the buttons along the top rather than stack them.
+ * @param onOpenScreen called with the screen a button opens.
+ * @param onFastForward called when the demo's time button is pressed, or `null` when this corner is
+ *   not the one carrying that button — or when the build is not a demo one at all.
+ * @param modifier modifier applied to the row or the column.
+ */
+@Composable
+private fun ControlsCorner(
+    inRow: Boolean,
+    onOpenScreen: (Screen) -> Unit,
+    onFastForward: (() -> Unit)?,
+    modifier: Modifier = Modifier
+) {
+    val settings: @Composable () -> Unit = {
+        SpriteButton(
+            assetPath = Sprites.SETTINGS,
+            contentDescription = "Открыть настройки",
+            onClick = { onOpenScreen(Screen.OPTIONS) },
+            size = SecondaryActionSize
+        )
+    }
+    val locations: @Composable () -> Unit = {
+        SpriteButton(
+            assetPath = Sprites.LOCATIONS,
+            contentDescription = "Открыть локации",
+            onClick = { onOpenScreen(Screen.LOCATIONS) },
+            size = SecondaryActionSize
+        )
+    }
+    val fastForward: @Composable () -> Unit = {
+        if (onFastForward != null) {
+            PillButton(
+                text = "Вперёд ${DemoMode.FAST_FORWARD_HOURS} ч",
+                onClick = onFastForward
+            )
+        }
+    }
+
+    if (inRow) {
+        Row(
+            modifier = modifier,
+            horizontalArrangement = Arrangement.spacedBy(ControlGap, Alignment.End),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            fastForward()
+            locations()
+            settings()
+        }
+    } else {
         Column(
-            modifier = Modifier.align(Alignment.TopEnd),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = modifier,
+            verticalArrangement = Arrangement.spacedBy(ControlGap),
             horizontalAlignment = Alignment.End
         ) {
-            SpriteButton(
-                assetPath = Sprites.SETTINGS,
-                contentDescription = "Открыть настройки",
-                onClick = { onOpenScreen(Screen.OPTIONS) },
-                size = SecondaryActionSize
-            )
-            SpriteButton(
-                assetPath = Sprites.LOCATIONS,
-                contentDescription = "Открыть локации",
-                onClick = { onOpenScreen(Screen.LOCATIONS) },
-                size = SecondaryActionSize
-            )
+            settings()
+            locations()
+            fastForward()
+        }
+    }
+}
 
-            if (onFastForward != null) {
-                PillButton(
-                    text = "Вперёд ${DemoMode.FAST_FORWARD_HOURS} ч",
-                    onClick = onFastForward
-                )
-            }
+/**
+ * The corner with the arrows that walk the pet from one sub-location to the next.
+ *
+ * @param size size of one arrow; the screen shrinks it with [bottomRowFit] when the bottom of it is
+ *   too narrow for the buttons at full size.
+ * @param gap gap between the two, shrunk by the same amount.
+ * @param onPrevSubLocation called when the "previous sub-location" arrow is pressed.
+ * @param onNextSubLocation called when the "next sub-location" arrow is pressed.
+ * @param modifier modifier applied to the row.
+ */
+@Composable
+private fun SubLocationArrows(
+    size: Dp,
+    gap: Dp,
+    onPrevSubLocation: () -> Unit,
+    onNextSubLocation: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(gap),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SpriteButton(
+            assetPath = Sprites.ARROW_LEFT,
+            contentDescription = "Предыдущая подлокация",
+            onClick = onPrevSubLocation,
+            size = size
+        )
+        SpriteButton(
+            assetPath = Sprites.ARROW_RIGHT,
+            contentDescription = "Следующая подлокация",
+            onClick = onNextSubLocation,
+            size = size
+        )
+    }
+}
+
+/**
+ * The corner with the buttons that open the quests, the inventory and the shop.
+ *
+ * @param size size of one button; shrunk together with everything else along the bottom of the
+ *   screen by [bottomRowFit].
+ * @param gap gap between them, shrunk by the same amount.
+ * @param onOpenScreen called with the screen a button opens.
+ * @param modifier modifier applied to the row.
+ */
+@Composable
+private fun PrimaryActions(
+    size: Dp,
+    gap: Dp,
+    onOpenScreen: (Screen) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(gap),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SpriteButton(
+            assetPath = Sprites.QUESTS,
+            contentDescription = "Открыть квесты",
+            onClick = { onOpenScreen(Screen.QUESTS) },
+            size = size
+        )
+        SpriteButton(
+            assetPath = Sprites.INVENTORY,
+            contentDescription = "Открыть инвентарь",
+            onClick = { onOpenScreen(Screen.INVENTORY) },
+            size = size
+        )
+        SpriteButton(
+            assetPath = Sprites.SHOP,
+            contentDescription = "Открыть магазин",
+            onClick = { onOpenScreen(Screen.SHOP) },
+            size = size
+        )
+    }
+}
+
+/**
+ * The middle of the screen: the badge naming the pet and the place it is in, the game area under it
+ * and the daily bonus button under that.
+ *
+ * The badge and the button take the height they need and the game area is given every last bit of
+ * what the column has left ([PetStage] is weighted, but only takes what it can square off), so the
+ * pet is as large as the screen allows and the column is no taller than what is in it.
+ *
+ * @param scene what stands in the game area.
+ * @param title text of the badge, or `null` when there is nothing to say and the badge is left out.
+ * @param stageMaxWidth widest the game area may be, or [Dp.Unspecified] to let it take the whole
+ *   width of the column.
+ * @param dailyBonusAvailable whether the daily bonus is there to take, i.e. whether the button
+ *   under the pet is shown at all.
+ * @param onClaimDailyBonus called when the player takes the bonus.
+ * @param modifier modifier applied to the column.
+ */
+@Composable
+private fun PetColumn(
+    scene: GameScene,
+    title: String?,
+    stageMaxWidth: Dp,
+    dailyBonusAvailable: Boolean,
+    onClaimDailyBonus: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        if (title != null) {
+            StageBadge(title = title)
+            Spacer(modifier = Modifier.height(StageGap))
         }
 
-        Row(
+        PetStage(
+            scene = scene,
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.Bottom
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(ActionGap),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SpriteButton(
-                    assetPath = Sprites.ARROW_LEFT,
-                    contentDescription = "Предыдущая подлокация",
-                    onClick = onPrevSubLocation,
-                    size = SecondaryActionSize
-                )
-                SpriteButton(
-                    assetPath = Sprites.ARROW_RIGHT,
-                    contentDescription = "Следующая подлокация",
-                    onClick = onNextSubLocation,
-                    size = SecondaryActionSize
-                )
-            }
+                .weight(1f, fill = false)
+                .widthIn(max = stageMaxWidth)
+        )
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(ActionGap),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SpriteButton(
-                    assetPath = Sprites.QUESTS,
-                    contentDescription = "Открыть квесты",
-                    onClick = { onOpenScreen(Screen.QUESTS) },
-                    size = PrimaryActionSize
-                )
-                SpriteButton(
-                    assetPath = Sprites.INVENTORY,
-                    contentDescription = "Открыть инвентарь",
-                    onClick = { onOpenScreen(Screen.INVENTORY) },
-                    size = PrimaryActionSize
-                )
-                SpriteButton(
-                    assetPath = Sprites.SHOP,
-                    contentDescription = "Открыть магазин",
-                    onClick = { onOpenScreen(Screen.SHOP) },
-                    size = PrimaryActionSize
-                )
-            }
+        if (dailyBonusAvailable) {
+            Spacer(modifier = Modifier.height(StageGap))
+            PillButton(
+                text = "Бонус дня +${Economy.DAILY_BONUS}",
+                onClick = onClaimDailyBonus
+            )
         }
     }
 }
@@ -645,13 +1004,12 @@ private fun Modifier.sceneIn(viewport: () -> SceneViewport, moved: () -> SceneOf
 /**
  * Pill-shaped badge naming the pet and the sub-location it is in, displayed above the pet.
  *
- * The badge is only as wide as its text, up to whatever the caller allows it; a name that still
- * does not fit on one line is wrapped onto a second one ([StageBadgeMaxLines]) rather than cut
- * short, since a sub-location the player cannot read the name of is the same as an unnamed one.
+ * The badge is only as wide as its text, up to whatever the column it stands in allows; a name that
+ * still does not fit on one line is wrapped onto a second one ([StageBadgeMaxLines]) rather than
+ * cut short, since a sub-location the player cannot read the name of is the same as an unnamed one.
  *
  * @param title text to display inside the badge, as built by [stageTitleOf].
- * @param modifier modifier applied to the badge surface; this is where the caller limits how wide
- *   the badge may grow.
+ * @param modifier modifier applied to the badge surface.
  */
 @Composable
 private fun StageBadge(
@@ -676,6 +1034,21 @@ private fun StageBadge(
     }
 }
 
+/** State the previews show: a pet with a name, money, stats and a bonus waiting to be taken. */
+private val PreviewState = GameUiState(
+    balance = 250,
+    dailyBonusAvailable = true,
+    subLocationIndex = 1,
+    petName = "Барсик",
+    stats = PetStats(
+        mapOf(
+            StatKind.HEALTH to 90,
+            StatKind.HUNGER to 45,
+            StatKind.PLEASURE to 70
+        )
+    )
+)
+
 /** Preview of [MainScreen] in the light theme, portrait orientation. */
 @Preview(name = "MainScreen — Light", showBackground = true, widthDp = 411, heightDp = 891)
 @Composable
@@ -683,19 +1056,7 @@ private fun MainScreenLightPreview() {
     FinGameTheme(darkTheme = false) {
         Surface(color = MaterialTheme.colorScheme.background) {
             MainScreen(
-                state = GameUiState(
-                    balance = 250,
-                    dailyBonusAvailable = true,
-                    subLocationIndex = 1,
-                    petName = "Барсик",
-                    stats = PetStats(
-                        mapOf(
-                            StatKind.HEALTH to 90,
-                            StatKind.HUNGER to 45,
-                            StatKind.PLEASURE to 70
-                        )
-                    )
-                ),
+                state = PreviewState,
                 onOpenScreen = {},
                 onPrevSubLocation = {},
                 onNextSubLocation = {},
@@ -712,11 +1073,7 @@ private fun MainScreenDemoPreview() {
     FinGameTheme(darkTheme = false) {
         Surface(color = MaterialTheme.colorScheme.background) {
             MainScreen(
-                state = GameUiState(
-                    balance = 250,
-                    subLocationIndex = 1,
-                    petName = "Барсик"
-                ),
+                state = PreviewState,
                 onOpenScreen = {},
                 onPrevSubLocation = {},
                 onNextSubLocation = {},
@@ -757,6 +1114,79 @@ private fun MainScreenDarkPreview() {
 }
 
 /**
+ * Preview of the tightest upright screen the game is laid out for: a narrow phone with everything
+ * on it at once — the time button, the bonus button and a pet with a name to say.
+ */
+@Preview(
+    name = "MainScreen — Narrow phone",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 800
+)
+@Composable
+private fun MainScreenNarrowPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            MainScreen(
+                state = PreviewState,
+                onOpenScreen = {},
+                onPrevSubLocation = {},
+                onNextSubLocation = {},
+                onClaimDailyBonus = {},
+                onFastForward = {}
+            )
+        }
+    }
+}
+
+/** Preview of the smallest screen of all: the bottom row is shrunk to fit it (see [bottomRowFit]). */
+@Preview(
+    name = "MainScreen — Smallest phone",
+    showBackground = true,
+    widthDp = 320,
+    heightDp = 640
+)
+@Composable
+private fun MainScreenSmallestPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            MainScreen(
+                state = PreviewState,
+                onOpenScreen = {},
+                onPrevSubLocation = {},
+                onNextSubLocation = {},
+                onClaimDailyBonus = {},
+                onFastForward = {}
+            )
+        }
+    }
+}
+
+/** Preview of a narrow phone with the system text turned up as far as the game is laid out for. */
+@Preview(
+    name = "MainScreen — Narrow phone, large text",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 800,
+    fontScale = 1.3f
+)
+@Composable
+private fun MainScreenLargeTextPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            MainScreen(
+                state = PreviewState,
+                onOpenScreen = {},
+                onPrevSubLocation = {},
+                onNextSubLocation = {},
+                onClaimDailyBonus = {},
+                onFastForward = {}
+            )
+        }
+    }
+}
+
+/**
  * Preview of [MainScreen] in the light theme, landscape orientation: the case the badge above the
  * pet has to survive, with both a name and a sub-location to fit into a screen that has no height —
  * and the case the game area has to fill, with every bit of that height between the badge and the
@@ -768,16 +1198,35 @@ private fun MainScreenLandscapePreview() {
     FinGameTheme(darkTheme = false) {
         Surface(color = MaterialTheme.colorScheme.background) {
             MainScreen(
-                state = GameUiState(
-                    balance = 250,
-                    dailyBonusAvailable = true,
-                    subLocationIndex = 2,
-                    petName = "Барсик"
-                ),
+                state = PreviewState,
                 onOpenScreen = {},
                 onPrevSubLocation = {},
                 onNextSubLocation = {},
-                onClaimDailyBonus = {}
+                onClaimDailyBonus = {},
+                onFastForward = {}
+            )
+        }
+    }
+}
+
+/** Preview of the tightest screen held sideways: a narrow phone with no height at all to give. */
+@Preview(
+    name = "MainScreen — Narrow landscape",
+    showBackground = true,
+    widthDp = 800,
+    heightDp = 360
+)
+@Composable
+private fun MainScreenNarrowLandscapePreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            MainScreen(
+                state = PreviewState,
+                onOpenScreen = {},
+                onPrevSubLocation = {},
+                onNextSubLocation = {},
+                onClaimDailyBonus = {},
+                onFastForward = {}
             )
         }
     }
@@ -794,16 +1243,12 @@ private fun MainScreenTabletPreview() {
     FinGameTheme(darkTheme = false) {
         Surface(color = MaterialTheme.colorScheme.background) {
             MainScreen(
-                state = GameUiState(
-                    balance = 250,
-                    dailyBonusAvailable = true,
-                    subLocationIndex = 1,
-                    petName = "Барсик"
-                ),
+                state = PreviewState,
                 onOpenScreen = {},
                 onPrevSubLocation = {},
                 onNextSubLocation = {},
-                onClaimDailyBonus = {}
+                onClaimDailyBonus = {},
+                onFastForward = {}
             )
         }
     }
@@ -821,12 +1266,7 @@ private fun MainScreenTabletPortraitPreview() {
     FinGameTheme(darkTheme = false) {
         Surface(color = MaterialTheme.colorScheme.background) {
             MainScreen(
-                state = GameUiState(
-                    balance = 250,
-                    dailyBonusAvailable = true,
-                    subLocationIndex = 1,
-                    petName = "Барсик"
-                ),
+                state = PreviewState,
                 onOpenScreen = {},
                 onPrevSubLocation = {},
                 onNextSubLocation = {},
