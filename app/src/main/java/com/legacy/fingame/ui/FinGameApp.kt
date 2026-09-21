@@ -142,7 +142,8 @@ fun FinGameApp(
                             ),
                             animalId = pet.animalId,
                             worn = state.worn,
-                            catalog = itemRegistry
+                            catalog = itemRegistry,
+                            animalAge = state.petAge
                         )
                     )
 

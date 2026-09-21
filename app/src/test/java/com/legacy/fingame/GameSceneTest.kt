@@ -21,6 +21,7 @@ class GameSceneTest {
     private val background = SceneSprite(assetPath = "locations/0/background.webp", description = null)
     private val pet = SceneSprite(assetPath = "animals/cat/white/0/idle.webp", description = "Питомец")
     private val animalId = "cat"
+    private val animalAge = 2
 
     /**
      * @param worn items the pet has on.
@@ -31,7 +32,8 @@ class GameSceneTest {
         pet = pet,
         animalId = animalId,
         worn = worn,
-        catalog = catalog
+        catalog = catalog,
+        animalAge = animalAge
     )
 
     @Test
@@ -89,11 +91,13 @@ class GameSceneTest {
         val scene = sceneWith(setOf(hat, lamp))
 
         assertEquals(
-            listOf(ItemSprites.equippedOnAnimal(TestItems.HAT.id, animalId, "black")),
+            listOf(
+                ItemSprites.equippedOnAnimal(TestItems.HAT.id, "black", animalId, animalAge)
+            ),
             scene[GameLayer.CLOTHES].map { it.assetPath }
         )
         assertEquals(
-            listOf(ItemSprites.equippedInScenery(TestItems.LAMP.id, "default")),
+            listOf(ItemSprites.placedInScenery(TestItems.LAMP.id, "default")),
             scene[GameLayer.ENVIRONMENT_FRONT].map { it.assetPath }
         )
         assertTrue(scene[GameLayer.ENVIRONMENT_BACK].isEmpty())
@@ -139,8 +143,36 @@ class GameSceneTest {
         assertTrue(scene[GameLayer.CLOTHES].isEmpty())
         // A decoration belongs to the room and stands there pet or no pet.
         assertEquals(
-            listOf(ItemSprites.equippedInScenery(TestItems.LAMP.id, "default")),
+            listOf(ItemSprites.placedInScenery(TestItems.LAMP.id, "default")),
             scene[GameLayer.ENVIRONMENT_FRONT].map { it.assetPath }
+        )
+    }
+
+    @Test
+    fun `the clothes of the pet grow with it, the room around it does not`() {
+        val worn = setOf(
+            ItemSelection(TestItems.HAT.id, "black"),
+            ItemSelection(TestItems.LAMP.id, "default")
+        )
+
+        val grown = GameScene.of(
+            background = background,
+            pet = pet,
+            animalId = animalId,
+            worn = worn,
+            catalog = catalog,
+            animalAge = animalAge + 1
+        )
+
+        assertEquals(
+            listOf(
+                ItemSprites.equippedOnAnimal(TestItems.HAT.id, "black", animalId, animalAge + 1)
+            ),
+            grown[GameLayer.CLOTHES].map { it.assetPath }
+        )
+        assertEquals(
+            sceneWith(worn)[GameLayer.ENVIRONMENT_FRONT].map { it.assetPath },
+            grown[GameLayer.ENVIRONMENT_FRONT].map { it.assetPath }
         )
     }
 
@@ -160,7 +192,7 @@ class GameSceneTest {
         assertEquals(3, entries.first().count)
         assertFalse(entries.first().worn)
         assertTrue(entries.last().worn)
-        assertEquals(ItemSprites.icon(TestItems.APPLE.id), entries.first().iconPath)
+        assertEquals(ItemSprites.icon(TestItems.APPLE.id, "red"), entries.first().iconPath)
     }
 
     @Test

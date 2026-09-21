@@ -14,7 +14,8 @@ import com.legacy.fingame.game.stats.StatKind
  * once the player owns it (see [ItemCategory.use]).
  * @property variantIds ids of the item's variants, in the order the data declares them. Never
  * empty: an item with no variant at all could not be drawn. The sprites themselves are not listed
- * here — their paths are built out of the item's id and the variant id by [ItemSprites].
+ * here — every variant keeps them in a folder named after the item and the variant, which
+ * [ItemSprites] knows how to find.
  * @property effects what using the item does to the pet's stats, keyed by stat: a positive value
  * fills the bar, a negative one empties it (a cake that is sweet but not healthy). Empty for an item
  * the pet feels nothing about.
@@ -49,34 +50,57 @@ data class Item(
     val hasSeveralVariants: Boolean get() = variantIds.size > 1
 
     /**
-     * Path to the icon the shop and the inventory show the item by, relative to /assets/textures/,
-     * e.g. 'items/hat/icon.webp'. The same for every variant; see [ItemSprites.icon].
+     * Builds the path to the icon the shop and the inventory show one of the item's variants by.
+     *
+     * @param variantId id of a variant. A variant this item doesn't have falls back to
+     * [defaultVariantId], so a variant id saved before the data changed still draws the item.
+     * @return Path to the icon relative to /assets/textures/, e.g. 'items/hat/black/icon.webp'; see
+     * [ItemSprites.icon].
      */
-    val iconPath: String get() = ItemSprites.icon(id)
+    fun getIconPath(variantId: String): String = ItemSprites.icon(id, variantOrDefault(variantId))
 
     /**
      * Builds the path to the sprite of the item as it is worn, i.e. what the game area draws on the
      * item's [layer].
      *
      * Which sprite that is depends on the layer: something worn by the pet is painted per species
-     * (see [ItemSprites.equippedOnAnimal]), while a decoration belongs to the room and is painted
-     * once for all pets (see [ItemSprites.equippedInScenery]).
+     * and per age stage (see [ItemSprites.equippedOnAnimal]), while a decoration belongs to the
+     * room and is painted once for all pets (see [ItemSprites.placedInScenery]).
      *
      * @param variantId id of a variant. A variant this item doesn't have falls back to
      * [defaultVariantId], so a variant id saved before the data changed still draws the item.
      * @param animalId species id of the pet the item is worn by, or null when there is no pet;
      * needed by clothes alone, which are cut to fit the animal they sit on.
-     * @return Path to the sprite relative to /assets/textures/, e.g. 'items/hat/equipped-cat-black.webp'
-     * for clothes and 'items/rug/equipped-beige.webp' for a decoration; null for an item that is not
+     * @param animalAge age stage that pet has grown to, so that clothes grow with it; ignored by a
+     * decoration, which the pet's age is nothing to.
+     * @return Path to the sprite relative to /assets/textures/, e.g. 'items/hat/black/equipped-cat-0.webp'
+     * for clothes and 'items/rug/beige/placed.webp' for a decoration; null for an item that is not
      * drawn in the game area at all — food and toys, which have no worn look — and for clothes with
      * no pet to put them on.
      */
-    fun getEquippedSpritePath(variantId: String, animalId: String?): String? {
-        val variant = if (variantId in variantIds) variantId else defaultVariantId
+    fun getEquippedSpritePath(variantId: String, animalId: String?, animalAge: Int): String? {
+        val variant = variantOrDefault(variantId)
         return when (layer) {
             null -> null
-            GameLayer.CLOTHES -> animalId?.let { ItemSprites.equippedOnAnimal(id, it, variant) }
-            else -> ItemSprites.equippedInScenery(id, variant)
+            GameLayer.CLOTHES -> animalId?.let {
+                ItemSprites.equippedOnAnimal(
+                    itemId = id,
+                    variantId = variant,
+                    animalId = it,
+                    animalAge = animalAge
+                )
+            }
+
+            else -> ItemSprites.placedInScenery(id, variant)
         }
     }
+
+    /**
+     * @param variantId id of a variant.
+     * @return [variantId] itself when the item is offered in it, and [defaultVariantId] when it is
+     * not: a variant id saved before the data changed names a folder nobody drew, while the default
+     * one is always there.
+     */
+    private fun variantOrDefault(variantId: String): String =
+        if (variantId in variantIds) variantId else defaultVariantId
 }

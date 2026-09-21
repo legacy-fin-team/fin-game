@@ -1,5 +1,6 @@
 package com.legacy.fingame
 
+import com.legacy.fingame.game.animals.Animal
 import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.items.ItemReader
@@ -70,7 +71,7 @@ class ItemReaderTest {
     }
 
     @Test
-    fun `a variant is its id alone, the sprites are found by the item's own folder`() {
+    fun `a variant is its id alone, the sprites are found by the variant's own folder`() {
         val items = readItems(
             """
             <?xml version="1.0" encoding="utf-8"?>
@@ -86,10 +87,14 @@ class ItemReaderTest {
         )
 
         val rug = items.getValue("rug")
-        assertEquals("items/rug/icon.webp", rug.iconPath)
+        assertEquals("items/rug/blue/icon.webp", rug.getIconPath("blue"))
         assertEquals(
-            "items/rug/equipped-blue.webp",
-            rug.getEquippedSpritePath(variantId = "blue", animalId = "cat")
+            "items/rug/blue/placed.webp",
+            rug.getEquippedSpritePath(
+                variantId = "blue",
+                animalId = "cat",
+                animalAge = Animal.FIRST_AGE
+            )
         )
     }
 
@@ -153,17 +158,32 @@ class ItemReaderTest {
         val hat = items.getValue("hat")
         assertEquals(ItemCategory.CLOTHES, hat.category)
         assertEquals(listOf("black", "white", "violet"), hat.variantIds)
-        assertEquals("items/hat/icon.webp", hat.iconPath)
+        assertEquals("items/hat/black/icon.webp", hat.getIconPath("black"))
+        assertEquals(
+            "items/hat/violet/equipped-cat-1.webp",
+            hat.getEquippedSpritePath(variantId = "violet", animalId = "cat", animalAge = 1)
+        )
 
         val apple = items.getValue("apple")
         assertEquals(listOf("default"), apple.variantIds)
-        assertNull(apple.getEquippedSpritePath(variantId = "default", animalId = "cat"))
+        assertNull(
+            apple.getEquippedSpritePath(
+                variantId = "default",
+                animalId = "cat",
+                animalAge = Animal.FIRST_AGE
+            )
+        )
 
-        // Every item of the shipped data is still drawable: it has at least one variant, and its
-        // icon is looked for in a folder of its own.
+        // Every item of the shipped data is still drawable: it has at least one variant, and every
+        // variant is looked for in a folder of its own.
         items.values.forEach { item ->
             assertTrue("${item.id} has no variants", item.variantIds.isNotEmpty())
-            assertEquals("items/${item.id}/icon.webp", item.iconPath)
+            item.variantIds.forEach { variantId ->
+                assertEquals(
+                    "items/${item.id}/$variantId/icon.webp",
+                    item.getIconPath(variantId)
+                )
+            }
         }
     }
 }

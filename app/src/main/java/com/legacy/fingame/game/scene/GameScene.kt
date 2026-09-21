@@ -1,5 +1,6 @@
 package com.legacy.fingame.game.scene
 
+import com.legacy.fingame.game.animals.Animal
 import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.items.ItemSelection
 
@@ -38,6 +39,10 @@ data class GameScene(val sprites: Map<GameLayer, List<SceneSprite>> = emptyMap()
          * @param animalId species id of that pet, or null while there is none: clothes are cut to
          * fit the animal they sit on, so they cannot be drawn without knowing which animal that is
          * (see [com.legacy.fingame.game.items.Item.getEquippedSpritePath]).
+         * @param animalAge age stage that pet has grown to, the very one its own sprite is drawn at
+         * (see [com.legacy.fingame.game.animals.Animal.getIdleSpritePath]), so that the clothes on
+         * it grow along with it. Defaults to the stage every pet starts at, which is the pet the
+         * previews show.
          * @param worn items the player put on the pet; an item that is not drawn in the game area at
          * all (see [com.legacy.fingame.game.items.Item.layer]) is skipped, as is one the catalog no
          * longer registers.
@@ -51,7 +56,8 @@ data class GameScene(val sprites: Map<GameLayer, List<SceneSprite>> = emptyMap()
             pet: SceneSprite?,
             animalId: String?,
             worn: Set<ItemSelection>,
-            catalog: ItemCatalog
+            catalog: ItemCatalog,
+            animalAge: Int = Animal.FIRST_AGE
         ): GameScene {
             val sprites = mutableMapOf<GameLayer, MutableList<SceneSprite>>()
 
@@ -65,8 +71,11 @@ data class GameScene(val sprites: Map<GameLayer, List<SceneSprite>> = emptyMap()
             worn.sortedWith(compareBy({ it.itemId }, { it.variantId })).forEach { selection ->
                 val item = catalog.findItemById(selection.itemId) ?: return@forEach
                 val layer = item.layer ?: return@forEach
-                val assetPath = item.getEquippedSpritePath(selection.variantId, animalId)
-                    ?: return@forEach
+                val assetPath = item.getEquippedSpritePath(
+                    variantId = selection.variantId,
+                    animalId = animalId,
+                    animalAge = animalAge
+                ) ?: return@forEach
                 sprites.getOrPut(layer) { mutableListOf() }.add(
                     SceneSprite(
                         assetPath = assetPath,

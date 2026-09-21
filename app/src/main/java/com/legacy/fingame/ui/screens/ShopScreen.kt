@@ -544,13 +544,9 @@ private fun modeOf(item: Item, state: GameUiState): ShopItemMode = when {
 }
 
 /**
- * Single shop item card: the item's icon with an "add to goals" star toggle, the item's name and
- * price, a variant picker for items offered in several variants, and a purchase control that
- * depends on [mode].
- *
- * The icon stands for the item as a whole and not for the variant picked in it (see
- * [com.legacy.fingame.game.items.ItemSprites.icon]), so the variant picker tells its buttons apart
- * by which of them is selected rather than by what they show.
+ * Single shop item card: the icon of the picked variant with an "add to goals" star toggle, the
+ * item's name and price, a variant picker for items offered in several variants, and a purchase
+ * control that depends on [mode].
  *
  * The card is built out of slots of a fixed height rather than out of whatever its item happens to
  * need, so the cards of one shelf line up with each other instead of ending at three different
@@ -608,6 +604,7 @@ private fun ShopItemCard(
             ) {
                 ItemSprite(
                     item = item,
+                    pickedVariantId = pickedVariantId,
                     inGoals = inGoals,
                     onToggleGoals = { inGoals = !inGoals },
                     starButtonSize = ShortScreenStarButtonSize,
@@ -647,6 +644,7 @@ private fun ShopItemCard(
             ) {
                 ItemSprite(
                     item = item,
+                    pickedVariantId = pickedVariantId,
                     inGoals = inGoals,
                     onToggleGoals = { inGoals = !inGoals },
                     starButtonSize = StarButtonSize,
@@ -713,6 +711,7 @@ private fun ItemNameText(
  * and the star button are given.
  *
  * @param item the item the sprite belongs to.
+ * @param pickedVariantId variant of it the card is showing, the one whose icon is drawn.
  * @param inGoals whether the star is currently toggled on.
  * @param onToggleGoals called when the star is pressed.
  * @param starButtonSize size of the star toggle.
@@ -721,6 +720,7 @@ private fun ItemNameText(
 @Composable
 private fun ItemSprite(
     item: Item,
+    pickedVariantId: String,
     inGoals: Boolean,
     onToggleGoals: () -> Unit,
     starButtonSize: Dp,
@@ -728,7 +728,7 @@ private fun ItemSprite(
 ) {
     Box(modifier = modifier) {
         Sprite(
-            assetPath = item.iconPath,
+            assetPath = item.getIconPath(pickedVariantId),
             contentDescription = item.name,
             modifier = Modifier.fillMaxSize()
         )
@@ -811,7 +811,7 @@ private fun ItemVariantRow(
             ) {
                 item.variantIds.forEach { variantId ->
                     SpriteButton(
-                        assetPath = item.iconPath,
+                        assetPath = item.getIconPath(variantId),
                         contentDescription = "Вариант «$variantId»",
                         onClick = { onPickVariant(variantId) },
                         size = VariantButtonSize,
