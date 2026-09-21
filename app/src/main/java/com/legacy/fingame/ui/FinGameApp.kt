@@ -159,7 +159,7 @@ fun FinGameApp(
                         onPickVariant = vm::pickVariant,
                         onIncrease = vm::increaseQty,
                         onDecrease = vm::decreaseQty,
-                        onBuy = { vm.buyCart() },
+                        onBuy = vm::buyCart,
                         onClose = vm::closeScreen
                     )
 

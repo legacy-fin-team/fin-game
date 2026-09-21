@@ -106,8 +106,24 @@ data class GameUiState(
     val petBornAtMillis: Long = Growth.NOT_BORN,
     val subLocationIndex: Int = 0
 ) {
+    /**
+     * Whether the player picked anything at all, i.e. whether there is a purchase to ask about.
+     * Says nothing about the money: a cart the player cannot afford is still a cart.
+     */
+    val hasCart: Boolean get() = cartPrice > 0
+
+    /**
+     * How many coins the cart costs over what the player has, i.e. by how much the purchase
+     * overshoots the balance. Zero whenever the cart can be paid for, so this is the one number the
+     * "not enough money" window has to show.
+     */
+    val cartShortfall: Int get() = (cartPrice - balance).coerceAtLeast(0)
+
+    /** Whether the balance covers the cart. A cart costing exactly the balance is covered. */
+    val canAffordCart: Boolean get() = cartShortfall == 0
+
     /** Whether the cart holds something the player can actually pay for. */
-    val canBuyCart: Boolean get() = cartPrice in 1..balance
+    val canBuyCart: Boolean get() = hasCart && canAffordCart
 
     /**
      * @param item item shown in the shop.

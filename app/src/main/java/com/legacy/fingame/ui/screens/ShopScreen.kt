@@ -6,6 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -107,11 +108,13 @@ private val ShortScreenPriceIconSize = 24.dp
 /** Gap between the shelves and the column of controls standing beside them on a short screen. */
 private val ShortScreenRailGap = 12.dp
 
-/** Sizes of the window that asks the player to confirm the purchase. */
-private val ConfirmMaxWidth = 320.dp
-private val ConfirmCloseButtonSize = 44.dp
+/** Sizes shared by the windows the shop opens over itself; see [ShopDialogBlock]. */
+private val DialogMaxWidth = 320.dp
+private val DialogCloseButtonSize = 44.dp
+private val DialogCoinSize = 20.dp
+
+/** Size of an item's sprite on a line of the cart in [PurchaseConfirmBlock]. */
 private val ConfirmLineSpriteSize = 40.dp
-private val ConfirmCoinSize = 20.dp
 
 /**
  * How tall the list of items in the confirmation window is allowed to grow before it starts to
@@ -121,6 +124,21 @@ private val ConfirmLinesMaxHeight = 260.dp
 
 /** How a card exposes its purchase controls. Presentation-only, never stored in the ViewModel. */
 enum class ShopItemMode { COUNTER, ADDABLE, PURCHASED }
+
+/**
+ * The window the shop currently holds open over itself, if any. Presentation-only: which window is
+ * up is nothing to the rest of the game, and none of them is a purchase until the player says so.
+ */
+private enum class ShopWindow {
+    /** Nothing is open: the player is shopping. */
+    NONE,
+
+    /** The player asked to pay and is being shown what for; see [PurchaseConfirmBlock]. */
+    PURCHASE_CONFIRM,
+
+    /** The cart costs more than the player has; see [NotEnoughMoneyBlock]. */
+    NOT_ENOUGH_MONEY
+}
 
 /**
  * Shop screen: the registered items of one category at a time, and the balance they are paid from.
@@ -133,11 +151,14 @@ enum class ShopItemMode { COUNTER, ADDABLE, PURCHASED }
  *   [GameDimens.isShortScreen] — the cards are laid out sideways too, sprite beside the details
  *   rather than above them, so a card's height stops depending on how wide the grid made it.
  * - Bottom: one button per category in a row that scrolls horizontally (so the row can hold any
- *   number of categories) next to the "Купить" button, which shows what the cart costs and stays
- *   disabled while the cart is empty or the player cannot afford it.
+ *   number of categories) next to the "Купить" button, which shows what the cart costs and is
+ *   disabled while — and only while — the cart is empty. A cart the player cannot afford is still
+ *   worth pressing: it is answered with a window saying by how much, not with a dead button.
  * - Over all of it, once "Купить" is pressed: [PurchaseConfirmDialog], where the player sees what
- *   the cart holds and what it costs before the coins are gone. The money is only spent from there,
- *   so a pressed button is never a spent balance.
+ *   the cart holds and what it costs before the coins are gone, or [NotEnoughMoneyDialog] when the
+ *   cart costs more than the balance (see [GameUiState.cartShortfall]). The money is only spent
+ *   from the first of them, so a pressed button is never a spent balance, and the second one spends
+ *   nothing at all: it leaves the cart, the category and the scrolled position exactly as they were.
  *
  * @param state current game state: the balance to show, which category is selected, what is in the
  *   cart with what it costs, and which items the player already owns.
@@ -148,7 +169,10 @@ enum class ShopItemMode { COUNTER, ADDABLE, PURCHASED }
  * @param onPickVariant called with an item id and the id of the variant picked for it.
  * @param onIncrease called with the id of the item to put one more of into the cart.
  * @param onDecrease called with the id of the item to take one of out of the cart.
- * @param onBuy called when the player confirms the purchase and pays for the cart.
+ * @param onBuy called when the player confirms the purchase and pays for the cart; returns whether
+ *   the purchase actually went through. False means the cart stopped being payable between opening
+ *   the confirmation and confirming it, which is answered with [NotEnoughMoneyDialog] instead of a
+ *   silently ignored press.
  * @param onClose called when the close button is pressed.
  * @param modifier modifier applied to the screen root.
  * @param categories categories the shop is split into; every [ItemCategory] by default, so a
@@ -163,14 +187,15 @@ fun ShopScreen(
     onPickVariant: (String, String) -> Unit,
     onIncrease: (String) -> Unit,
     onDecrease: (String) -> Unit,
-    onBuy: () -> Unit,
+    onBuy: () -> Boolean,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     categories: List<ItemCategory> = ItemCategory.entries
 ) {
-    // Whether the player asked to pay and is being shown what for. Presentation-only: a cart that is
-    // still unconfirmed is no different from any other cart to the rest of the game.
-    var confirming by remember { mutableStateOf(false) }
+    // Which window the player opened over the shop, if any. Presentation-only: a cart that is still
+    // unconfirmed is no different from any other cart to the rest of the game, and a cart the player
+    // was told they cannot afford is not changed by being told.
+    var window by remember { mutableStateOf(ShopWindow.NONE) }
     // Cards of one screen are cut to the same pattern, so they end up the same height: room for a
     // variant picker is kept on every card of a category where any item has variants at all.
     val reserveVariantRow = items.any { item -> item.hasSeveralVariants }
@@ -275,24 +300,48 @@ fun ShopScreen(
             Spacer(modifier = Modifier.width(12.dp))
             PillButton(
                 text = if (state.cartPrice > 0) "Купить · ${state.cartPrice}" else "Купить",
-                onClick = { confirming = true },
-                enabled = state.canBuyCart
+                // Pressing this opens a window and nothing else: which of the two it is, is the
+                // cart's own answer (see [GameUiState.canBuyCart]). Pressing it twice in a row asks
+                // for the same window twice, which is one window.
+                onClick = {
+                    window = if (state.canBuyCart) {
+                        ShopWindow.PURCHASE_CONFIRM
+                    } else {
+                        ShopWindow.NOT_ENOUGH_MONEY
+                    }
+                },
+                enabled = state.hasCart
             )
         }
     }
 
-    // The window goes away by itself if the cart stops being payable while it is open — there would
-    // be nothing left to confirm.
-    if (confirming && state.canBuyCart) {
-        PurchaseConfirmDialog(
+    // A window whose reason is gone closes itself rather than standing there saying nothing: an
+    // emptied cart leaves nothing to confirm, and a cart that became payable leaves nothing to warn
+    // about. The window the player is being shown is therefore read off the cart, not off the press.
+    val shownWindow = when (window) {
+        ShopWindow.NONE -> ShopWindow.NONE
+        ShopWindow.PURCHASE_CONFIRM -> window.takeIf { state.hasCart } ?: ShopWindow.NONE
+        ShopWindow.NOT_ENOUGH_MONEY -> window.takeIf { state.cartShortfall > 0 } ?: ShopWindow.NONE
+    }
+
+    when (shownWindow) {
+        ShopWindow.NONE -> Unit
+
+        ShopWindow.PURCHASE_CONFIRM -> PurchaseConfirmDialog(
             lines = cartLines,
             total = state.cartPrice,
             balance = state.balance,
+            // The purchase is the view model's to allow: a balance that fell between this window
+            // opening and this press buys nothing and is answered by the other window instead.
             onConfirm = {
-                confirming = false
-                onBuy()
+                window = if (onBuy()) ShopWindow.NONE else ShopWindow.NOT_ENOUGH_MONEY
             },
-            onDismiss = { confirming = false }
+            onDismiss = { window = ShopWindow.NONE }
+        )
+
+        ShopWindow.NOT_ENOUGH_MONEY -> NotEnoughMoneyDialog(
+            shortfall = state.cartShortfall,
+            onDismiss = { window = ShopWindow.NONE }
         )
     }
 }
@@ -319,8 +368,55 @@ private fun PurchaseConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    // The window is sized by what is in it, not by the platform's dialog width, so the card keeps
-    // the proportions of the rest of the game's windows.
+    ShopDialog(onDismiss = onDismiss) {
+        PurchaseConfirmBlock(
+            lines = lines,
+            total = total,
+            balance = balance,
+            onConfirm = onConfirm,
+            onDismiss = onDismiss
+        )
+    }
+}
+
+/**
+ * Window telling the player that the cart costs more than they have: by how much, and what to do
+ * about it. Nothing is paid, nothing is taken out of the cart and the shop is still there behind it
+ * — the player comes back to the same category, the same scrolled position and the same cart.
+ *
+ * Which items to put back is left to the player: the window says how much has to go, not what.
+ *
+ * The cross in the corner, the button in the middle, a tap outside the window and the system back
+ * gesture all close it, and all four do exactly the same nothing to the cart.
+ *
+ * @param shortfall how many coins the cart costs over the balance; see [GameUiState.cartShortfall].
+ * @param onDismiss called when the window should be closed.
+ */
+@Composable
+private fun NotEnoughMoneyDialog(
+    shortfall: Int,
+    onDismiss: () -> Unit
+) {
+    ShopDialog(onDismiss = onDismiss) {
+        NotEnoughMoneyBlock(shortfall = shortfall, onDismiss = onDismiss)
+    }
+}
+
+/**
+ * The frame both of the shop's windows are hung in: a window sized by what is in it rather than by
+ * the platform's dialog width, so the card keeps the proportions of the rest of the game's windows,
+ * and centred in the screen with a margin of its own.
+ *
+ * A tap outside it and the system back gesture close it, which is [onDismiss]'s job either way.
+ *
+ * @param onDismiss called when the window should be closed without anything happening.
+ * @param content the block the window shows; see [ShopDialogBlock].
+ */
+@Composable
+private fun ShopDialog(
+    onDismiss: () -> Unit,
+    content: @Composable () -> Unit
+) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -331,23 +427,78 @@ private fun PurchaseConfirmDialog(
                 .padding(horizontal = 16.dp),
             contentAlignment = Alignment.Center
         ) {
-            PurchaseConfirmBlock(
-                lines = lines,
-                total = total,
-                balance = balance,
-                onConfirm = onConfirm,
-                onDismiss = onDismiss
-            )
+            content()
         }
+    }
+}
+
+/**
+ * The card both of the shop's windows are built out of, so the two look like one game and not like
+ * two: the same rounded surface, the same title over the same column of content, and the cross that
+ * closes it.
+ *
+ * The cross sits on the top-right corner and hangs half-way over the edge of the card, the way the
+ * inventory's item window wears it.
+ *
+ * The title wraps onto a second line rather than being cut short: a window's title is written to be
+ * read whole, and the font scale it is read at is the player's to choose.
+ *
+ * @param title what the window is about, in one short line.
+ * @param closeDescription what the cross does, announced to screen readers.
+ * @param onDismiss called when the cross is pressed.
+ * @param modifier modifier applied to the block root.
+ * @param content what the window says under its title, laid out in the card's column: evenly spaced
+ *   and centred, ending with the button that acts on it.
+ */
+@Composable
+private fun ShopDialogBlock(
+    title: String,
+    closeDescription: String,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    // Half of the cross hangs outside the card, so the card keeps that much room around itself.
+    val overhang = GameDimens.buttonSize(DialogCloseButtonSize) / 2
+
+    Box(modifier = modifier) {
+        Surface(
+            modifier = Modifier
+                .padding(top = overhang, end = overhang)
+                .widthIn(max = DialogMaxWidth),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, GameColors.cardStroke),
+            shadowElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                )
+                content()
+            }
+        }
+
+        SpriteButton(
+            assetPath = Sprites.CLOSE,
+            contentDescription = closeDescription,
+            onClick = onDismiss,
+            size = DialogCloseButtonSize,
+            modifier = Modifier.align(Alignment.TopEnd)
+        )
     }
 }
 
 /**
  * The block the purchase window is made of: what the cart holds, what it costs, what the player is
  * left with, the button that pays for it and the cross that closes it.
- *
- * The cross sits on the top-right corner and hangs half-way over the edge of the card, the way the
- * inventory's item window wears it.
  *
  * @param lines what the cart holds.
  * @param total what the whole cart costs.
@@ -365,68 +516,79 @@ private fun PurchaseConfirmBlock(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Half of the cross hangs outside the card, so the card keeps that much room around itself.
-    val overhang = GameDimens.buttonSize(ConfirmCloseButtonSize) / 2
-
-    Box(modifier = modifier) {
-        Surface(
+    ShopDialogBlock(
+        title = "Покупка",
+        closeDescription = "Отменить покупку",
+        onDismiss = onDismiss,
+        modifier = modifier
+    ) {
+        Column(
             modifier = Modifier
-                .padding(top = overhang, end = overhang)
-                .widthIn(max = ConfirmMaxWidth),
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, GameColors.cardStroke),
-            shadowElevation = 6.dp
+                .fillMaxWidth()
+                .heightIn(max = ConfirmLinesMaxHeight)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Покупка",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = ConfirmLinesMaxHeight)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    lines.forEach { line -> CartLineRow(line = line) }
-                }
-
-                HorizontalDivider(color = GameColors.cardStroke)
-
-                PriceRow(
-                    label = "Итого",
-                    price = total,
-                    labelStyle = MaterialTheme.typography.titleMedium,
-                    labelColor = MaterialTheme.colorScheme.onSurface
-                )
-                PriceRow(
-                    label = "Останется",
-                    price = balance - total,
-                    labelStyle = MaterialTheme.typography.bodyMedium,
-                    labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                PillButton(text = "Купить", onClick = onConfirm)
-            }
+            lines.forEach { line -> CartLineRow(line = line) }
         }
 
-        SpriteButton(
-            assetPath = Sprites.CLOSE,
-            contentDescription = "Отменить покупку",
-            onClick = onDismiss,
-            size = ConfirmCloseButtonSize,
-            modifier = Modifier.align(Alignment.TopEnd)
+        HorizontalDivider(color = GameColors.cardStroke)
+
+        PriceRow(
+            label = "Итого",
+            price = total,
+            labelStyle = MaterialTheme.typography.titleMedium,
+            labelColor = MaterialTheme.colorScheme.onSurface
         )
+        PriceRow(
+            label = "Останется",
+            price = balance - total,
+            labelStyle = MaterialTheme.typography.bodyMedium,
+            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        PillButton(text = "Купить", onClick = onConfirm)
+    }
+}
+
+/**
+ * The block the "not enough money" window is made of: by how many coins the cart overshoots the
+ * balance, what the player can do about it, and the button that takes the window away again.
+ *
+ * The sum is shown the way every other sum in the shop is — the coin sprite and the number — so the
+ * missing coins read as the same coins the prices are written in.
+ *
+ * @param shortfall how many coins the cart costs over the balance.
+ * @param onDismiss called when the window should be closed, by the cross or by the button.
+ * @param modifier modifier applied to the block root.
+ */
+@Composable
+private fun NotEnoughMoneyBlock(
+    shortfall: Int,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    ShopDialogBlock(
+        title = "Не хватает монет",
+        closeDescription = "Закрыть окно",
+        onDismiss = onDismiss,
+        modifier = modifier
+    ) {
+        PriceRow(
+            label = "Ещё нужно",
+            price = shortfall,
+            labelStyle = MaterialTheme.typography.titleMedium,
+            labelColor = MaterialTheme.colorScheme.onSurface
+        )
+
+        Text(
+            text = "Покупка не прошла. Уберите часть товаров из корзины.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+
+        PillButton(text = "ОК", onClick = onDismiss)
     }
 }
 
@@ -473,7 +635,7 @@ private fun CartLineRow(
 }
 
 /**
- * A named sum in [PurchaseConfirmDialog]: the label on the left, the coins on the right.
+ * A named sum in one of the shop's windows: the label on the left, the coins on the right.
  *
  * @param label what the sum is.
  * @param price the sum itself, in coins.
@@ -524,7 +686,7 @@ private fun CoinAmount(
         Sprite(
             assetPath = Sprites.COIN,
             contentDescription = null,
-            modifier = Modifier.size(ConfirmCoinSize)
+            modifier = Modifier.size(DialogCoinSize)
         )
         Text(
             text = amount.toString(),
@@ -997,7 +1159,7 @@ private fun ShopScreenLightPreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
-                onBuy = {},
+                onBuy = { true },
                 onClose = {}
             )
         }
@@ -1026,7 +1188,7 @@ private fun ShopScreenLandscapePreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
-                onBuy = {},
+                onBuy = { true },
                 onClose = {}
             )
         }
@@ -1054,7 +1216,7 @@ private fun ShopScreenNarrowPreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
-                onBuy = {},
+                onBuy = { true },
                 onClose = {}
             )
         }
@@ -1089,7 +1251,7 @@ private fun ShopScreenMediumFontScalePreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
-                onBuy = {},
+                onBuy = { true },
                 onClose = {}
             )
         }
@@ -1123,7 +1285,7 @@ private fun ShopScreenNarrowLargeFontScalePreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
-                onBuy = {},
+                onBuy = { true },
                 onClose = {}
             )
         }
@@ -1150,7 +1312,7 @@ private fun ShopScreenDarkPreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
-                onBuy = {},
+                onBuy = { true },
                 onClose = {}
             )
         }
@@ -1168,6 +1330,53 @@ private fun PurchaseConfirmDialogPreview() {
                 total = PreviewCartLines.sumOf { line -> line.price },
                 balance = 300,
                 onConfirm = {},
+                onDismiss = {},
+                modifier = Modifier.padding(16.dp)
+            )
+        }
+    }
+}
+
+/**
+ * How many coins the previews of the "not enough money" window are short of: a sum of two digits,
+ * the widest the line ever gets on the shop's own prices.
+ */
+private const val PreviewShortfall = 55
+
+/** Preview of the window that says the cart costs more than the player has. */
+@Preview(name = "Shop — Not enough money", showBackground = true, widthDp = 360, heightDp = 400)
+@Composable
+private fun NotEnoughMoneyDialogPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            NotEnoughMoneyBlock(
+                shortfall = PreviewShortfall,
+                onDismiss = {},
+                modifier = Modifier.padding(16.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Preview of the "not enough money" window at the narrowest width the game's previews go down to,
+ * with the system font scaled up: the case its title, its sum and the sentence under them have to
+ * survive without a word being cut short — the text wraps, the button's label shrinks (see
+ * [com.legacy.fingame.ui.components.PillButtonMinLabelSize]).
+ */
+@Preview(
+    name = "Shop — Not enough money, 320dp, fontScale 1.3",
+    showBackground = true,
+    widthDp = 320,
+    heightDp = 400,
+    fontScale = 1.3f
+)
+@Composable
+private fun NotEnoughMoneyDialogNarrowPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            NotEnoughMoneyBlock(
+                shortfall = PreviewShortfall,
                 onDismiss = {},
                 modifier = Modifier.padding(16.dp)
             )

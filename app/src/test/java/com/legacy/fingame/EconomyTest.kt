@@ -4,6 +4,7 @@ import com.legacy.fingame.game.PlayerState
 import com.legacy.fingame.game.Screen
 import com.legacy.fingame.game.economy.Economy
 import com.legacy.fingame.game.items.Cart
+import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.items.ItemSelection
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -89,6 +90,106 @@ class EconomyTest {
         assertFalse(vm.state.value.canBuyCart)
         assertFalse(vm.buyCart())
         assertEquals(Economy.STARTING_BALANCE, vm.state.value.balance)
+    }
+
+    @Test
+    fun `an empty cart is not a cart the player is short of money for`() {
+        // Nothing picked is nothing to be short of: the shop's "Купить" button is simply not there
+        // to be pressed, rather than there to be answered with a window about money.
+        val vm = testGameViewModel()
+
+        val state = vm.state.value
+        assertFalse(state.hasCart)
+        assertTrue(state.canAffordCart)
+        assertEquals(0, state.cartShortfall)
+        assertFalse(state.canBuyCart)
+    }
+
+    @Test
+    fun `a cart costing exactly the balance is short of nothing and is paid for`() {
+        val store = FakePlayerStateStore(PlayerState(balance = TestItems.HAT.price))
+        val vm = testGameViewModel(store)
+
+        vm.increaseQty(TestItems.HAT.id)
+
+        val state = vm.state.value
+        assertTrue(state.hasCart)
+        assertTrue(state.canAffordCart)
+        assertEquals(0, state.cartShortfall)
+        assertTrue(state.canBuyCart)
+
+        assertTrue(vm.buyCart())
+        assertEquals(0, vm.state.value.balance)
+    }
+
+    @Test
+    fun `a cart one coin over the balance says it is one coin over`() {
+        val store = FakePlayerStateStore(PlayerState(balance = TestItems.HAT.price - 1))
+        val vm = testGameViewModel(store)
+
+        vm.increaseQty(TestItems.HAT.id)
+
+        val state = vm.state.value
+        assertTrue(state.hasCart)
+        assertFalse(state.canAffordCart)
+        assertEquals(1, state.cartShortfall)
+        assertFalse(state.canBuyCart)
+    }
+
+    @Test
+    fun `being told about the shortfall leaves the money, the cart and the items alone`() {
+        val balance = TestItems.APPLE.price
+        val store = FakePlayerStateStore(PlayerState(balance = balance))
+        val vm = testGameViewModel(store)
+
+        vm.openScreen(Screen.SHOP)
+        vm.selectCategory(ItemCategory.TOYS)
+        vm.increaseQty(TestItems.APPLE.id)
+        vm.increaseQty(TestItems.APPLE.id)
+
+        // What the shop does when the player presses "Купить" without the coins for it: it asks the
+        // state how much is missing and shows that, and the purchase itself is never attempted.
+        assertEquals(TestItems.APPLE.price, vm.state.value.cartShortfall)
+        assertFalse(vm.buyCart())
+
+        val state = vm.state.value
+        assertEquals(balance, state.balance)
+        assertEquals(balance, store.state.balance)
+        assertEquals(2, state.quantities[TestItems.APPLE.id])
+        assertEquals(emptyMap<ItemSelection, Int>(), state.owned)
+        // The player is left where they were shopping: same screen, same section.
+        assertEquals(Screen.SHOP, state.screen)
+        assertEquals(ItemCategory.TOYS, state.selectedCategory)
+    }
+
+    @Test
+    fun `the shortfall follows what is in the cart`() {
+        val store = FakePlayerStateStore(PlayerState(balance = TestItems.APPLE.price))
+        val vm = testGameViewModel(store)
+
+        vm.increaseQty(TestItems.APPLE.id)
+        assertEquals(0, vm.state.value.cartShortfall)
+
+        vm.increaseQty(TestItems.APPLE.id)
+        assertEquals(TestItems.APPLE.price, vm.state.value.cartShortfall)
+
+        vm.decreaseQty(TestItems.APPLE.id)
+        assertEquals(0, vm.state.value.cartShortfall)
+    }
+
+    @Test
+    fun `confirming the same purchase twice pays for it once`() {
+        // Two taps on the confirmation window's button, or on "Купить" before it, reach the view
+        // model twice; the cart is emptied by the first of them, so the second buys nothing.
+        val vm = testGameViewModel()
+
+        vm.increaseQty(TestItems.HAT.id)
+        assertTrue(vm.buyCart())
+        assertFalse(vm.buyCart())
+
+        val state = vm.state.value
+        assertEquals(Economy.STARTING_BALANCE - TestItems.HAT.price, state.balance)
+        assertEquals(1, state.owned[ItemSelection(TestItems.HAT.id, "black")])
     }
 
     @Test
