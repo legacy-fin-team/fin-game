@@ -34,15 +34,16 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.game.stats.StatKind
@@ -275,11 +276,11 @@ private val PillHorizontalPadding = 24.dp
 private val PillVerticalPadding = 12.dp
 
 /**
- * Smallest a pill's label is ever allowed to shrink to (see [PillButton]'s `autoSize`) before the
- * pixel font would stop being legible. Also used for the "Куплено" label in the shop, which is
- * built the same way as a pill but is not clickable, so it is not [PillButton] itself.
+ * Horizontal padding a [PillButton] uses instead of [PillHorizontalPadding] when its `compact`
+ * parameter is `true` — a button stretched to fill a shop card's width needs as much of that width
+ * as possible handed to the label, not spent on padding around it.
  */
-val PillButtonMinFontSize = 10.sp
+private val PillCompactHorizontalPadding = 6.dp
 
 /**
  * Name of a pet stat as the player reads it.
@@ -390,35 +391,62 @@ fun StatValueChip(
  *
  * @param text label displayed inside the pill.
  * @param onClick called when the button is tapped; not invoked while [enabled] is `false`.
- * @param modifier modifier applied to the outer [Surface].
+ * @param modifier modifier applied to the outer [Surface]; a button given `Modifier.fillMaxWidth()`
+ *   stretches into all the width it is handed instead of wrapping its label, which the label then
+ *   has all of to grow or shrink into (see `compact` below and [PillButtonMinLabelSize]).
  * @param enabled whether the button responds to taps; when `false`, the button is rendered with
  *   the disabled container/content colors and taps are ignored.
+ * @param compact whether the pill (a) uses [PillCompactHorizontalPadding] instead of the normal,
+ *   wider [PillHorizontalPadding] and (b) actually stretches into a [modifier] with
+ *   `Modifier.fillMaxWidth()` in it rather than staying wrap-content-sized regardless (`Compose`'s
+ *   `Modifier.wrapContentSize()`, which the button otherwise carries so *other* callers' `modifier`
+ *   cannot stretch it by accident, does exactly that — it would let a wider space through to the
+ *   surrounding layout for alignment purposes while leaving the pill itself, and so the label inside
+ *   it, no wider than the label needs). Meant for a button meant to fill a narrow space — a shop
+ *   card, say — so the label gets the padding out of its way and the width to shrink into before
+ *   `autoSize` ever needs its floor; everywhere else the button keeps wrapping its own label.
  *
- * The label is always kept to a single line ([Text]'s `maxLines = 1`, `softWrap = false`): a card
+ * The label is always kept to a single line ([Text]'s `maxLines = 1`, `softWrap = false`): a button
  * narrow enough that the label does not fit at its normal size shrinks the label's font instead of
- * breaking a word across two lines (down to [PillButtonMinFontSize], the floor it stays legible
- * above), via `autoSize`. At a width wide enough for the label, this changes nothing — `autoSize`
- * picks the same size the label's [MaterialTheme.typography] style already asks for.
+ * breaking a word across two lines, via `autoSize`, down to [PillButtonMinLabelSize] — a size that
+ * does not grow with the system font scale, so the label can always shrink enough to fit rather than
+ * running out of room and being cropped instead (see [pillButtonAutoSizeRange]). At a width wide
+ * enough for the label, this changes nothing — `autoSize` picks the same size the label's
+ * [MaterialTheme.typography] style already asks for.
  */
 @Composable
 fun PillButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    compact: Boolean = false
 ) {
     val containerColor = if (enabled) MaterialTheme.colorScheme.primary else GameColors.disabledContainer
     val contentColor = if (enabled) MaterialTheme.colorScheme.onPrimary else GameColors.disabledContent
     val interactionSource = remember { MutableInteractionSource() }
+    val density = LocalDensity.current
     val textStyle = if (GameDimens.isTabletScreen) {
         MaterialTheme.typography.titleMedium
     } else {
         MaterialTheme.typography.labelLarge
     }
+    val horizontalPadding = if (compact) PillCompactHorizontalPadding else PillHorizontalPadding
+    val (minFontSize, maxFontSize) = pillButtonAutoSizeRange(
+        minLabelSize = PillButtonMinLabelSize,
+        styleFontSize = textStyle.fontSize,
+        density = density
+    )
+    // wrapContentSize() relaxes the *minimum* width/height a caller's modifier might otherwise force
+    // on the pill down to zero, so the pill stays only as big as its label needs even if it is placed
+    // somewhere that hands it a bigger minimum than that — which is what keeps every other PillButton
+    // call site wrap-content-sized. A `compact` button wants the opposite of that: it is handed
+    // `Modifier.fillMaxWidth()` on purpose, specifically to be stretched, so it skips this altogether.
+    val sizingModifier = if (compact) Modifier else Modifier.wrapContentSize()
 
     Surface(
         modifier = modifier
-            .wrapContentSize()
+            .then(sizingModifier)
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(bounded = true),
@@ -430,7 +458,7 @@ fun PillButton(
     ) {
         Box(
             modifier = Modifier.padding(
-                horizontal = GameDimens.buttonSize(PillHorizontalPadding),
+                horizontal = GameDimens.buttonSize(horizontalPadding),
                 vertical = GameDimens.buttonSize(PillVerticalPadding)
             ),
             contentAlignment = Alignment.Center
@@ -440,11 +468,12 @@ fun PillButton(
                 style = textStyle,
                 fontWeight = FontWeight.Bold,
                 color = contentColor,
+                textAlign = TextAlign.Center,
                 maxLines = 1,
                 softWrap = false,
                 autoSize = TextAutoSize.StepBased(
-                    minFontSize = PillButtonMinFontSize,
-                    maxFontSize = textStyle.fontSize
+                    minFontSize = minFontSize,
+                    maxFontSize = maxFontSize
                 )
             )
         }

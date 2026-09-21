@@ -23,7 +23,6 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -53,7 +52,6 @@ import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.items.ItemUse
 import com.legacy.fingame.ui.components.BalanceChip
 import com.legacy.fingame.ui.components.PillButton
-import com.legacy.fingame.ui.components.PillButtonMinFontSize
 import com.legacy.fingame.ui.components.Sprite
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
@@ -77,12 +75,17 @@ private val PriceIconSize = 32.dp
  * Smallest width a vertical shop card's cell is allowed to shrink to. Bounded from above by the
  * screen's own 16.dp padding on both sides plus [ShopScreen]'s 12.dp gap between columns: on the
  * narrowest phone the layout still promises two columns to (360.dp wide, see the
- * "Shop — Narrow 320dp" preview), `GridCells.Adaptive` only keeps two columns while
- * `2 * minSize + 12.dp <= 328.dp`
- * (`360.dp` minus the screen's own padding), i.e. up to `158.dp`; this stays a few dp under that so
- * rounding to pixels never tips it over into one. A card this wide still is not always enough room
- * for the widest button label at its normal size — [PurchaseControl]'s own label shrinks to make up
- * the rest, see [com.legacy.fingame.ui.components.PillButton].
+ * "Shop — 360dp, fontScale 1.3" preview), `GridCells.Adaptive` only keeps two columns while
+ * `2 * minSize + 12.dp <= 328.dp` (`360.dp` minus the screen's own padding), i.e. up to `158.dp`;
+ * this stays a few dp under that so rounding to pixels never tips it over into one.
+ *
+ * At exactly that width, a card's own 12.dp padding leaves `134.dp` for [PurchaseControl], which
+ * fills all of it (see [com.legacy.fingame.ui.components.PillButton]'s `Modifier.fillMaxWidth()`)
+ * rather than wrapping its label — `134.dp` minus the compact pill padding it asks for leaves
+ * `122.dp` for the label itself, more than the `112.dp` "Добавить" (the widest label a card's
+ * button ever shows) needs at its normal size and an ordinary font scale. A bigger font scale, or
+ * a screen [ShopScreen] does not promise two columns to, is what the label's own shrink (see
+ * [com.legacy.fingame.ui.components.PillButtonMinLabelSize]) is for.
  */
 private val ItemCellMinSize = 152.dp
 
@@ -649,7 +652,8 @@ private fun ShopItemCard(
                         mode = mode,
                         quantity = quantity,
                         onIncrease = onIncrease,
-                        onDecrease = onDecrease
+                        onDecrease = onDecrease,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
@@ -692,7 +696,8 @@ private fun ShopItemCard(
                     mode = mode,
                     quantity = quantity,
                     onIncrease = onIncrease,
-                    onDecrease = onDecrease
+                    onDecrease = onDecrease,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
@@ -846,7 +851,11 @@ private fun ItemVariantRow(
  * for something already owned. Shared between [ShopItemCard]'s two layouts.
  *
  * Sits in a slot as tall as the counter, its tallest form, so a card with a button ends at the same
- * height as one with a counter.
+ * height as one with a counter. Its caller passes `Modifier.fillMaxWidth()`, so a card's own width is
+ * what [ShopItemMode.ADDABLE] and [ShopItemMode.PURCHASED]'s [PillButton] stretch into instead of
+ * wrapping their own label — see [ItemCellMinSize] for why that is what lets a card's button hold its
+ * label at one line without shrinking on an ordinary phone; [ShopItemMode.COUNTER]'s row of buttons
+ * around the quantity just ends up centered in the same width, same as before.
  *
  * @param mode which control to show.
  * @param quantity how many of the item are in the cart; shown by [ShopItemMode.COUNTER].
@@ -892,29 +901,28 @@ private fun PurchaseControl(
                 )
             }
 
+            // Stretched to the width PurchaseControl's own caller was given (a shop card's full
+            // content width), rather than wrapping the label: that width is what autoSize's label
+            // shrink is measured against, and a card is wide before the label is ever asked to
+            // shrink at all. `compact` trims the padding around the label to match, so the width is
+            // spent on the label rather than the margin around it.
             ShopItemMode.ADDABLE -> PillButton(
                 text = if (quantity > 0) "Убрать" else "Добавить",
-                onClick = { if (quantity > 0) onDecrease() else onIncrease() }
+                onClick = { if (quantity > 0) onDecrease() else onIncrease() },
+                modifier = Modifier.fillMaxWidth(),
+                compact = true
             )
 
-            ShopItemMode.PURCHASED -> Surface(
-                shape = RoundedCornerShape(50),
-                color = GameColors.disabledContainer
-            ) {
-                val labelStyle = MaterialTheme.typography.labelLarge
-                Text(
-                    text = "Куплено",
-                    style = labelStyle,
-                    color = GameColors.disabledContent,
-                    maxLines = 1,
-                    softWrap = false,
-                    autoSize = TextAutoSize.StepBased(
-                        minFontSize = PillButtonMinFontSize,
-                        maxFontSize = labelStyle.fontSize
-                    ),
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
-                )
-            }
+            // A plain, unclickable pill: same shape and colors an "Куплено" label always had, now
+            // built from PillButton itself (disabled) instead of a copy of it, so it gets the same
+            // width and shrink-instead-of-crop treatment as the other two states for free.
+            ShopItemMode.PURCHASED -> PillButton(
+                text = "Куплено",
+                onClick = {},
+                modifier = Modifier.fillMaxWidth(),
+                enabled = false,
+                compact = true
+            )
         }
     }
 }
@@ -1026,9 +1034,9 @@ private fun ShopScreenLandscapePreview() {
 }
 
 /**
- * Preview of [ShopScreen] at 320.dp — near the narrowest a phone in portrait gets — checking that
- * [ItemCellMinSize] still keeps two columns and that a card's "Добавить" button stays one line
- * rather than breaking the word across two.
+ * Preview of [ShopScreen] at 320.dp, the narrowest width the game's own preview widths go down to.
+ * [ItemCellMinSize] is wide enough that this falls back to one column rather than two — checked here
+ * so that fallback itself stays free of a card's "Добавить" button breaking the word across two lines.
  */
 @Preview(name = "Shop — Narrow 320dp", showBackground = true, widthDp = 320, heightDp = 640)
 @Composable
@@ -1054,18 +1062,54 @@ private fun ShopScreenNarrowPreview() {
 }
 
 /**
- * Preview of [ShopScreen] with the system font scaled up to 1.5x — the top of the range the game
- * promises "Добавить" stays a single line for (see [PillButtonMinFontSize]).
+ * Preview of [ShopScreen] at 360.dp with the system font scaled up to 1.3x — two columns, a card
+ * only as wide as [ItemCellMinSize] promises, and a font scale big enough that a card's "Добавить"
+ * button no longer fits at its normal size and has to shrink (see
+ * [com.legacy.fingame.ui.components.PillButtonMinLabelSize]) rather than being cropped.
  */
 @Preview(
-    name = "Shop — Large font scale",
+    name = "Shop — 360dp, fontScale 1.3",
     showBackground = true,
     widthDp = 360,
+    heightDp = 640,
+    fontScale = 1.3f
+)
+@Composable
+private fun ShopScreenMediumFontScalePreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ShopScreen(
+                state = GameUiState(
+                    balance = 300,
+                    selectedCategory = ItemCategory.CLOTHES
+                ),
+                items = PreviewClothes,
+                cartLines = emptyList(),
+                onSelectCategory = {},
+                onPickVariant = { _, _ -> },
+                onIncrease = {},
+                onDecrease = {},
+                onBuy = {},
+                onClose = {}
+            )
+        }
+    }
+}
+
+/**
+ * Preview of [ShopScreen] at 320.dp with the system font scaled up to 1.5x — one column this time
+ * (see [ShopScreenNarrowPreview]), but the top of both the width and the font scale range together,
+ * checked so their combination is no exception to a card's "Добавить" button never being cropped.
+ */
+@Preview(
+    name = "Shop — 320dp, fontScale 1.5",
+    showBackground = true,
+    widthDp = 320,
     heightDp = 640,
     fontScale = 1.5f
 )
 @Composable
-private fun ShopScreenLargeFontScalePreview() {
+private fun ShopScreenNarrowLargeFontScalePreview() {
     FinGameTheme(darkTheme = false) {
         Surface(color = MaterialTheme.colorScheme.background) {
             ShopScreen(
