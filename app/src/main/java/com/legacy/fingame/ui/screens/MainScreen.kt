@@ -1,5 +1,6 @@
 package com.legacy.fingame.ui.screens
 
+import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -38,6 +39,10 @@ import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.SemanticsPropertyReceiver
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -142,6 +147,38 @@ private const val SceneMaxZoom = 2f
 
 /** How round the corners of the game area are. */
 private val SceneCornerRadius = 32.dp
+
+/**
+ * Name of the game area in the semantics tree: what a test takes hold of to drag and pinch the
+ * scene, and whose size tells it how big the window came out.
+ */
+@VisibleForTesting
+internal const val PetStageTag = "PetStage"
+
+/**
+ * How big a pixel of the artwork is drawn in the game area right now, in screen pixels.
+ *
+ * The scene is dragged and pinched in the layout pass and never composed again, which is what keeps
+ * the gestures smooth and leaves a test nothing to read; this says out loud what the layout is
+ * doing. It is a property of nobody's making but ours, so a screen reader passes over it in silence
+ * and the game area is announced by the sprites in it, as it was before.
+ */
+@VisibleForTesting
+internal val SceneScaleKey: SemanticsPropertyKey<Float> = SemanticsPropertyKey("SceneScale")
+private var SemanticsPropertyReceiver.sceneScale by SceneScaleKey
+
+/**
+ * How far the scene is moved to the right inside the window, in screen pixels. Told to a test the
+ * same way, and for the same reason, as [SceneScaleKey].
+ */
+@VisibleForTesting
+internal val SceneOffsetXKey: SemanticsPropertyKey<Float> = SemanticsPropertyKey("SceneOffsetX")
+private var SemanticsPropertyReceiver.sceneOffsetX by SceneOffsetXKey
+
+/** How far the scene is moved down inside the window, in screen pixels. See [SceneOffsetXKey]. */
+@VisibleForTesting
+internal val SceneOffsetYKey: SemanticsPropertyKey<Float> = SemanticsPropertyKey("SceneOffsetY")
+private var SemanticsPropertyReceiver.sceneOffsetY by SceneOffsetYKey
 
 /**
  * Saves how far the player has dragged the scene, so the room stays where it was put over a
@@ -813,7 +850,8 @@ private fun stageTitleOf(petName: String, subLocationTitle: String?): String? = 
  *   area has, e.g. as a share of the screen or as the height left over in a column.
  */
 @Composable
-private fun PetStage(
+@VisibleForTesting
+internal fun PetStage(
     scene: GameScene,
     modifier: Modifier = Modifier
 ) {
@@ -847,7 +885,14 @@ private fun PetStage(
         }
 
         Surface(
-            modifier = Modifier.sceneWindow { viewport().windowSide },
+            modifier = Modifier
+                .sceneWindow { viewport().windowSide }
+                .testTag(PetStageTag)
+                .semantics {
+                    sceneScale = scale
+                    sceneOffsetX = moved.x
+                    sceneOffsetY = moved.y
+                },
             shape = RoundedCornerShape(SceneCornerRadius),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, GameColors.cardStroke),
