@@ -20,6 +20,14 @@ private const val TabletSmallestWidthDp = 600
 private const val TabletButtonScale = 1.3f
 
 /**
+ * Height, in dp, under which a screen counts as a short one. This is the 480dp breakpoint Android
+ * itself splits compact screen heights from the rest at, so the layouts change shape exactly where
+ * the platform says the height has run out — which on a phone is the moment it is turned on its
+ * side.
+ */
+private const val ShortScreenHeightDp = 480
+
+/**
  * Size tokens that depend on the screen the app is running on. The values are written for phones
  * and scaled up from there, so a call site only ever states the compact (phone) size and the
  * token decides what it becomes on a larger screen.
@@ -38,6 +46,22 @@ object GameDimens {
         @Composable
         @ReadOnlyComposable
         get() = LocalConfiguration.current.smallestScreenWidthDp >= TabletSmallestWidthDp
+
+    /**
+     * Whether the app is running on a screen with next to no height to give: a phone held
+     * sideways, a flattened freeform window — anything under [ShortScreenHeightDp].
+     *
+     * Reads the height the screen has right now and not the smallest one it can have, unlike
+     * [isTabletScreen]: this is about the shape the window is in at the moment, so turning the
+     * device does change the answer, which is the whole point of asking.
+     *
+     * A screen like that has width to spare and none to spare vertically, so the screens that
+     * stack their content into a column lay it out in a row instead.
+     */
+    val isShortScreen: Boolean
+        @Composable
+        @ReadOnlyComposable
+        get() = LocalConfiguration.current.screenHeightDp < ShortScreenHeightDp
 
     /**
      * Adapts a button dimension to the current screen.

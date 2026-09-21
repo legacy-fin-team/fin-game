@@ -40,6 +40,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -71,6 +72,22 @@ private val VariantButtonSize = 36.dp
 private val PriceIconSize = 32.dp
 private val ItemCellMinSize = 170.dp
 
+/**
+ * Sizes the shop swaps in on a short screen — a phone held sideways — where a card is laid out
+ * sideways too: the sprite on one side, everything that is said about the item on the other.
+ *
+ * The cell is wider, because a card now has to hold the sprite and the widest of the purchase
+ * controls next to each other; the sprite and the coin are smaller, because the height a card may
+ * take is all the height the screen has.
+ */
+private val ShortScreenItemCellMinSize = 264.dp
+private val ShortScreenCardSpriteSize = 96.dp
+private val ShortScreenStarButtonSize = 28.dp
+private val ShortScreenPriceIconSize = 24.dp
+
+/** Gap between the shelves and the column of controls standing beside them on a short screen. */
+private val ShortScreenRailGap = 12.dp
+
 /** Sizes of the window that asks the player to confirm the purchase. */
 private val ConfirmMaxWidth = 320.dp
 private val ConfirmCloseButtonSize = 44.dp
@@ -93,7 +110,9 @@ enum class ShopItemMode { COUNTER, ADDABLE, PURCHASED }
  * - Top: the player's balance and a close button.
  * - Below that: the title of the current category, then a scrollable grid of item cards
  *   ([ShopItemCard]), one per item of [items]; a category with nothing on its shelves says so
- *   instead of showing an empty grid.
+ *   instead of showing an empty grid. On a short screen — a phone held sideways, see
+ *   [GameDimens.isShortScreen] — the cards are laid out sideways too, sprite beside the details
+ *   rather than above them, so a card's height stops depending on how wide the grid made it.
  * - Bottom: one button per category in a row that scrolls horizontally (so the row can hold any
  *   number of categories) next to the "Купить" button, which shows what the cart costs and stays
  *   disabled while the cart is empty or the player cannot afford it.
@@ -136,6 +155,9 @@ fun ShopScreen(
     // Cards of one screen are cut to the same pattern, so they end up the same height: room for a
     // variant picker is kept on every card of a category where any item has variants at all.
     val reserveVariantRow = items.any { item -> item.hasSeveralVariants }
+    // A phone held sideways has no height to spare for a card that stacks its sprite over its
+    // price and controls; the card is laid out sideways there instead, see [ShopItemCard].
+    val isShortScreen = GameDimens.isShortScreen
 
     Column(
         modifier = modifier
@@ -184,7 +206,9 @@ fun ShopScreen(
                 )
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = ItemCellMinSize),
+                    columns = GridCells.Adaptive(
+                        minSize = if (isShortScreen) ShortScreenItemCellMinSize else ItemCellMinSize
+                    ),
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -197,6 +221,7 @@ fun ShopScreen(
                             quantity = state.quantities[item.id] ?: 0,
                             mode = modeOf(item, state),
                             reserveVariantRow = reserveVariantRow,
+                            horizontalLayout = isShortScreen,
                             onPickVariant = { variantId -> onPickVariant(item.id, variantId) },
                             onIncrease = { onIncrease(item.id) },
                             onDecrease = { onDecrease(item.id) }
@@ -533,12 +558,20 @@ private fun modeOf(item: Item, state: GameUiState): ShopItemMode = when {
  * neighbours have one, see [reserveVariantRow]), and the purchase control sits in a slot as tall as
  * the tallest of them.
  *
+ * On a screen with no height to spare ([horizontalLayout]) the card is laid out sideways instead of
+ * stacked: the sprite on the left, the name, price, variant picker and purchase control in a column
+ * to its right. A vertical card is as tall as the grid is wide, and on a phone held sideways that is
+ * taller than the screen; turned on its side, the card fits into the height the screen has left once
+ * the bottom bar with the cart and the "Купить" button is given its share.
+ *
  * @param item the item to show.
  * @param pickedVariantId variant the item is shown and would be bought in.
  * @param quantity how many of this item are in the cart; shown by [ShopItemMode.COUNTER].
  * @param mode which purchase control to show; see [ShopItemMode].
  * @param reserveVariantRow whether the card keeps room for a variant picker even when its item has
  *   but one variant; true when any item on the same shelf has several of them.
+ * @param horizontalLayout whether to lay the card out sideways, sprite beside the details rather
+ *   than above them; true on a short screen, see [GameDimens.isShortScreen].
  * @param onPickVariant called with the id of the variant the player picked.
  * @param onIncrease called to put one more of this item into the cart.
  * @param onDecrease called to take one of this item out of the cart.
@@ -551,6 +584,7 @@ private fun ShopItemCard(
     quantity: Int,
     mode: ShopItemMode,
     reserveVariantRow: Boolean,
+    horizontalLayout: Boolean,
     onPickVariant: (String) -> Unit,
     onIncrease: () -> Unit,
     onDecrease: () -> Unit,
@@ -566,135 +600,296 @@ private fun ShopItemCard(
         border = BorderStroke(1.dp, GameColors.cardStroke),
         shadowElevation = 2.dp
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-            ) {
-                Sprite(
-                    assetPath = item.iconPath,
-                    contentDescription = item.name,
-                    modifier = Modifier.fillMaxSize()
-                )
-                SpriteButton(
-                    assetPath = if (inGoals) Sprites.STAR_ON else Sprites.STAR_OFF,
-                    contentDescription = if (inGoals) "Убрать из целей" else "Добавить в цели",
-                    onClick = { inGoals = !inGoals },
-                    size = StarButtonSize,
-                    modifier = Modifier.align(Alignment.TopEnd)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = item.name,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
+        if (horizontalLayout) {
             Row(
+                modifier = Modifier.padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                horizontalArrangement = Arrangement.spacedBy(ShortScreenRailGap)
             ) {
-                Sprite(
-                    assetPath = Sprites.COIN,
-                    contentDescription = null,
-                    modifier = Modifier.size(PriceIconSize)
+                ItemSprite(
+                    item = item,
+                    inGoals = inGoals,
+                    onToggleGoals = { inGoals = !inGoals },
+                    starButtonSize = ShortScreenStarButtonSize,
+                    modifier = Modifier.size(ShortScreenCardSpriteSize)
                 )
-                Text(
-                    text = item.price.toString(),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
 
-            if (reserveVariantRow) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Box(
-                    modifier = Modifier.height(spriteButtonHeight(VariantButtonSize)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (item.hasSeveralVariants) {
-                        Row(
-                            modifier = Modifier.horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            item.variantIds.forEach { variantId ->
-                                SpriteButton(
-                                    assetPath = item.iconPath,
-                                    contentDescription = "Вариант «$variantId»",
-                                    onClick = { onPickVariant(variantId) },
-                                    size = VariantButtonSize,
-                                    selected = variantId == pickedVariantId
-                                )
-                            }
-                        }
-                    }
-                }
-            }
+                Column(modifier = Modifier.weight(1f)) {
+                    ItemNameText(name = item.name)
 
-            Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
-            // The counter is the tallest of the three controls, so its height is the one they all
-            // get: a card with a button ends where a card with a counter does.
-            Box(
-                modifier = Modifier.heightIn(min = spriteButtonHeight(CounterButtonSize)),
-                contentAlignment = Alignment.Center
-            ) {
-                when (mode) {
-                    ShopItemMode.COUNTER -> Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        SpriteButton(
-                            assetPath = Sprites.MINUS,
-                            contentDescription = "Уменьшить количество",
-                            onClick = { if (quantity > 0) onDecrease() },
-                            size = CounterButtonSize
-                        )
-                        Text(
-                            text = quantity.toString(),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.width(28.dp)
-                        )
-                        SpriteButton(
-                            assetPath = Sprites.PLUS,
-                            contentDescription = "Увеличить количество",
-                            onClick = onIncrease,
-                            size = CounterButtonSize
-                        )
-                    }
+                    ItemPriceRow(price = item.price, iconSize = ShortScreenPriceIconSize)
 
-                    ShopItemMode.ADDABLE -> PillButton(
-                        text = if (quantity > 0) "Убрать" else "Добавить",
-                        onClick = { if (quantity > 0) onDecrease() else onIncrease() }
+                    ItemVariantRow(
+                        item = item,
+                        pickedVariantId = pickedVariantId,
+                        reserveVariantRow = reserveVariantRow,
+                        onPickVariant = onPickVariant,
+                        contentAlignment = Alignment.CenterStart,
+                        modifier = Modifier.padding(top = 8.dp)
                     )
 
-                    ShopItemMode.PURCHASED -> Surface(
-                        shape = RoundedCornerShape(50),
-                        color = GameColors.disabledContainer
-                    ) {
-                        Text(
-                            text = "Куплено",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = GameColors.disabledContent,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    PurchaseControl(
+                        mode = mode,
+                        quantity = quantity,
+                        onIncrease = onIncrease,
+                        onDecrease = onDecrease
+                    )
                 }
+            }
+        } else {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                ItemSprite(
+                    item = item,
+                    inGoals = inGoals,
+                    onToggleGoals = { inGoals = !inGoals },
+                    starButtonSize = StarButtonSize,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                ItemNameText(name = item.name)
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                ItemPriceRow(price = item.price, iconSize = PriceIconSize)
+
+                ItemVariantRow(
+                    item = item,
+                    pickedVariantId = pickedVariantId,
+                    reserveVariantRow = reserveVariantRow,
+                    onPickVariant = onPickVariant,
+                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                PurchaseControl(
+                    mode = mode,
+                    quantity = quantity,
+                    onIncrease = onIncrease,
+                    onDecrease = onDecrease
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Name of an item as [ShopItemCard] shows it, cut to one line: shared between the portrait and the
+ * [ShopItemCard]'s short-screen layout, which differ only in what sits around this text.
+ *
+ * @param name the item's name.
+ * @param modifier modifier applied to the text.
+ */
+@Composable
+private fun ItemNameText(
+    name: String,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = name,
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurface,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier
+    )
+}
+
+/**
+ * Sprite of the picked variant, with the "add to goals" star toggle sitting over its top-right
+ * corner. Shared between [ShopItemCard]'s two layouts, which only differ in the size the sprite box
+ * and the star button are given.
+ *
+ * @param item the item the sprite belongs to.
+ * @param inGoals whether the star is currently toggled on.
+ * @param onToggleGoals called when the star is pressed.
+ * @param starButtonSize size of the star toggle.
+ * @param modifier modifier applied to the sprite box; this is where the caller sizes it.
+ */
+@Composable
+private fun ItemSprite(
+    item: Item,
+    inGoals: Boolean,
+    onToggleGoals: () -> Unit,
+    starButtonSize: Dp,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier) {
+        Sprite(
+            assetPath = item.iconPath,
+            contentDescription = item.name,
+            modifier = Modifier.fillMaxSize()
+        )
+        SpriteButton(
+            assetPath = if (inGoals) Sprites.STAR_ON else Sprites.STAR_OFF,
+            contentDescription = if (inGoals) "Убрать из целей" else "Добавить в цели",
+            onClick = onToggleGoals,
+            size = starButtonSize,
+            modifier = Modifier.align(Alignment.TopEnd)
+        )
+    }
+}
+
+/**
+ * An item's price: the coin sprite and the number of coins. Shared between [ShopItemCard]'s two
+ * layouts, which only differ in how big the coin sprite is drawn.
+ *
+ * @param price the item's price, in coins.
+ * @param iconSize size of the coin sprite.
+ * @param modifier modifier applied to the row.
+ */
+@Composable
+private fun ItemPriceRow(
+    price: Int,
+    iconSize: Dp,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Sprite(
+            assetPath = Sprites.COIN,
+            contentDescription = null,
+            modifier = Modifier.size(iconSize)
+        )
+        Text(
+            text = price.toString(),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * Variant picker of an item's card, reserving its row's height even for an item with a single
+ * variant so the cards of one shelf ([reserveVariantRow]) end at the same height; renders nothing
+ * at all when the shelf keeps no room for it, so no gap is left for it either.
+ *
+ * @param item the item the variants belong to.
+ * @param pickedVariantId variant currently picked, highlighted in the row.
+ * @param reserveVariantRow whether the shelf this card sits on keeps room for this row at all.
+ * @param onPickVariant called with the id of the variant the player picked.
+ * @param contentAlignment where the row of variant buttons sits within the reserved height; centered
+ *   under a vertical card, left-aligned next to the sprite of a horizontal one.
+ * @param modifier modifier applied to the row's box.
+ */
+@Composable
+private fun ItemVariantRow(
+    item: Item,
+    pickedVariantId: String,
+    reserveVariantRow: Boolean,
+    onPickVariant: (String) -> Unit,
+    contentAlignment: Alignment,
+    modifier: Modifier = Modifier
+) {
+    if (!reserveVariantRow) return
+
+    Box(
+        modifier = modifier.height(spriteButtonHeight(VariantButtonSize)),
+        contentAlignment = contentAlignment
+    ) {
+        if (item.hasSeveralVariants) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                item.variantIds.forEach { variantId ->
+                    SpriteButton(
+                        assetPath = item.iconPath,
+                        contentDescription = "Вариант «$variantId»",
+                        onClick = { onPickVariant(variantId) },
+                        size = VariantButtonSize,
+                        selected = variantId == pickedVariantId
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The control an item's card offers to buy it with, picked by [mode]: a +/- counter for something
+ * bought again and again, an "Добавить"/"Убрать" toggle for a one-off, or a plain "Куплено" label
+ * for something already owned. Shared between [ShopItemCard]'s two layouts.
+ *
+ * Sits in a slot as tall as the counter, its tallest form, so a card with a button ends at the same
+ * height as one with a counter.
+ *
+ * @param mode which control to show.
+ * @param quantity how many of the item are in the cart; shown by [ShopItemMode.COUNTER].
+ * @param onIncrease called to put one more of the item into the cart.
+ * @param onDecrease called to take one of the item out of the cart.
+ * @param modifier modifier applied to the control's box.
+ */
+@Composable
+private fun PurchaseControl(
+    mode: ShopItemMode,
+    quantity: Int,
+    onIncrease: () -> Unit,
+    onDecrease: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.heightIn(min = spriteButtonHeight(CounterButtonSize)),
+        contentAlignment = Alignment.Center
+    ) {
+        when (mode) {
+            ShopItemMode.COUNTER -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SpriteButton(
+                    assetPath = Sprites.MINUS,
+                    contentDescription = "Уменьшить количество",
+                    onClick = { if (quantity > 0) onDecrease() },
+                    size = CounterButtonSize
+                )
+                Text(
+                    text = quantity.toString(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.width(28.dp)
+                )
+                SpriteButton(
+                    assetPath = Sprites.PLUS,
+                    contentDescription = "Увеличить количество",
+                    onClick = onIncrease,
+                    size = CounterButtonSize
+                )
+            }
+
+            ShopItemMode.ADDABLE -> PillButton(
+                text = if (quantity > 0) "Убрать" else "Добавить",
+                onClick = { if (quantity > 0) onDecrease() else onIncrease() }
+            )
+
+            ShopItemMode.PURCHASED -> Surface(
+                shape = RoundedCornerShape(50),
+                color = GameColors.disabledContainer
+            ) {
+                Text(
+                    text = "Куплено",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = GameColors.disabledContent,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                )
             }
         }
     }
@@ -766,6 +961,35 @@ private fun ShopScreenLightPreview() {
                 ),
                 items = PreviewItems,
                 cartLines = listOf(PreviewCartLines.first()),
+                onSelectCategory = {},
+                onPickVariant = { _, _ -> },
+                onIncrease = {},
+                onDecrease = {},
+                onBuy = {},
+                onClose = {}
+            )
+        }
+    }
+}
+
+/**
+ * Preview of [ShopScreen] in the light theme, landscape orientation: the case the cards have to
+ * survive without a card's height running past the screen and under the bottom bar.
+ */
+@Preview(name = "Shop — Landscape", showBackground = true, widthDp = 891, heightDp = 411)
+@Composable
+private fun ShopScreenLandscapePreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ShopScreen(
+                state = GameUiState(
+                    balance = 300,
+                    selectedCategory = ItemCategory.CLOTHES,
+                    quantities = mapOf("fish" to 1),
+                    cartPrice = 25
+                ),
+                items = PreviewClothes,
+                cartLines = listOf(PreviewCartLines.last()),
                 onSelectCategory = {},
                 onPickVariant = { _, _ -> },
                 onIncrease = {},

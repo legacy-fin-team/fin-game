@@ -13,8 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
@@ -51,6 +52,7 @@ import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.components.StatChip
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
+import com.legacy.fingame.ui.theme.GameDimens
 import com.legacy.fingame.utils.SpriteLoader
 
 private val ScreenPadding = 16.dp
@@ -75,6 +77,21 @@ private const val PetAreaWidthFraction = 0.74f
  */
 private const val PetAreaHeightFraction = 0.52f
 
+/**
+ * Fraction of the available height the pet area may occupy on a short screen — a phone turned on
+ * its side. Smaller than [PetAreaHeightFraction] so the badge above the pet, which may need a
+ * second line there to say the name in full, and the daily bonus button under it still fit between
+ * the pet and the edges of the screen.
+ */
+private const val ShortScreenPetAreaHeightFraction = 0.42f
+
+/**
+ * Width each of the two corner columns — the stats with the goal card on one side, the buttons on
+ * the other — is assumed to take. The badge above the pet is kept out of that much room on either
+ * side, so a badge wider than the pet card still cannot run under what is in the corners.
+ */
+private val CornerColumnWidth = GoalCardWidth
+
 // TODO: DemoGoalProgress is a hardcoded placeholder for the goal card progress bar. Replace with the real progress value once goal data is exposed from app logic.
 private const val DemoGoalProgress = 0.4f
 
@@ -86,6 +103,13 @@ private val SecondaryStats: List<StatKind> = StatKind.entries.filter { it != Sta
 
 /** Separator between the pet's name and the sub-location it is in, in the badge above the pet. */
 private const val StageTitleSeparator = " · "
+
+/**
+ * How many lines the badge above the pet may take. The separator of [stageTitleOf] carries spaces
+ * on both sides, so a badge too narrow for the whole title breaks it between the pet's name and the
+ * sub-location instead of cutting the name of the place off.
+ */
+private const val StageBadgeMaxLines = 2
 
 /**
  * Game area the previews and the default of [MainScreen] show: the demo content pet standing in the
@@ -111,8 +135,11 @@ private val DemoScene: GameScene = GameScene.of(
  * - Center: [PetStage] with the pet sprite and the badge naming the pet and the sub-location above
  *   it, and the daily bonus button right under the pet while the bonus is unclaimed. The pet area
  *   is sized from both the available width and height ([PetAreaWidthFraction],
- *   [PetAreaHeightFraction]) so it cannot grow past the screen in landscape and cover the
- *   corner buttons.
+ *   [PetAreaHeightFraction], and [ShortScreenPetAreaHeightFraction] on a screen held sideways) so
+ *   it cannot grow past the screen in landscape and cover the corner buttons. The badge is not
+ *   held to the width of the card: it may spread over the whole middle of the screen, between the
+ *   corner columns ([CornerColumnWidth]), so the name of the place is readable on a screen where
+ *   the card itself has to be small.
  * - Top-start: the balance chip with the pet's health next to it, the rest of the stats
  *   ([SecondaryStats]) in a row under them, and the goal progress card. Every stat is a
  *   [StatChip] — an icon and a percentage — so the stats take a corner instead of half the screen.
@@ -162,10 +189,18 @@ fun MainScreen(
             .systemBarsPadding()
             .padding(ScreenPadding)
     ) {
+        val heightFraction = if (GameDimens.isShortScreen) {
+            ShortScreenPetAreaHeightFraction
+        } else {
+            PetAreaHeightFraction
+        }
         val petAreaSize = minOf(
             maxWidth * PetAreaWidthFraction,
-            maxHeight * PetAreaHeightFraction
+            maxHeight * heightFraction
         )
+        // The pet card is sized by the height on a short screen and ends up narrow; the badge over
+        // it is not, so it takes the whole middle of the screen when it has a long name to say.
+        val stageBadgeMaxWidth = maxOf(petAreaSize, maxWidth - CornerColumnWidth * 2)
 
         Column(
             modifier = Modifier.align(Alignment.Center),
@@ -177,7 +212,8 @@ fun MainScreen(
                     petName = state.petName,
                     subLocationTitle = subLocationTitles.getOrNull(state.subLocationIndex)
                 ),
-                areaSize = petAreaSize
+                areaSize = petAreaSize,
+                badgeMaxWidth = stageBadgeMaxWidth
             )
 
             if (state.dailyBonusAvailable) {
@@ -330,6 +366,9 @@ private fun stageTitleOf(petName: String, subLocationTitle: String?): String? = 
  * @param title text of the badge above the pet, or `null` to hide the badge.
  * @param areaSize side length of the square pet card; the caller computes it from both the
  *   available width and height so the pet cannot grow past the screen in landscape.
+ * @param badgeMaxWidth how wide the badge above the card may grow. It is not tied to [areaSize]:
+ *   a card sized by the height of a screen held sideways is narrow, and a name cut down to that
+ *   width would say nothing, so the badge gets the middle of the screen instead.
  * @param modifier modifier applied to the root column.
  */
 @Composable
@@ -337,6 +376,7 @@ private fun PetStage(
     scene: GameScene,
     title: String?,
     areaSize: Dp,
+    badgeMaxWidth: Dp,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -348,18 +388,19 @@ private fun PetStage(
     }
 
     Column(
-        modifier = modifier.width(areaSize),
+        modifier = modifier,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         if (title != null) {
-            StageBadge(title = title)
+            StageBadge(
+                title = title,
+                modifier = Modifier.widthIn(max = badgeMaxWidth)
+            )
             Spacer(modifier = Modifier.height(12.dp))
         }
 
         Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f),
+            modifier = Modifier.size(areaSize),
             shape = RoundedCornerShape(32.dp),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, GameColors.cardStroke),
@@ -395,8 +436,13 @@ private fun PetStage(
 /**
  * Pill-shaped badge naming the pet and the sub-location it is in, displayed above the pet.
  *
+ * The badge is only as wide as its text, up to whatever the caller allows it; a name that still
+ * does not fit on one line is wrapped onto a second one ([StageBadgeMaxLines]) rather than cut
+ * short, since a sub-location the player cannot read the name of is the same as an unnamed one.
+ *
  * @param title text to display inside the badge, as built by [stageTitleOf].
- * @param modifier modifier applied to the badge surface.
+ * @param modifier modifier applied to the badge surface; this is where the caller limits how wide
+ *   the badge may grow.
  */
 @Composable
 private fun StageBadge(
@@ -414,7 +460,8 @@ private fun StageBadge(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
+            textAlign = TextAlign.Center,
+            maxLines = StageBadgeMaxLines,
             overflow = TextOverflow.Ellipsis
         )
     }
@@ -521,14 +568,21 @@ private fun MainScreenTabletPreview() {
     }
 }
 
-/** Preview of [MainScreen] in the light theme, landscape orientation. */
+/**
+ * Preview of [MainScreen] in the light theme, landscape orientation: the case the badge above the
+ * pet has to survive, with both a name and a sub-location to fit into a screen that has no height.
+ */
 @Preview(name = "MainScreen — Landscape", showBackground = true, widthDp = 891, heightDp = 411)
 @Composable
 private fun MainScreenLandscapePreview() {
     FinGameTheme(darkTheme = false) {
         Surface(color = MaterialTheme.colorScheme.background) {
             MainScreen(
-                state = GameUiState(balance = 250, subLocationIndex = 2),
+                state = GameUiState(
+                    balance = 250,
+                    subLocationIndex = 2,
+                    petName = "Барсик"
+                ),
                 onOpenScreen = {},
                 onPrevSubLocation = {},
                 onNextSubLocation = {},
