@@ -40,6 +40,12 @@ import com.legacy.fingame.game.stats.PetStats
  * @property petBornAtMillis moment the pet was taken in, in milliseconds, or [Growth.NOT_BORN] when
  * there is no pet yet. The pet's age stage is worked out from it (see [Growth.ageAt]) instead of
  * being saved, so the pet grows while the app is closed and the stage can never drift.
+ * @property gameNowMillis moment the game's own clock had reached when this state was saved, in
+ * milliseconds, or [CLOCK_NEVER_SAVED] when no run has saved one yet. The next launch picks its
+ * clock up here instead of starting it over (see
+ * [com.legacy.fingame.game.economy.FastForwardClock.fastForwardTo]), so neither the time a demo
+ * build skipped nor a device clock moved back since can take the pet's age, its bars or its daily
+ * bonus back to where they were before.
  */
 data class PlayerState(
     val selection: AnimalSelection? = null,
@@ -51,7 +57,8 @@ data class PlayerState(
     val worn: Set<ItemSelection> = emptySet(),
     val stats: PetStats = PetStats.FULL,
     val statsUpdatedAtMillis: Long = NEVER_UPDATED,
-    val petBornAtMillis: Long = Growth.NOT_BORN
+    val petBornAtMillis: Long = Growth.NOT_BORN,
+    val gameNowMillis: Long = CLOCK_NEVER_SAVED
 ) {
     companion object {
         /**
@@ -60,5 +67,12 @@ data class PlayerState(
          * lived with yet.
          */
         const val NEVER_UPDATED = Long.MIN_VALUE
+
+        /**
+         * Value of [gameNowMillis] standing for "no run has saved the game's clock yet", i.e. the
+         * very first launch or one following a run from before the clock was kept. There is then
+         * no moment to pick the clock up at, so it simply starts at the device's own.
+         */
+        const val CLOCK_NEVER_SAVED = Long.MIN_VALUE
     }
 }

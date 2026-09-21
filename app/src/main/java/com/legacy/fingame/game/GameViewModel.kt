@@ -293,9 +293,9 @@ class GameViewModel(
      * This is what the demo build's time button does (see
      * [com.legacy.fingame.DemoMode.FAST_FORWARD_MILLIS]) and it is the only thing it does: nothing is
      * written into the pet by hand, the stats fall through the very same [tick] the waiting player's
-     * pet falls through. The skipped time lives for as long as the app is open; the moments saved
-     * for the next launch are the skipped-to ones, so a pet pushed into the future simply stands
-     * still until the device's own clock catches up with it.
+     * pet falls through. The skipped time outlives the app being closed as well (see
+     * [PlayerState.gameNowMillis]): a pet shown grown up in a demo is still grown up when the app is
+     * opened again, and goes on living from the moment the demo left it at.
      *
      * @param millis how much time to skip; zero or less skips nothing.
      */
@@ -311,6 +311,9 @@ class GameViewModel(
             )
         )
         tick()
+        // The skipped time is remembered even when it moved neither a bar nor a stage, since the
+        // next launch starts from the moment it was skipped to and not from the one before it.
+        persist()
     }
 
     /**
@@ -578,6 +581,10 @@ class GameViewModel(
      */
     private fun restoredState(): GameUiState {
         val saved = store.load()
+        // The game's clock is picked up where the previous run left it instead of being started
+        // over: what the player was shown — the age stage, the bars, the day the bonus was paid on
+        // — was reached on that clock, and a clock starting behind it would take all three back.
+        clock.fastForwardTo(saved.gameNowMillis)
         val now = clock.nowMillis()
         // A pet saved before the game kept track of time starts living now: the alternative is to
         // treat it as having been neglected since the epoch and greet the player with an empty pet.
@@ -654,7 +661,8 @@ class GameViewModel(
                 worn = current.worn,
                 stats = current.stats,
                 statsUpdatedAtMillis = current.statsUpdatedAtMillis,
-                petBornAtMillis = current.petBornAtMillis
+                petBornAtMillis = current.petBornAtMillis,
+                gameNowMillis = clock.nowMillis()
             )
         )
     }

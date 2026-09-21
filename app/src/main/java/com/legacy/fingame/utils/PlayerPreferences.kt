@@ -34,6 +34,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         private const val KEY_WORN_ITEMS = "worn_items"
         private const val KEY_STATS_UPDATED_AT = "stats_updated_at"
         private const val KEY_PET_BORN_AT = "pet_born_at"
+        private const val KEY_GAME_NOW = "game_now"
 
         /** Prefix of the key one stat bar is stored under, completed by [StatKind.xmlName]. */
         private const val KEY_STAT_PREFIX = "stat_"
@@ -81,7 +82,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
                 KEY_STATS_UPDATED_AT,
                 defaults.statsUpdatedAtMillis
             ),
-            petBornAtMillis = preferences.getLong(KEY_PET_BORN_AT, defaults.petBornAtMillis)
+            petBornAtMillis = preferences.getLong(KEY_PET_BORN_AT, defaults.petBornAtMillis),
+            gameNowMillis = preferences.getLong(KEY_GAME_NOW, defaults.gameNowMillis)
         )
     }
 
@@ -102,6 +104,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             .putStringSet(KEY_WORN_ITEMS, state.worn.map(::encodeSelection).toSet())
             .putLong(KEY_STATS_UPDATED_AT, state.statsUpdatedAtMillis)
             .putLong(KEY_PET_BORN_AT, state.petBornAtMillis)
+            .putLong(KEY_GAME_NOW, state.gameNowMillis)
 
         StatKind.entries.forEach { stat ->
             editor.putInt(KEY_STAT_PREFIX + stat.xmlName, state.stats[stat])

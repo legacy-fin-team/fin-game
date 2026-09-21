@@ -13,6 +13,10 @@ import java.util.concurrent.TimeUnit
  * Until it is pushed, it is the clock it wraps, hour for hour and day for day; pushed, it keeps
  * running with it, so the time that passes while the demo is being shown still counts.
  *
+ * What it never does is run backwards, whatever the clock it wraps does: a pet that grew up cannot
+ * be made younger again by turning the device's clock back, and neither the hunger nor the daily
+ * bonus can be undone that way.
+ *
  * @param source clock the current moment and the current day are read from.
  */
 class FastForwardClock(private val source: GameClock) : GameClock {
@@ -31,13 +35,33 @@ class FastForwardClock(private val source: GameClock) : GameClock {
         private set
 
     /**
+     * Furthest moment this clock has already told, in milliseconds, so that it can never tell an
+     * earlier one; see [nowMillis]. [Long.MIN_VALUE] until it is asked for the first time, when
+     * there is no moment yet to stay ahead of.
+     */
+    private var furthestMillis: Long = Long.MIN_VALUE
+
+    /**
      * @return The day [source] is on plus the whole days this clock has been pushed by. Whole days
      * only, and counted from the shift rather than from a calendar, so a day passes after a full
      * day's worth of pushing whatever time of day the demo happens to be shown at.
      */
     override fun today(): Long = source.today() + shiftMillis / DAY_MILLIS
 
-    override fun nowMillis(): Long = source.nowMillis() + shiftMillis
+    /**
+     * @return The moment [source] is at plus the shift, and never a moment earlier than one this
+     * clock has already told: a [source] that was moved back pushes the shift by as much as it went
+     * back, so the game's time carries on from where it was instead of falling back to it.
+     */
+    override fun nowMillis(): Long {
+        val now = source.nowMillis() + shiftMillis
+        if (now < furthestMillis) {
+            fastForward(furthestMillis - now)
+        } else {
+            furthestMillis = now
+        }
+        return furthestMillis
+    }
 
     /**
      * Pushes this clock further ahead.
@@ -49,5 +73,21 @@ class FastForwardClock(private val source: GameClock) : GameClock {
     fun fastForward(millis: Long) {
         if (millis <= 0) return
         shiftMillis += millis
+    }
+
+    /**
+     * Pushes this clock up to a given moment; a moment it is already past leaves it where it is.
+     *
+     * This is how a clock is picked up where the previous run left it (see
+     * [com.legacy.fingame.game.PlayerState.gameNowMillis]) rather than started over: the time a demo
+     * build skipped is back after the app was closed, and a device clock that has been moved back in
+     * the meantime does not take the game's own time with it.
+     *
+     * @param millis moment to push this clock up to, in milliseconds.
+     */
+    fun fastForwardTo(millis: Long) {
+        val now = nowMillis()
+        if (millis <= now) return
+        fastForward(millis - now)
     }
 }

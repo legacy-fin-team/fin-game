@@ -86,6 +86,42 @@ class FastForwardTest {
     }
 
     @Test
+    fun `a clock is picked up at the moment it was left at`() {
+        val source = FakeGameClock()
+        val clock = FastForwardClock(source)
+
+        clock.fastForwardTo(source.nowMillis() + halfDay)
+
+        assertEquals(halfDay, clock.shiftMillis)
+    }
+
+    @Test
+    fun `a clock is not pushed to a moment it is already past`() {
+        val source = FakeGameClock()
+        val clock = FastForwardClock(source)
+
+        clock.fastForwardTo(source.nowMillis() - halfDay)
+        clock.fastForwardTo(PlayerState.CLOCK_NEVER_SAVED)
+
+        assertEquals(FastForwardClock.NO_SHIFT, clock.shiftMillis)
+    }
+
+    @Test
+    fun `a clock never tells a moment earlier than one it already told`() {
+        val source = FakeGameClock()
+        val clock = FastForwardClock(source)
+        val told = clock.nowMillis()
+
+        source.millis -= halfDay
+        assertEquals(told, clock.nowMillis())
+
+        // Time carries on from where it was left instead of being frozen until the device's own
+        // clock has made the lost half a day up again.
+        source.millis += halfDay / 2
+        assertEquals(told + halfDay / 2, clock.nowMillis())
+    }
+
+    @Test
     fun `skipping time empties the bars as waiting would`() {
         val clock = FakeGameClock()
         val vm = testGameViewModel(store = storeWithPet(clock), clock = clock)
