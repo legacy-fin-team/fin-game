@@ -41,40 +41,62 @@ data class SceneOffset(val x: Float, val y: Float) {
 /**
  * The window the game area looks at the scene through, and the scene behind it.
  *
- * The scene — the room with the pet and everything standing in it — is drawn as one square picture
- * of [sceneSide] screen pixels, and the window is the card on the screen that shows it. On a phone
- * the scene is blown up past the card, so only a part of it is visible at a time and the player
- * drags the rest into view; on a screen with room to spare the whole scene fits and there is
- * nothing to drag (see [SceneViewport.of] and [isDraggable]).
+ * The scene — the room with the pet and everything standing in it — is a square picture of
+ * [scenePixels] pixels of artwork, blown up by [scale] screen pixels per pixel of that artwork. The
+ * window is the card on the screen showing it, and it is square as well: as large as the game area
+ * is allowed to be ([availableWidth] by [availableHeight]), or exactly as large as the scene when
+ * the scene is the smaller of the two. That is why a screen with room to spare never shows a band
+ * of the card around the room — there is no card left over to show (see [windowSide]).
+ *
+ * When the scene is the larger of the two only a part of it is visible at a time and the player
+ * drags the rest into view.
  *
  * This is the whole geometry of the game area and it knows nothing about Compose: the UI measures
- * the card, builds a viewport out of it and asks it where the scene may go.
+ * how much room the area has, builds a viewport out of it and asks it how big the card is, how big
+ * the scene is and where the scene may go.
  *
- * @property windowWidth width of the window, in screen pixels.
- * @property windowHeight height of the window, in screen pixels.
- * @property sceneSide side of the square the scene is drawn as, in screen pixels.
+ * @property availableWidth widest the game area may be, in screen pixels.
+ * @property availableHeight tallest the game area may be, in screen pixels.
+ * @property scenePixels side of the scene in the pixels the artwork itself is made of.
+ * @property scale how many screen pixels one pixel of the artwork takes up. Always a whole number:
+ * the scene is pixel art, and anything else would smear its grid across the screen and make some
+ * pixels wider than their neighbours.
  */
 data class SceneViewport(
-    val windowWidth: Float,
-    val windowHeight: Float,
-    val sceneSide: Float
+    val availableWidth: Float,
+    val availableHeight: Float,
+    val scenePixels: Int,
+    val scale: Float
 ) {
 
     /**
-     * How far the scene may be moved to either side before its own edge would come into the window.
-     * Zero when the scene is no wider than the window, i.e. when there is nothing hidden to the
-     * sides to drag into view.
+     * Side of the largest square the game area may take up: the shorter of the two sides it is
+     * allowed to have, since the area is a square card. Zero when the area has not been measured
+     * yet.
      */
-    val freeX: Float = max(0f, (sceneSide - windowWidth) / 2f)
+    val availableSide: Float = max(0f, min(availableWidth, availableHeight))
 
-    /** How far the scene may be moved up or down. The vertical twin of [freeX]. */
-    val freeY: Float = max(0f, (sceneSide - windowHeight) / 2f)
+    /** Side of the square the scene is drawn as, in screen pixels. */
+    val sceneSide: Float = scenePixels * scale
+
+    /**
+     * Side of the square window the scene is shown through, in screen pixels: as much of the room
+     * as the game area is allowed to take, and no more of the card than there is room to fill.
+     */
+    val windowSide: Float = min(availableSide, sceneSide)
+
+    /**
+     * How far the scene may be moved either way before its own edge would come into the window.
+     * Zero when the scene is no larger than the window, i.e. when there is nothing hidden to drag
+     * into view.
+     */
+    val free: Float = max(0f, (sceneSide - windowSide) / 2f)
 
     /**
      * Whether the player has anything to drag at all: `false` when the scene fits into the window
-     * whole, so a screen big enough to show the entire room never moves it under the finger.
+     * whole, so a window that shows the entire room never moves it under the finger.
      */
-    val isDraggable: Boolean = freeX > 0f || freeY > 0f
+    val isDraggable: Boolean = free > 0f
 
     /**
      * Where the scene stands when the game area is first shown: with the pet in the middle of the
@@ -94,8 +116,8 @@ data class SceneViewport(
      * of the scene would come into the window and leave an empty band next to the room.
      */
     fun clamp(offset: SceneOffset): SceneOffset = SceneOffset(
-        x = heldTo(free = freeX, moved = offset.x),
-        y = heldTo(free = freeY, moved = offset.y)
+        x = heldTo(offset.x),
+        y = heldTo(offset.y)
     )
 
     /**
@@ -112,13 +134,12 @@ data class SceneViewport(
     /**
      * Holds a move along one axis to what the scene has hidden along it.
      *
-     * @param free how far the scene may go that way, as [freeX] and [freeY] state it.
-     * @param moved how far it is being moved.
-     * @return The move cut down to that much, and squarely zero when the axis has nothing hidden
-     * to show — an axis with no room left has exactly one position the scene may take, and it is
-     * the middle of the window.
+     * @param moved how far the scene is being moved that way.
+     * @return The move cut down to [free], and squarely zero when the scene has nothing hidden to
+     * show — a scene that fits into the window whole has exactly one position it may take, and it
+     * is the middle of the window.
      */
-    private fun heldTo(free: Float, moved: Float): Float =
+    private fun heldTo(moved: Float): Float =
         if (free <= 0f) 0f else moved.coerceIn(-free, free)
 
     companion object {
@@ -126,37 +147,33 @@ data class SceneViewport(
         /**
          * Builds the viewport of a measured game area, picking how big the scene is drawn.
          *
-         * The scene is pixel art, so it is only ever blown up by a whole number of screen pixels
-         * per pixel of the artwork: anything else would smear the pixel grid across the screen and
-         * make some pixels wider than their neighbours. Of those whole numbers the scene takes
-         * [pixelSize] — the size a pixel of the game is meant to have — and falls back to the
-         * largest blow-up that still fits into the window when the window is bigger than that, so
-         * a tablet shows the whole room instead of a needlessly small picture in the middle of a
-         * large card.
+         * The scene takes [pixelSize] — the size a pixel of the game is meant to have — and falls
+         * back to the largest whole blow-up that still fits into the area when the area is bigger
+         * than that, so a tablet shows the whole room instead of a needlessly small picture in the
+         * middle of a large card.
          *
-         * The fit is measured against the shorter side of the window, so a scene said to fit fits
-         * whole — the game area is a square card, where both sides are the same anyway.
-         *
-         * @param windowWidth width of the game area, in screen pixels.
-         * @param windowHeight height of the game area, in screen pixels.
+         * @param availableWidth widest the game area may be, in screen pixels.
+         * @param availableHeight tallest it may be, in screen pixels.
          * @param scenePixels side of the scene in the pixels the art itself is made of, i.e.
          *   [GameLayer.BACKGROUND]'s [GameLayer.spritePixels].
          * @param pixelSize how many screen pixels one pixel of the art should take up.
-         * @return The viewport of that window with the scene sized to it.
+         * @return The viewport of that area with the scene sized to it.
          */
         fun of(
-            windowWidth: Float,
-            windowHeight: Float,
+            availableWidth: Float,
+            availableHeight: Float,
             scenePixels: Int,
             pixelSize: Float
         ): SceneViewport {
             val artPixels = max(1, scenePixels)
-            val fitting = floor(min(windowWidth, windowHeight) / artPixels)
-            val wanted = max(1, pixelSize.roundToInt()).toFloat()
+            val side = max(0f, min(availableWidth, availableHeight))
+            val fitting = max(1f, floor(side / artPixels))
+            val wanted = max(1f, pixelSize.roundToInt().toFloat())
             return SceneViewport(
-                windowWidth = windowWidth,
-                windowHeight = windowHeight,
-                sceneSide = max(fitting, wanted) * artPixels
+                availableWidth = availableWidth,
+                availableHeight = availableHeight,
+                scenePixels = artPixels,
+                scale = max(fitting, wanted)
             )
         }
     }
