@@ -371,9 +371,10 @@ class GameViewModel(
      * is the player's own and comes back on the next launch.
      *
      * Only one variant of the same item can be on at a time: putting on the white hat takes the black
-     * one off, since the pet has but one head. Putting an item on is using it, so the item's
-     * [Item.effects] are applied then; taking it off does not take them back — the pet was happy to
-     * wear it while it did.
+     * one off, since the pet has but one head.
+     *
+     * Neither putting an item on nor taking it off moves a single bar: what the pet wears is a look
+     * and nothing more (see [Item.effects]), so the stats are the same before and after.
      *
      * @param selection the item and the variant of it to put on or take off.
      * @return True when the item was put on or taken off, false when the player doesn't own it, it is
@@ -385,17 +386,13 @@ class GameViewModel(
         if (!item.isWearable) return false
         if ((current.owned[selection] ?: 0) <= 0) return false
 
-        val takingOff = selection in current.worn
-        val worn = if (takingOff) {
+        val worn = if (selection in current.worn) {
             current.worn - selection
         } else {
             current.worn.filterNot { it.itemId == selection.itemId }.toSet() + selection
         }
 
-        _state.value = current.copy(
-            worn = worn,
-            stats = if (takingOff) current.stats else current.stats.changedBy(item.effects)
-        )
+        _state.value = current.copy(worn = worn)
         persist()
         return true
     }

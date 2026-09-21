@@ -49,6 +49,35 @@ class ItemReaderTest {
             """
             <?xml version="1.0" encoding="utf-8"?>
             <items>
+                <item id="cake" name="Пирожное" price="40" category="food">
+                    <variants>
+                        <variant id="default" />
+                    </variants>
+                    <effects>
+                        <effect stat="hunger" value="30" />
+                        <effect stat="health" value="-5" />
+                    </effects>
+                </item>
+            </items>
+            """
+        )
+
+        val cake = items.getValue("cake")
+        assertEquals("Пирожное", cake.name)
+        assertEquals(40, cake.price)
+        assertEquals(ItemCategory.FOOD, cake.category)
+        assertEquals(listOf("default"), cake.variantIds)
+        assertEquals(mapOf(StatKind.HUNGER to 30, StatKind.HEALTH to -5), cake.effects)
+    }
+
+    @Test
+    fun `effects declared on something the pet wears are read and then ignored`() {
+        // Data written before clothes and decorations became a look and nothing more is still read
+        // without an error — the item is simply worn to no effect.
+        val items = readItems(
+            """
+            <?xml version="1.0" encoding="utf-8"?>
+            <items>
                 <item id="hat" name="Шляпа" price="100" category="clothes">
                     <variants>
                         <variant id="black" />
@@ -58,16 +87,23 @@ class ItemReaderTest {
                         <effect stat="pleasure" value="10" />
                     </effects>
                 </item>
+                <item id="rug" name="Коврик" price="90" category="decor">
+                    <variants>
+                        <variant id="beige" />
+                    </variants>
+                    <effects>
+                        <effect stat="pleasure" value="5" />
+                    </effects>
+                </item>
             </items>
             """
         )
 
         val hat = items.getValue("hat")
         assertEquals("Шляпа", hat.name)
-        assertEquals(100, hat.price)
-        assertEquals(ItemCategory.CLOTHES, hat.category)
         assertEquals(listOf("black", "white"), hat.variantIds)
-        assertEquals(mapOf(StatKind.PLEASURE to 10), hat.effects)
+        assertEquals(emptyMap<StatKind, Int>(), hat.effects)
+        assertEquals(emptyMap<StatKind, Int>(), items.getValue("rug").effects)
     }
 
     @Test
@@ -185,5 +221,36 @@ class ItemReaderTest {
                 )
             }
         }
+    }
+
+    @Test
+    fun `the data the app ships with gives the pet nothing to feel about what it wears`() {
+        val items = readShippedItems()
+
+        // Clothes and decorations are bought to be looked at: their data declares no effect at all
+        // any more, and the rule holds even if one crept back in.
+        items.values.filter { it.isWearable }.forEach { item ->
+            assertEquals(
+                "${item.id} declares effects the pet cannot feel",
+                emptyMap<StatKind, Int>(),
+                item.declaredEffects
+            )
+            assertEquals(emptyMap<StatKind, Int>(), item.effects)
+        }
+
+        // Food and toys are the other half of the bargain: they are bought for what they do.
+        assertEquals(
+            mapOf(StatKind.HUNGER to 20, StatKind.HEALTH to 5),
+            items.getValue("apple").effects
+        )
+        assertEquals(
+            mapOf(StatKind.HUNGER to 30, StatKind.PLEASURE to 15, StatKind.HEALTH to -5),
+            items.getValue("cake").effects
+        )
+        assertEquals(
+            mapOf(StatKind.PLEASURE to 20, StatKind.HUNGER to -5),
+            items.getValue("ball").effects
+        )
+        assertEquals(mapOf(StatKind.PLEASURE to 30), items.getValue("teddy").effects)
     }
 }

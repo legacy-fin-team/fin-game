@@ -133,15 +133,15 @@ class PetCareTest {
     }
 
     @Test
-    fun `putting an item on lifts the pet's mood, taking it off does not sink it again`() {
+    fun `what the pet wears is a look and nothing more`() {
         val hat = ItemSelection(TestItems.HAT.id, "black")
         val vm = testGameViewModel(storeWith(hat))
 
         assertTrue(vm.toggleWorn(hat))
-        assertEquals(50 + 10, vm.state.value.stats[StatKind.PLEASURE])
+        assertEquals(halfEmptyStats, vm.state.value.stats)
 
         assertTrue(vm.toggleWorn(hat))
-        assertEquals(50 + 10, vm.state.value.stats[StatKind.PLEASURE])
+        assertEquals(halfEmptyStats, vm.state.value.stats)
     }
 
     @Test

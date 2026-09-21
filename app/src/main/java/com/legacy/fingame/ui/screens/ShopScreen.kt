@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -51,11 +52,15 @@ import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.items.ItemUse
+import com.legacy.fingame.game.items.ShopShelf
+import com.legacy.fingame.game.stats.StatKind
 import com.legacy.fingame.ui.components.BalanceChip
+import com.legacy.fingame.ui.components.EffectChip
 import com.legacy.fingame.ui.components.PillButton
 import com.legacy.fingame.ui.components.Sprite
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
+import com.legacy.fingame.ui.components.compactEffectChipHeight
 import com.legacy.fingame.ui.components.spriteButtonHeight
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
@@ -107,6 +112,21 @@ private val ShortScreenPriceIconSize = 24.dp
 
 /** Gap between the shelves and the column of controls standing beside them on a short screen. */
 private val ShortScreenRailGap = 12.dp
+
+/**
+ * How many effect chips a card fits into one row, and the gap between them.
+ *
+ * Two is what the narrowest card the shop lays out has room for — `134.dp` of content (see
+ * [ItemCellMinSize]) against a chip drawn `compact`, which is sized to take under half of that at
+ * any font scale (see [com.legacy.fingame.ui.components.StatValueChip]) — and it is also what the
+ * wider card of a short screen uses, so a shelf keeps room for the same number of rows in either
+ * layout. An item with three effects therefore takes two rows and never a chip cut in half.
+ */
+private const val EffectChipsPerRow = 2
+private val EffectChipGap = 4.dp
+
+/** Gap between an item's price and the effects it has on the pet. */
+private val EffectsRowTopGap = 6.dp
 
 /** Sizes shared by the windows the shop opens over itself; see [ShopDialogBlock]. */
 private val DialogMaxWidth = 320.dp
@@ -197,8 +217,11 @@ fun ShopScreen(
     // was told they cannot afford is not changed by being told.
     var window by remember { mutableStateOf(ShopWindow.NONE) }
     // Cards of one screen are cut to the same pattern, so they end up the same height: room for a
-    // variant picker is kept on every card of a category where any item has variants at all.
+    // variant picker is kept on every card of a category where any item has variants at all, and
+    // room for as many rows of effects as the busiest item of the category needs — none at all in a
+    // category whose items do nothing to the pet, where the cards end right under the price.
     val reserveVariantRow = items.any { item -> item.hasSeveralVariants }
+    val reservedEffectRows = ShopShelf.effectRowsOf(items, EffectChipsPerRow)
     // A phone held sideways has no height to spare for a card that stacks its sprite over its
     // price and controls; the card is laid out sideways there instead, see [ShopItemCard].
     val isShortScreen = GameDimens.isShortScreen
@@ -265,6 +288,7 @@ fun ShopScreen(
                             quantity = state.quantities[item.id] ?: 0,
                             mode = modeOf(item, state),
                             reserveVariantRow = reserveVariantRow,
+                            reservedEffectRows = reservedEffectRows,
                             horizontalLayout = isShortScreen,
                             onPickVariant = { variantId -> onPickVariant(item.id, variantId) },
                             onIncrease = { onIncrease(item.id) },
@@ -726,8 +750,13 @@ private fun modeOf(item: Item, state: GameUiState): ShopItemMode = when {
 
 /**
  * Single shop item card: the icon of the picked variant with an "add to goals" star toggle, the
- * item's name and price, a variant picker for items offered in several variants, and a purchase
- * control that depends on [mode].
+ * item's name and price, what the item does to the pet, a variant picker for items offered in
+ * several variants, and a purchase control that depends on [mode].
+ *
+ * What the item does to the pet is read right under its price — the two questions the player weighs
+ * against each other stand together, before the choice of variant and before the button that acts on
+ * both — and in the very chips the inventory shows the same effects in, so an item looks the same
+ * before and after it is bought. An item that does nothing (clothes, decorations) says nothing.
  *
  * The card is built out of slots of a fixed height rather than out of whatever its item happens to
  * need, so the cards of one shelf line up with each other instead of ending at three different
@@ -747,6 +776,8 @@ private fun modeOf(item: Item, state: GameUiState): ShopItemMode = when {
  * @param mode which purchase control to show; see [ShopItemMode].
  * @param reserveVariantRow whether the card keeps room for a variant picker even when its item has
  *   but one variant; true when any item on the same shelf has several of them.
+ * @param reservedEffectRows how many rows of effect chips the card keeps room for, however many its
+ *   own item fills; the shelf's own answer, see [ShopShelf.effectRowsOf]. Zero keeps no room at all.
  * @param horizontalLayout whether to lay the card out sideways, sprite beside the details rather
  *   than above them; true on a short screen, see [GameDimens.isShortScreen].
  * @param onPickVariant called with the id of the variant the player picked.
@@ -761,6 +792,7 @@ private fun ShopItemCard(
     quantity: Int,
     mode: ShopItemMode,
     reserveVariantRow: Boolean,
+    reservedEffectRows: Int,
     horizontalLayout: Boolean,
     onPickVariant: (String) -> Unit,
     onIncrease: () -> Unit,
@@ -798,6 +830,13 @@ private fun ShopItemCard(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     ItemPriceRow(price = item.price, iconSize = ShortScreenPriceIconSize)
+
+                    ItemEffectsRow(
+                        item = item,
+                        reservedRows = reservedEffectRows,
+                        alignment = Alignment.Start,
+                        modifier = Modifier.padding(top = EffectsRowTopGap)
+                    )
 
                     ItemVariantRow(
                         item = item,
@@ -842,6 +881,13 @@ private fun ShopItemCard(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 ItemPriceRow(price = item.price, iconSize = PriceIconSize)
+
+                ItemEffectsRow(
+                    item = item,
+                    reservedRows = reservedEffectRows,
+                    alignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(top = EffectsRowTopGap)
+                )
 
                 ItemVariantRow(
                     item = item,
@@ -957,6 +1003,49 @@ private fun ItemPriceRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+/**
+ * What an item does to the pet, shown on its card before it is bought: one compact
+ * [com.legacy.fingame.ui.components.EffectChip] per effect, the very chips the inventory shows the
+ * same item's effects in once it is owned.
+ *
+ * The chips wrap by whole chips and never by halves: a row holds [EffectChipsPerRow] of them, so an
+ * item with three effects reads as two and one rather than as two and a cropped third. The block
+ * keeps the height of [reservedRows] rows whatever its own item fills, which is how a cake and the
+ * apple beside it end at the same height; a shelf that reserved nothing (clothes, decorations)
+ * renders nothing at all, so no gap is left for it either.
+ *
+ * @param item the item whose effects to show.
+ * @param reservedRows rows of chips the shelf keeps room for; see [ShopShelf.effectRowsOf].
+ * @param alignment where the chips sit within the card's width: centred under a vertical card,
+ *   left-aligned beside the sprite of a horizontal one.
+ * @param modifier modifier applied to the block.
+ */
+@Composable
+private fun ItemEffectsRow(
+    item: Item,
+    reservedRows: Int,
+    alignment: Alignment.Horizontal,
+    modifier: Modifier = Modifier
+) {
+    if (reservedRows <= 0) return
+
+    val reservedHeight = compactEffectChipHeight() * reservedRows +
+            EffectChipGap * (reservedRows - 1)
+
+    Box(modifier = modifier.heightIn(min = reservedHeight)) {
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(EffectChipGap, alignment),
+            verticalArrangement = Arrangement.spacedBy(EffectChipGap),
+            maxItemsInEachRow = EffectChipsPerRow
+        ) {
+            item.effects.forEach { (stat, value) ->
+                EffectChip(stat = stat, value = value, compact = true)
+            }
+        }
     }
 }
 
@@ -1089,34 +1178,46 @@ private fun PurchaseControl(
     }
 }
 
-/** Food the previews go shopping with, standing in for what the catalog reads from the assets. */
+/**
+ * Food the previews go shopping with, standing in for what the catalog reads from the assets: two
+ * items the pet feels two ways about and one — the cake — it feels three, which is the shelf where
+ * a card's row of effects has to wrap onto a second row while the cards stay the same height.
+ */
 private val PreviewItems = listOf(
     Item(
         id = "apple",
         name = "Яблоко",
         price = 15,
         category = ItemCategory.FOOD,
-        variantIds = listOf("default")
+        variantIds = listOf("default"),
+        declaredEffects = mapOf(StatKind.HUNGER to 20, StatKind.HEALTH to 5)
     ),
     Item(
         id = "fish",
         name = "Рыбка",
         price = 25,
         category = ItemCategory.FOOD,
-        variantIds = listOf("default")
+        variantIds = listOf("default"),
+        declaredEffects = mapOf(StatKind.HUNGER to 35, StatKind.PLEASURE to 5)
     ),
     Item(
         id = "cake",
         name = "Пирожное",
         price = 40,
         category = ItemCategory.FOOD,
-        variantIds = listOf("default")
+        variantIds = listOf("default"),
+        declaredEffects = mapOf(
+            StatKind.HUNGER to 30,
+            StatKind.PLEASURE to 15,
+            StatKind.HEALTH to -5
+        )
     )
 )
 
 /**
  * Clothes the previews go shopping with: the category where a thing really does come in several
- * sorts, so this is what the variant picker on a card is previewed on.
+ * sorts, so this is what the variant picker on a card is previewed on — and the one the pet feels
+ * nothing about, so it is also what a shelf with no room kept for effects is previewed on.
  */
 private val PreviewClothes = listOf(
     Item(
@@ -1280,6 +1381,110 @@ private fun ShopScreenNarrowLargeFontScalePreview() {
                     selectedCategory = ItemCategory.CLOTHES
                 ),
                 items = PreviewClothes,
+                cartLines = emptyList(),
+                onSelectCategory = {},
+                onPickVariant = { _, _ -> },
+                onIncrease = {},
+                onDecrease = {},
+                onBuy = { true },
+                onClose = {}
+            )
+        }
+    }
+}
+
+/**
+ * Preview of the food shelf at 360.dp, i.e. at the narrowest a card is ever laid out two to a row:
+ * the apple and the fish move two of the pet's bars each and the cake moves three, so the shelf
+ * keeps two rows of chips for every card of it and the three cards end at the same height.
+ */
+@Preview(name = "Shop — Food shelf 360dp", showBackground = true, widthDp = 360, heightDp = 720)
+@Composable
+private fun ShopScreenFoodShelfPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ShopScreen(
+                state = GameUiState(balance = 300),
+                items = PreviewItems,
+                cartLines = emptyList(),
+                onSelectCategory = {},
+                onPickVariant = { _, _ -> },
+                onIncrease = {},
+                onDecrease = {},
+                onBuy = { true },
+                onClose = {}
+            )
+        }
+    }
+}
+
+/**
+ * The same food shelf with the system font scaled up: two chips still sit side by side in a card's
+ * width, so the cake's three effects still read as two rows and not as three.
+ */
+@Preview(
+    name = "Shop — Food shelf 360dp, fontScale 1.3",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 720,
+    fontScale = 1.3f
+)
+@Composable
+private fun ShopScreenFoodShelfLargeFontScalePreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ShopScreen(
+                state = GameUiState(balance = 300),
+                items = PreviewItems,
+                cartLines = emptyList(),
+                onSelectCategory = {},
+                onPickVariant = { _, _ -> },
+                onIncrease = {},
+                onDecrease = {},
+                onBuy = { true },
+                onClose = {}
+            )
+        }
+    }
+}
+
+/**
+ * Preview of the clothes rack at the same width: a shelf where nothing touches the pet's bars, so
+ * the cards end right under the variant picker with no room kept for effects at all.
+ */
+@Preview(name = "Shop — Clothes shelf 360dp", showBackground = true, widthDp = 360, heightDp = 720)
+@Composable
+private fun ShopScreenClothesShelfPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ShopScreen(
+                state = GameUiState(balance = 300, selectedCategory = ItemCategory.CLOTHES),
+                items = PreviewClothes,
+                cartLines = emptyList(),
+                onSelectCategory = {},
+                onPickVariant = { _, _ -> },
+                onIncrease = {},
+                onDecrease = {},
+                onBuy = { true },
+                onClose = {}
+            )
+        }
+    }
+}
+
+/**
+ * Preview of the food shelf on a phone held sideways, where a card is laid out sideways too: the
+ * effects stand in the right-hand column under the price, same as they stand under it in a vertical
+ * card.
+ */
+@Preview(name = "Shop — Landscape food", showBackground = true, widthDp = 891, heightDp = 411)
+@Composable
+private fun ShopScreenLandscapeFoodPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ShopScreen(
+                state = GameUiState(balance = 300, quantities = mapOf("cake" to 1), cartPrice = 40),
+                items = PreviewItems,
                 cartLines = emptyList(),
                 onSelectCategory = {},
                 onPickVariant = { _, _ -> },

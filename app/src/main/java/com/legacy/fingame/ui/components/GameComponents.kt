@@ -307,8 +307,45 @@ private fun statValueColor(fraction: Float): Color =
 /** How empty a stat has to get before it is shown as a warning; see [statValueColor]. */
 private const val StatLowLevel = 0.25f
 
-/** Side of the stat icon inside a [StatChip]; the chip is sized around it. */
+/** Sizes a [StatValueChip] is built out of: the icon, the padding around it and the gap after it. */
 private val StatIconSize = 24.dp
+private val StatChipHorizontalPadding = 12.dp
+private val StatChipVerticalPadding = 6.dp
+private val StatChipIconGap = 6.dp
+
+/**
+ * The same sizes for a chip drawn `compact`, i.e. small enough for two of them to sit side by side
+ * inside a shop card.
+ *
+ * A card's own content is `134.dp` wide at the narrowest the shop lays one out at (see
+ * [com.legacy.fingame.ui.screens.ShopScreen]), and a row of it is meant to hold two chips and the
+ * gap between them, i.e. some `65.dp` per chip. Everything but the value's own text is fixed here
+ * and adds up to `27.dp` of that, which leaves the text `38.dp` — room for the three characters
+ * ("+20", "-5") an effect is ever written in, at the font scales a player reads the game at.
+ */
+private val CompactStatIconSize = 14.dp
+private val CompactStatChipHorizontalPadding = 5.dp
+private val CompactStatChipVerticalPadding = 3.dp
+private val CompactStatChipIconGap = 3.dp
+
+/**
+ * How tall a `compact` [StatValueChip] — and so a [EffectChip] in a shop card — comes out on the
+ * current screen, the chip's text style and font scale included.
+ *
+ * Lets a layout keep room for a row of chips without measuring one first, which is what the shop's
+ * cards do to come out the same height whether or not their item has effects to show; the chip
+ * itself is drawn at exactly this height, so what is reserved is what is used. Mirrors
+ * [spriteButtonHeight], which does the same for a row of sprite buttons.
+ *
+ * @return The full height of a compact chip.
+ */
+@Composable
+@ReadOnlyComposable
+fun compactEffectChipHeight(): Dp {
+    val lineHeight = MaterialTheme.typography.labelSmall.lineHeight
+    val textHeight = with(LocalDensity.current) { lineHeight.toDp() }
+    return maxOf(textHeight, CompactStatIconSize) + CompactStatChipVerticalPadding * 2
+}
 
 /**
  * One stat of the pet as a [StatValueChip]: the icon of the stat and how full it is, in percent.
@@ -347,39 +384,93 @@ fun StatChip(
  * @param value the text written next to the icon, already formatted for the player.
  * @param valueColor color of that text.
  * @param modifier modifier applied to the outer [Surface].
+ * @param compact whether to draw the chip at the smaller size a shop card has room for: the same
+ *   chip in every part — icon, value, shape — only sized so that two of them fit a card's width
+ *   side by side. A compact chip is exactly [compactEffectChipHeight] tall, so a layout can keep
+ *   room for a row of them in advance.
  */
 @Composable
 fun StatValueChip(
     stat: StatKind,
     value: String,
     valueColor: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
 ) {
+    val sizeModifier = if (compact) Modifier.height(compactEffectChipHeight()) else Modifier
+
     Surface(
-        modifier = modifier.wrapContentSize(),
+        modifier = modifier
+            .wrapContentSize()
+            .then(sizeModifier),
         shape = RoundedCornerShape(50),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, GameColors.cardStroke)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            modifier = Modifier.padding(
+                horizontal = if (compact) {
+                    CompactStatChipHorizontalPadding
+                } else {
+                    StatChipHorizontalPadding
+                },
+                vertical = if (compact) CompactStatChipVerticalPadding else StatChipVerticalPadding
+            ),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Sprite(
                 assetPath = Sprites.stat(stat.xmlName),
                 contentDescription = stat.title(),
-                modifier = Modifier.size(StatIconSize)
+                modifier = Modifier.size(if (compact) CompactStatIconSize else StatIconSize)
             )
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(
+                modifier = Modifier.width(if (compact) CompactStatChipIconGap else StatChipIconGap)
+            )
             Text(
                 text = value,
-                style = MaterialTheme.typography.labelLarge,
+                style = if (compact) {
+                    MaterialTheme.typography.labelSmall
+                } else {
+                    MaterialTheme.typography.labelLarge
+                },
                 color = valueColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
         }
     }
+}
+
+/**
+ * One of an item's effects on the pet, in the same shape every stat is shown in: the icon of the
+ * stat and, next to it, how much the item moves that stat, with its sign. The stat is not named in
+ * words — the icon already says which one it is.
+ *
+ * This is the one place an effect is drawn in the whole game: the inventory shows what an owned item
+ * will do, the shop shows the same thing before the item is bought, and both read alike — a gain in
+ * the healthy color, a loss in the warning one.
+ *
+ * @param stat the stat the effect is on.
+ * @param value how much the effect adds to it; a negative value is shown with its minus sign.
+ * @param modifier modifier applied to the chip surface.
+ * @param compact whether to draw the chip at the size a shop card has room for; see [StatValueChip].
+ */
+@Composable
+fun EffectChip(
+    stat: StatKind,
+    value: Int,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
+) {
+    val sign = if (value > 0) "+" else ""
+
+    StatValueChip(
+        stat = stat,
+        value = "$sign$value",
+        valueColor = if (value < 0) MaterialTheme.colorScheme.error else GameColors.success,
+        modifier = modifier,
+        compact = compact
+    )
 }
 
 /**
@@ -545,6 +636,16 @@ private fun PreviewContent() {
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatKind.entries.forEach { stat -> StatChip(stat = stat, stats = stats) }
+        }
+        // The two sizes an effect is shown in: the roomy one of the inventory's item window and the
+        // compact one that fits two to a row inside a shop card.
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            EffectChip(stat = StatKind.HUNGER, value = 20)
+            EffectChip(stat = StatKind.HEALTH, value = -5)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            EffectChip(stat = StatKind.HUNGER, value = 20, compact = true)
+            EffectChip(stat = StatKind.HEALTH, value = -5, compact = true)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             PillButton(text = "Купить", onClick = {})

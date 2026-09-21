@@ -50,12 +50,12 @@ import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.items.ItemUse
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.game.stats.StatKind
+import com.legacy.fingame.ui.components.EffectChip
 import com.legacy.fingame.ui.components.PillButton
 import com.legacy.fingame.ui.components.Sprite
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.components.StatChip
-import com.legacy.fingame.ui.components.StatValueChip
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
@@ -365,6 +365,10 @@ private fun ItemActionPopup(
  * The item is neither pictured nor named here — the player has just tapped its cell and knows what
  * it is, so the window only says what will happen and lets it happen.
  *
+ * An item the pet wears does nothing to its stats at all (see [Item.effects]), so its window holds
+ * the action alone: the row of effects is not drawn rather than drawn empty, and no gap is left
+ * where it would have been.
+ *
  * The cross sits on the top-right corner and hangs half-way over the edge of the card, so it reads
  * as a way out of the block rather than as one more action inside it.
  *
@@ -479,34 +483,6 @@ private fun Item.useActionTitle(): String = when (category.use) {
     else -> "Поиграть"
 }
 
-/**
- * One of an item's effects, in the same shape the main screen shows a stat in: the icon of the stat
- * and, next to it, how much the item moves that stat. The stat is not named in words — the icon
- * already says which one it is, and the window stays small enough to sit next to a cell.
- *
- * @param stat the stat the effect is on.
- * @param value how much the effect adds to it; a negative value is shown with its minus sign.
- * @param modifier modifier applied to the chip surface.
- */
-@Composable
-private fun EffectChip(
-    stat: StatKind,
-    value: Int,
-    modifier: Modifier = Modifier
-) {
-    val sign = if (value > 0) "+" else ""
-    StatValueChip(
-        stat = stat,
-        value = "$sign$value",
-        valueColor = if (value < 0) {
-            MaterialTheme.colorScheme.error
-        } else {
-            GameColors.success
-        },
-        modifier = modifier
-    )
-}
-
 /** Inventory the previews show, standing in for what the player's state holds. */
 private val PreviewEntries = listOf(
     InventoryEntry(
@@ -516,7 +492,7 @@ private val PreviewEntries = listOf(
             price = 15,
             category = ItemCategory.FOOD,
             variantIds = listOf("default"),
-            effects = mapOf(StatKind.HUNGER to 20, StatKind.HEALTH to 5)
+            declaredEffects = mapOf(StatKind.HUNGER to 20, StatKind.HEALTH to 5)
         ),
         variantId = "default",
         count = 3,
@@ -529,12 +505,14 @@ private val PreviewEntries = listOf(
             price = 60,
             category = ItemCategory.TOYS,
             variantIds = listOf("red"),
-            effects = mapOf(StatKind.PLEASURE to 20, StatKind.HUNGER to -5)
+            declaredEffects = mapOf(StatKind.PLEASURE to 20, StatKind.HUNGER to -5)
         ),
         variantId = "red",
         count = 1,
         worn = false
     ),
+    // Clothes the player's own data may still declare an effect on: worn to no effect all the same,
+    // which is what the window opened on it has to look right without.
     InventoryEntry(
         item = Item(
             id = "hat",
@@ -542,7 +520,7 @@ private val PreviewEntries = listOf(
             price = 100,
             category = ItemCategory.CLOTHES,
             variantIds = listOf("black"),
-            effects = mapOf(StatKind.PLEASURE to 10)
+            declaredEffects = mapOf(StatKind.PLEASURE to 10)
         ),
         variantId = "black",
         count = 1,
@@ -613,14 +591,35 @@ private fun InventoryScreenNarrowPreview() {
     }
 }
 
-/** Preview of the window that opens on an item the pet can wear. */
-@Preview(name = "Inventory — Item actions", showBackground = true)
+/**
+ * Preview of the window that opens on an item the pet can wear: the case with nothing to say about
+ * the stats, which has to come out as the action alone rather than as an action with an empty row
+ * over it.
+ */
+@Preview(name = "Inventory — Item actions, worn item", showBackground = true)
 @Composable
 private fun ItemActionBlockPreview() {
     FinGameTheme(darkTheme = false) {
         Surface(color = MaterialTheme.colorScheme.background) {
             ItemActionBlock(
                 entry = PreviewEntries.last(),
+                onUse = {},
+                onToggleWorn = {},
+                onDismiss = {},
+                modifier = Modifier.padding(16.dp)
+            )
+        }
+    }
+}
+
+/** Preview of the window that opens on an item the pet is given, effects and all. */
+@Preview(name = "Inventory — Item actions, food", showBackground = true)
+@Composable
+private fun ItemActionBlockWithEffectsPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ItemActionBlock(
+                entry = PreviewEntries.first(),
                 onUse = {},
                 onToggleWorn = {},
                 onDismiss = {},

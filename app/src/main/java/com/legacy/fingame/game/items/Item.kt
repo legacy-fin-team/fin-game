@@ -16,9 +16,11 @@ import com.legacy.fingame.game.stats.StatKind
  * empty: an item with no variant at all could not be drawn. The sprites themselves are not listed
  * here — every variant keeps them in a folder named after the item and the variant, which
  * [ItemSprites] knows how to find.
- * @property effects what using the item does to the pet's stats, keyed by stat: a positive value
- * fills the bar, a negative one empties it (a cake that is sweet but not healthy). Empty for an item
- * the pet feels nothing about.
+ * @property declaredEffects what the data says using the item does to the pet's stats. Read through
+ * [effects], which is what the pet actually feels: an item the pet wears is a look and nothing more,
+ * so whatever such an item declares is dropped rather than applied. Keeping the declared value here
+ * rather than throwing it away is what lets data that still names effects on a hat be read without
+ * an error, and the hat itself be worn without a change to the pet.
  * @property layer layer of the game area the item is drawn on while it is worn, or null for an item
  * that is never drawn there. Defaults to [ItemCategory.defaultLayer], so only items that stand apart
  * from their category — a decoration in front of the pet rather than behind it — name a layer of
@@ -30,7 +32,7 @@ data class Item(
     val price: Int,
     val category: ItemCategory,
     val variantIds: List<String>,
-    val effects: Map<StatKind, Int> = emptyMap(),
+    val declaredEffects: Map<StatKind, Int> = emptyMap(),
     val layer: GameLayer? = category.defaultLayer
 ) {
     init {
@@ -39,6 +41,18 @@ data class Item(
 
     /** Whether the item is put on and taken off instead of being used up; see [ItemUse.WEARABLE]. */
     val isWearable: Boolean get() = category.use == ItemUse.WEARABLE && layer != null
+
+    /**
+     * What using the item does to the pet's stats, keyed by stat: a positive value fills the bar, a
+     * negative one empties it (a cake that is sweet but not healthy). Empty for an item the pet
+     * feels nothing about.
+     *
+     * Always empty for an item the pet wears ([isWearable]): clothes and decorations are bought to
+     * be looked at, so putting one on moves no bar at all. That is the item's own rule and not a
+     * property of the data — a hat whose data still declares an effect is worn to no effect, and
+     * the shop shows no effects for it either.
+     */
+    val effects: Map<StatKind, Int> get() = if (isWearable) emptyMap() else declaredEffects
 
     /** Variant the item is shown and bought in until the player picks another one. */
     val defaultVariantId: String get() = variantIds.first()

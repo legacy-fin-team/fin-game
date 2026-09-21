@@ -28,8 +28,8 @@ internal class FakePlayerStateStore(var state: PlayerState = PlayerState()) : Pl
 
 /**
  * The items the tests go shopping with: one cheap food item offered in two variants, one plain food
- * item, two items that are bought once — one of them in several variants — and a decoration that
- * stands behind the pet instead of on it.
+ * item, one the pet feels three ways about, two items that are bought once — one of them in several
+ * variants — and a decoration that stands in front of the pet instead of on it.
  */
 internal object TestItems {
 
@@ -40,7 +40,7 @@ internal object TestItems {
         price = 15,
         category = ItemCategory.FOOD,
         variantIds = listOf("red", "green"),
-        effects = mapOf(StatKind.HUNGER to 20, StatKind.HEALTH to 5)
+        declaredEffects = mapOf(StatKind.HUNGER to 20, StatKind.HEALTH to 5)
     )
 
     /** Food with a single variant. */
@@ -50,17 +50,22 @@ internal object TestItems {
         price = 25,
         category = ItemCategory.FOOD,
         variantIds = listOf("default"),
-        effects = mapOf(StatKind.HUNGER to 35)
+        declaredEffects = mapOf(StatKind.HUNGER to 35)
     )
 
-    /** Clothes in two variants: owned per variant, so the black one is not the white one. */
+    /**
+     * Clothes in two variants: owned per variant, so the black one is not the white one.
+     *
+     * Its data still declares an effect, the way a player's own data file may well still declare
+     * one: an item the pet wears is worn to no effect all the same (see [Item.effects]).
+     */
     val HAT = Item(
         id = "hat",
         name = "Шляпа",
         price = 100,
         category = ItemCategory.CLOTHES,
         variantIds = listOf("black", "white"),
-        effects = mapOf(StatKind.PLEASURE to 10)
+        declaredEffects = mapOf(StatKind.PLEASURE to 10)
     )
 
     /** A toy with a single variant, bought once and played with over and over. */
@@ -70,22 +75,39 @@ internal object TestItems {
         price = 60,
         category = ItemCategory.TOYS,
         variantIds = listOf("red"),
-        effects = mapOf(StatKind.PLEASURE to 20, StatKind.HUNGER to -5)
+        declaredEffects = mapOf(StatKind.PLEASURE to 20, StatKind.HUNGER to -5)
     )
 
-    /** A decoration standing in front of the pet: its data names a layer of its own. */
+    /**
+     * A decoration standing in front of the pet: its data names a layer of its own, and — like
+     * [HAT] — an effect the pet does not feel, since a decoration is a look and nothing more.
+     */
     val LAMP = Item(
         id = "lamp",
         name = "Лампа",
         price = 150,
         category = ItemCategory.DECOR,
         variantIds = listOf("default"),
-        effects = mapOf(StatKind.PLEASURE to 10),
+        declaredEffects = mapOf(StatKind.PLEASURE to 10),
         layer = GameLayer.ENVIRONMENT_FRONT
     )
 
+    /** Food the pet feels three ways about, for the shelf that has to make room for three chips. */
+    val CAKE = Item(
+        id = "cake",
+        name = "Пирожное",
+        price = 40,
+        category = ItemCategory.FOOD,
+        variantIds = listOf("default"),
+        declaredEffects = mapOf(
+            StatKind.HUNGER to 30,
+            StatKind.PLEASURE to 15,
+            StatKind.HEALTH to -5
+        )
+    )
+
     /** Every test item, in the order a catalog would list them. */
-    val ALL = listOf(APPLE, FISH, HAT, BALL, LAMP)
+    val ALL = listOf(APPLE, FISH, CAKE, HAT, BALL, LAMP)
 }
 
 /**

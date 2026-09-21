@@ -85,7 +85,7 @@ class ItemReader {
                 price = price,
                 category = category,
                 variantIds = variantIds,
-                effects = getEffects(itemNode, itemId),
+                declaredEffects = getEffects(itemNode, itemId),
                 layer = getLayer(itemNode, itemId, category)
             )
             itemsByCategory.getValue(category)[itemId] = item
@@ -104,9 +104,13 @@ class ItemReader {
      * An effect naming a stat the pet doesn't have, or an amount that is not a number, is dropped
      * with a log line: the item is still worth having, it just doesn't do that one thing.
      *
+     * Effects declared on an item the pet wears are read here all the same and then ignored by
+     * [Item.effects]: clothes and decorations are a look and nothing more, so data that still names
+     * an effect on a hat is read without an error and worn without one.
+     *
      * @param itemNode the `<item>` tag being read.
      * @param itemId id of the item, for the log messages.
-     * @return The item's effects, keyed by stat, empty when the item declares none.
+     * @return The effects the item declares, keyed by stat, empty when it declares none.
      */
     private fun getEffects(itemNode: Element, itemId: String): Map<StatKind, Int> {
         val effectNodes = itemNode.getElementsByTagName("effect")
