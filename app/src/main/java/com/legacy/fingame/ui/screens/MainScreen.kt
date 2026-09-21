@@ -264,6 +264,36 @@ internal fun bottomRowFit(
 internal data class CornerBlock(val width: Int, val height: Int)
 
 /**
+ * Where the demo build's time button stands under the buttons in the top end corner.
+ *
+ * The button carries a label and comes out several times wider than the sprite buttons it hangs
+ * under, so it sticks out towards the middle of the screen — and on a narrow one it reaches all the
+ * way across to what the player's things take in the corner opposite. When it does, it steps down
+ * past them as well instead of running into them; when it does not, it simply follows the buttons
+ * it belongs to.
+ *
+ * @param width width of the screen, in screen pixels.
+ * @param timeButtonWidth width of the button itself, in screen pixels.
+ * @param topStart size of the block with the player's things, in the corner opposite.
+ * @param topEnd size of the block of buttons the time button hangs under.
+ * @param gap how much room to leave between blocks.
+ * @return How far down the top of the button goes, in screen pixels from the top of the screen. The
+ * button is pinned to the end of the screen across, so this is all there is to say about where it
+ * stands.
+ */
+internal fun timeButtonTopOf(
+    width: Int,
+    timeButtonWidth: Int,
+    topStart: CornerBlock,
+    topEnd: CornerBlock,
+    gap: Int
+): Int {
+    val underButtons = topEnd.height + gap
+    val reachesAcross = width - timeButtonWidth < topStart.width + gap
+    return if (reachesAcross) max(underButtons, topStart.height + gap) else underButtons
+}
+
+/**
  * The room the corner blocks of the main screen leave in the middle of it for the pet, in screen
  * pixels from the start and the top of the screen.
  *
@@ -346,12 +376,12 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
  * - Top-start: the balance chip with the pet's health next to it, the rest of the stats
  *   ([SecondaryStats]) in a row under them, and the goal progress card. Every stat is a
  *   [StatChip] — an icon and a percentage — so the stats take a corner instead of half the screen.
- *   On an upright screen the demo build's time button stands under the card as well, where there
- *   is width for it (see [PlayerCorner]).
- * - Top-end: buttons for opening settings and locations, stacked into a column on an upright
- *   screen and laid along the top on a wide one — where they are joined by the time button, since
- *   the corner has the action buttons right under it and no height to stack anything (see
- *   [ControlsCorner]).
+ * - Top-end: buttons for opening settings and locations, and under them — in a demo build only —
+ *   the button that skips [DemoMode.FAST_FORWARD_HOURS] hours of the pet's life. The three are
+ *   stacked wherever there is height to stack them and laid along the top of a screen that has
+ *   none, i.e. of a phone held sideways, where the action buttons sit right under that corner (see
+ *   [ControlsCorner]). Stacked, the time button is wider than the two above it and hangs down past
+ *   the player's things when it reaches that far across ([timeButtonTopOf]).
  * - Bottom-start and bottom-end: the sub-location arrows and the action buttons for
  *   quests/inventory/shop. Both groups shrink together by [bottomRowFit] on a screen too narrow
  *   for them, so the buttons stay the size of one another instead of the last one being squeezed.
@@ -412,23 +442,30 @@ fun MainScreen(
             minTouchTarget = MinTouchTarget.value
         )
 
+        // The buttons of the top end corner are stacked wherever there is height to stack them,
+        // and laid along the top of a screen that has none — a phone held sideways, where the
+        // action buttons sit right under that corner.
+        val controlsInRow = !upright && GameDimens.isShortScreen
+
         MainScreenStage(
             modifier = Modifier.fillMaxSize(),
-            // The demo build's time button goes wherever there is width for it: under the goal card
-            // on an upright screen, and beside the other buttons on a wide one, where the corner it
-            // would stand in has the action buttons right under it instead.
-            topStart = {
-                PlayerCorner(
-                    state = state,
-                    onFastForward = onFastForward.takeIf { upright }
-                )
-            },
+            topStart = { PlayerCorner(state = state) },
             topEnd = {
                 ControlsCorner(
-                    inRow = !upright,
+                    inRow = controlsInRow,
                     onOpenScreen = onOpenScreen,
-                    onFastForward = onFastForward.takeIf { !upright }
+                    onFastForward = onFastForward.takeIf { controlsInRow }
                 )
+            },
+            // Stacked, the corner hangs the demo build's time button under the locations button;
+            // laid along the top, it has taken the button in beside the others already.
+            timeButton = {
+                if (!controlsInRow && onFastForward != null) {
+                    PillButton(
+                        text = "Вперёд ${DemoMode.FAST_FORWARD_HOURS} ч",
+                        onClick = onFastForward
+                    )
+                }
             },
             bottomStart = {
                 SubLocationArrows(
@@ -477,10 +514,17 @@ fun MainScreen(
  *   than running under the goal card;
  * - the bottom blocks take the room they ask for, having already been sized to the screen by
  *   [bottomRowFit];
- * - the pet gets the band the four of them leave ([stageBandOf]) and is centered in it.
+ * - the demo build's time button hangs under the top end corner, pinned to the end of the screen,
+ *   and steps down past the player's things when it is wide enough to reach them
+ *   ([timeButtonTopOf]). The corner it hangs under counts as reaching down to the bottom of it, so
+ *   nothing else is laid out over it either;
+ * - the pet gets the band the corners leave ([stageBandOf]) and is centered in it.
  *
  * @param topStart block for the top start corner, e.g. [PlayerCorner].
  * @param topEnd block for the top end corner, e.g. [ControlsCorner].
+ * @param timeButton the demo build's time button, hung under [topEnd]; a slot that puts nothing
+ *   there at all when the build is not a demo one, or when the corner itself has taken the button
+ *   in beside the other buttons.
  * @param bottomStart block for the bottom start corner, e.g. [SubLocationArrows].
  * @param bottomEnd block for the bottom end corner, e.g. [PrimaryActions].
  * @param center what goes in the middle, e.g. [PetColumn]. Laid out last, out of what the corners
@@ -493,6 +537,7 @@ fun MainScreen(
 private fun MainScreenStage(
     topStart: @Composable () -> Unit,
     topEnd: @Composable () -> Unit,
+    timeButton: @Composable () -> Unit,
     bottomStart: @Composable () -> Unit,
     bottomEnd: @Composable () -> Unit,
     center: @Composable () -> Unit,
@@ -500,9 +545,11 @@ private fun MainScreenStage(
     gap: Dp = BlockGap
 ) {
     Layout(
-        contents = listOf(topStart, topEnd, bottomStart, bottomEnd, center),
+        contents = listOf(topStart, topEnd, timeButton, bottomStart, bottomEnd, center),
         modifier = modifier
-    ) { (topStartAt, topEndAt, bottomStartAt, bottomEndAt, centerAt), constraints ->
+    ) { measurables, constraints ->
+        val (topStartAt, topEndAt, timeButtonAt, bottomStartAt, bottomEndAt) = measurables
+        val centerAt = measurables[5]
         val width = constraints.maxWidth
         val height = constraints.maxHeight
         val gapPx = gap.roundToPx()
@@ -520,11 +567,32 @@ private fun MainScreenStage(
         val bottomStartPlaced = bottomStartAt.first().measure(loose)
         val bottomEndPlaced = bottomEndAt.first().measure(loose)
 
+        // The time button is free to be wider than the corner it hangs under and to stick out
+        // towards the middle of the screen, so it is measured against the whole width.
+        val timeButtonPlaced = timeButtonAt.firstOrNull()?.measure(loose)
+        val timeButtonTop = timeButtonPlaced?.let { button ->
+            timeButtonTopOf(
+                width = width,
+                timeButtonWidth = button.width,
+                topStart = topStartPlaced.block,
+                topEnd = topEndPlaced.block,
+                gap = gapPx
+            )
+        }
+        val topEndBlock = if (timeButtonPlaced == null || timeButtonTop == null) {
+            topEndPlaced.block
+        } else {
+            CornerBlock(
+                width = max(topEndPlaced.width, timeButtonPlaced.width),
+                height = timeButtonTop + timeButtonPlaced.height
+            )
+        }
+
         val band = stageBandOf(
             width = width,
             height = height,
             topStart = topStartPlaced.block,
-            topEnd = topEndPlaced.block,
+            topEnd = topEndBlock,
             bottomStart = bottomStartPlaced.block,
             bottomEnd = bottomEndPlaced.block,
             gap = gapPx
@@ -536,6 +604,9 @@ private fun MainScreenStage(
         layout(width, height) {
             topStartPlaced.place(x = 0, y = 0)
             topEndPlaced.place(x = width - topEndPlaced.width, y = 0)
+            if (timeButtonPlaced != null && timeButtonTop != null) {
+                timeButtonPlaced.place(x = width - timeButtonPlaced.width, y = timeButtonTop)
+            }
             bottomStartPlaced.place(x = 0, y = height - bottomStartPlaced.height)
             bottomEndPlaced.place(
                 x = width - bottomEndPlaced.width,
@@ -556,20 +627,12 @@ private val Placeable.block: CornerBlock get() = CornerBlock(width = width, heig
  * The corner with what the player has: the money with the pet's health beside it, the rest of the
  * stats under them and the goal the player is saving towards.
  *
- * On an upright screen it also carries the demo build's time button, under the goal card. The
- * corner opposite is two sprite buttons wide there, and a screen 320dp across has nothing left
- * beside a goal card for a button with a label on it — down here the card's own width is room
- * enough (see [MainScreenStage]).
- *
  * @param state game state the chips and the card are filled from.
- * @param onFastForward called when the demo's time button is pressed, or `null` when this corner is
- *   not the one carrying that button — or when the build is not a demo one at all.
  * @param modifier modifier applied to the column.
  */
 @Composable
 private fun PlayerCorner(
     state: GameUiState,
-    onFastForward: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -596,24 +659,19 @@ private fun PlayerCorner(
             progress = DemoGoalProgress,
             modifier = Modifier.widthIn(max = GoalCardWidth)
         )
-
-        if (onFastForward != null) {
-            PillButton(
-                text = "Вперёд ${DemoMode.FAST_FORWARD_HOURS} ч",
-                onClick = onFastForward
-            )
-        }
     }
 }
 
 /**
  * The corner with the buttons that lead out of the game area: settings and locations, joined on a
- * wide screen by the demo build's button that skips a while of the pet's life.
+ * screen with no height to stack them by the demo build's button that skips a while of the pet's
+ * life.
  *
  * Which way they are laid out is decided by the shape of the screen, since the corner has to fit
- * next to the other blocks either way. An upright screen has height to spare and stacks them into a
- * column; a wide one has none — the action buttons sit right under this corner there — and lays
- * them along the top instead, counted from the corner outwards in the same order the column has
+ * next to the other blocks either way. A screen with height to spare stacks them into a column, and
+ * the demo build's time button hangs under them as its own block (see [MainScreenStage]); a phone
+ * held sideways has no height — the action buttons sit right under this corner there — and lays all
+ * of them along the top instead, counted from the corner outwards in the same order the column has
  * them from the top down.
  *
  * @param inRow whether to lay the buttons along the top rather than stack them.

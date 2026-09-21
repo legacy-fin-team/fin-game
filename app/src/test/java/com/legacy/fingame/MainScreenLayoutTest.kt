@@ -3,6 +3,7 @@ package com.legacy.fingame
 import com.legacy.fingame.ui.screens.CornerBlock
 import com.legacy.fingame.ui.screens.bottomRowFit
 import com.legacy.fingame.ui.screens.stageBandOf
+import com.legacy.fingame.ui.screens.timeButtonTopOf
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -107,46 +108,46 @@ class MainScreenLayoutTest {
 
     @Test
     fun `an upright screen gives the pet the band between the corners, from side to side`() {
-        // A 360x800dp phone with the demo build's time button in the top end corner, which is what
-        // makes that corner the taller of the two.
+        // A 360x800dp phone in a demo build: the top end corner counts as reaching down to the
+        // bottom of the time button hanging under it, which makes it the taller of the two.
         val band = stageBandOf(
             width = 328,
             height = 716,
-            topStart = CornerBlock(width = 186, height = 142),
-            topEnd = CornerBlock(width = 130, height = 192),
+            topStart = playerCorner(),
+            topEnd = CornerBlock(width = 188, height = 204),
             bottomStart = CornerBlock(width = 103, height = 52),
             bottomEnd = CornerBlock(width = 173, height = 64),
             gap = 12
         )
 
-        assertEquals(204, band.top)
+        assertEquals(216, band.top)
         assertEquals(640, band.bottom)
         assertEquals(0, band.left)
         assertEquals(328, band.right)
         assertEquals(328, band.width)
-        assertEquals(436, band.height)
+        assertEquals(424, band.height)
     }
 
     @Test
     fun `a build without the time button hands the pet the room that button took`() {
-        val corners = { topEndHeight: Int ->
+        val corners = { topEnd: CornerBlock ->
             stageBandOf(
                 width = 328,
                 height = 716,
-                topStart = CornerBlock(width = 186, height = 142),
-                topEnd = CornerBlock(width = 130, height = topEndHeight),
+                topStart = playerCorner(),
+                topEnd = topEnd,
                 bottomStart = CornerBlock(width = 103, height = 52),
                 bottomEnd = CornerBlock(width = 173, height = 64),
                 gap = 12
             )
         }
 
-        val demo = corners(192)
-        val released = corners(140)
+        val demo = corners(CornerBlock(width = 188, height = 204))
+        val released = corners(controlsCorner)
 
-        // Without the button the top end corner is shorter than the one with the money in it, so
-        // the band starts under that one instead.
-        assertEquals(154, released.top)
+        // Without the button the corner is the two stacked sprite buttons and nothing else, and
+        // the band starts right under them.
+        assertEquals(controlsCorner.height + 12, released.top)
         assertEquals(demo.bottom, released.bottom)
         assertTrue(released.height > demo.height)
     }
@@ -171,6 +172,77 @@ class MainScreenLayoutTest {
         assertEquals(280, band.bottom)
         assertEquals(262, band.width)
         assertEquals(280, band.height)
+    }
+
+    /**
+     * The block with the player's things, as an upright phone measures it.
+     *
+     * @param large whether the system text is turned up, which is what makes the chips and the card
+     *   taller.
+     * @return Size of the block, in dp.
+     */
+    private fun playerCorner(large: Boolean = false): CornerBlock =
+        CornerBlock(width = 208, height = if (large) 180 else 142)
+
+    /** The two stacked sprite buttons of the top end corner, as an upright phone measures them. */
+    private val controlsCorner = CornerBlock(width = 64, height = 152)
+
+    /**
+     * @param screenWidth width of the screen, in dp.
+     * @param large whether the system text is turned up, which is what makes the time button wider.
+     * @return Where the top of the time button goes on such a screen, in dp from the top.
+     */
+    private fun timeButtonTopOn(screenWidth: Float, large: Boolean = false): Int = timeButtonTopOf(
+        width = (screenWidth - 16f * 2).toInt(),
+        timeButtonWidth = if (large) 230 else 188,
+        topStart = playerCorner(large),
+        topEnd = controlsCorner,
+        gap = 12
+    )
+
+    @Test
+    fun `the time button hangs under the locations button, at the end of the screen`() {
+        // 411dp and 360dp, with the system text as it comes: the button starts right under the two
+        // stacked above it, which is already below the player's things opposite.
+        assertEquals(controlsCorner.height + 12, timeButtonTopOn(screenWidth = 411f))
+        assertEquals(controlsCorner.height + 12, timeButtonTopOn(screenWidth = 360f))
+    }
+
+    @Test
+    fun `a time button wide enough to reach the player's things steps down past them`() {
+        // With the system text turned up the button is wider and the corner opposite is taller, so
+        // following the buttons above it would have it run over the goal card.
+        val large = timeButtonTopOn(screenWidth = 360f, large = true)
+
+        assertEquals(playerCorner(large = true).height + 12, large)
+        assertTrue(large > controlsCorner.height + 12)
+    }
+
+    @Test
+    fun `a time button with the whole width to itself follows the buttons it belongs to`() {
+        // A tablet held upright: the button ends nowhere near the player's things.
+        val onTablet = timeButtonTopOn(screenWidth = 800f, large = true)
+
+        assertEquals(controlsCorner.height + 12, onTablet)
+    }
+
+    @Test
+    fun `the time button never lies over the player's things, whatever the screen`() {
+        listOf(320f, 360f, 411f, 800f).forEach { screenWidth ->
+            listOf(false, true).forEach { large ->
+                val width = (screenWidth - 16f * 2).toInt()
+                val timeButtonWidth = if (large) 230 else 188
+                val top = timeButtonTopOn(screenWidth = screenWidth, large = large)
+                val player = playerCorner(large)
+
+                // Either it starts after the player's things end, or it hangs below them.
+                val clearAcross = width - timeButtonWidth >= player.width + 12
+                val clearBelow = top >= player.height + 12
+                assertTrue(clearAcross || clearBelow)
+                // And it is always under the buttons it belongs to.
+                assertTrue(top >= controlsCorner.height + 12)
+            }
+        }
     }
 
     @Test
