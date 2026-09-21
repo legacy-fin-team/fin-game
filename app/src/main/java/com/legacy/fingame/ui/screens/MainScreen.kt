@@ -2,7 +2,7 @@ package com.legacy.fingame.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -136,6 +136,13 @@ private fun sideOfStageWidth(): Dp = maxOf(
  * drags it around (see [SceneViewport.of]).
  */
 private val ScenePixelSize = 3.dp
+
+/**
+ * How many times past the size it starts at the player may blow the scene up with a pinch. Twice
+ * is enough for the pet to fill a good part of the window without the room turning into a handful
+ * of huge squares.
+ */
+private const val SceneMaxZoom = 2f
 
 /** How round the corners of the game area are. */
 private val SceneCornerRadius = 32.dp
@@ -433,12 +440,14 @@ private fun stageTitleOf(petName: String, subLocationTitle: String?): String? = 
  * When the scene does not fit, which on a phone it does not, only a part of it is visible at a time
  * and the player moves the rest into view with a finger, like a map: the whole scene travels
  * together, and the edges of the room stop the drag so no empty band next to it can be pulled into
- * view.
+ * view. Two fingers pinch the scene larger or smaller around the spot they hold, between
+ * [SceneViewport.minScale] and [SceneViewport.maxScale]; the scene steps from one whole blow-up to
+ * the next as they go, so the pixel grid stays as crisp in the middle of a pinch as it is at rest.
  *
- * How far the scene is dragged outlives a recomposition and a turn of the device, and an area that
- * changed size holds it to its new edges. It is read in the layout pass and not during composition
- * ([sceneIn]), so a finger moving the room around never composes the sprites it is stacked out of
- * again.
+ * How big the scene is drawn and how far it is dragged outlive a recomposition and a turn of the
+ * device, and an area that changed size holds both to what it now allows. Both are read in the
+ * layout pass and not during composition ([sceneWindow], [sceneIn]), so a finger moving the room
+ * around never composes the sprites it is stacked out of again.
  *
  * @param scene what stands on each layer of the area.
  * @param modifier modifier applied to the card; this is where the caller states how much room the
@@ -451,7 +460,7 @@ private fun PetStage(
 ) {
     val density = LocalDensity.current
     BoxWithConstraints(modifier = modifier) {
-        val viewport = remember(constraints, density) {
+        val base = remember(constraints, density) {
             // An area told it may be as large as it likes is an area with nothing to measure
             // against, and it gets the smallest window there is rather than an endless one.
             val roomWide = if (constraints.hasBoundedWidth) constraints.maxWidth.toFloat() else 0f
@@ -460,20 +469,26 @@ private fun PetStage(
                 availableWidth = roomWide,
                 availableHeight = roomHigh,
                 scenePixels = GameLayer.BACKGROUND.spritePixels,
-                pixelSize = with(density) { ScenePixelSize.toPx() }
+                pixelSize = with(density) { ScenePixelSize.toPx() },
+                maxZoom = SceneMaxZoom
             )
         }
+        var scale by rememberSaveable { mutableStateOf(base.scale) }
         var moved by rememberSaveable(stateSaver = SceneOffsetSaver) {
-            mutableStateOf(viewport.initialOffset)
+            mutableStateOf(base.initialOffset)
         }
+        val viewport = { base.withScale(scale) }
 
         // An area that was resized — a turn of the device, a folded screen — may have been left
-        // showing the scene further out than its new edges allow, so the drag is held to them
-        // again.
-        LaunchedEffect(viewport) { moved = viewport.clamp(moved) }
+        // showing the scene at a size it no longer allows, or moved further out than its new edges
+        // do, so both are held to it again.
+        LaunchedEffect(base) {
+            scale = base.heldScale(scale)
+            moved = base.withScale(scale).clamp(moved)
+        }
 
         Surface(
-            modifier = Modifier.size(with(density) { viewport.windowSide.toDp() }),
+            modifier = Modifier.sceneWindow { viewport().windowSide },
             shape = RoundedCornerShape(SceneCornerRadius),
             color = MaterialTheme.colorScheme.surface,
             border = BorderStroke(1.dp, GameColors.cardStroke),
@@ -483,13 +498,23 @@ private fun PetStage(
                 modifier = Modifier
                     .fillMaxSize()
                     .clipToBounds()
-                    .pointerInput(viewport) {
-                        if (!viewport.isDraggable) return@pointerInput
-                        detectDragGestures { change, dragged ->
-                            change.consume()
-                            moved = viewport.clamp(
-                                moved + SceneOffset(x = dragged.x, y = dragged.y)
+                    .pointerInput(base) {
+                        // How far the pinch has carried the scale, fractions and all. The scene
+                        // follows it in whole steps, and this is what remembers where between two
+                        // of them the fingers actually are.
+                        var pinched = viewport().scale
+                        detectTransformGestures { centroid, pan, zoom, _ ->
+                            val current = viewport()
+                            pinched = (pinched * zoom)
+                                .coerceIn(current.minScale, current.maxScale)
+                            val zoomed = current.zoomedAt(
+                                rawScale = pinched,
+                                focusX = centroid.x - size.width / 2f,
+                                focusY = centroid.y - size.height / 2f,
+                                moved = current.clamp(moved + SceneOffset(x = pan.x, y = pan.y))
                             )
+                            scale = zoomed.viewport.scale
+                            moved = zoomed.offset
                         }
                     }
             ) {
@@ -518,14 +543,14 @@ private fun PetStage(
  * without the pile.
  *
  * @param scene what stands on each layer.
- * @param viewport geometry of the window and the scene behind it.
- * @param moved how far the scene is dragged, read in the layout pass.
+ * @param viewport geometry of the window and the scene behind it, read in the layout pass.
+ * @param moved how far the scene is dragged, read in the layout pass as well.
  * @param modifier modifier applied to the stack.
  */
 @Composable
 private fun SceneLayers(
     scene: GameScene,
-    viewport: SceneViewport,
+    viewport: () -> SceneViewport,
     moved: () -> SceneOffset,
     modifier: Modifier = Modifier
 ) {
@@ -566,6 +591,24 @@ private fun SceneLayers(
 }
 
 /**
+ * Lays what this modifier is applied to out as the window of the game area: a square of the side
+ * the viewport has picked, whatever the layout around it was prepared to give.
+ *
+ * The side is asked for at measuring time rather than during composition, so a pinch that makes the
+ * window shrink around a scene that now fits into it re-measures the card without composing
+ * anything again.
+ *
+ * @param side side of the window, in screen pixels, as [SceneViewport.windowSide] states it.
+ * @return This modifier with the window sized that way.
+ */
+private fun Modifier.sceneWindow(side: () -> Float): Modifier =
+    layout { measurable, constraints ->
+        val window = side().roundToInt().coerceAtLeast(0)
+        val placeable = measurable.measure(Constraints.fixed(width = window, height = window))
+        layout(window, window) { placeable.place(x = 0, y = 0) }
+    }
+
+/**
  * Lays what this modifier is applied to out as the scene behind a window: as large as the viewport
  * says the scene is, however small the window showing it happens to be, and moved to where the
  * player has dragged it.
@@ -574,14 +617,16 @@ private fun SceneLayers(
  * a part of: a room larger than its card is the point of the game area, not something the card
  * around it should grow for. Whatever sticks out is left to the window to cut off.
  *
- * @param viewport geometry of the window and the scene behind it.
- * @param moved read at placement time — in the layout pass rather than during composition — so
- *   dragging the scene moves it without composing the sprites it is stacked out of again.
+ * @param viewport geometry of the window and the scene behind it, read at measuring time — in the
+ *   layout pass rather than during composition — so a pinch resizes the scene without composing the
+ *   sprites it is stacked out of again.
+ * @param moved read at placement time, for the same reason, so dragging the scene only moves it.
  * @return This modifier with the scene laid out that way.
  */
-private fun Modifier.sceneIn(viewport: SceneViewport, moved: () -> SceneOffset): Modifier =
+private fun Modifier.sceneIn(viewport: () -> SceneViewport, moved: () -> SceneOffset): Modifier =
     layout { measurable, constraints ->
-        val side = viewport.sceneSide.roundToInt()
+        val current = viewport()
+        val side = current.sceneSide.roundToInt()
         val placeable = measurable.measure(Constraints.fixed(width = side, height = side))
         // A game area always has its size given to it; the scene's own is the fallback for a
         // measurement that leaves an axis open, where there is no window to speak of.
@@ -589,7 +634,7 @@ private fun Modifier.sceneIn(viewport: SceneViewport, moved: () -> SceneOffset):
         val windowHeight = if (constraints.hasBoundedHeight) constraints.maxHeight else side
 
         layout(windowWidth, windowHeight) {
-            val offset = viewport.clamp(moved())
+            val offset = current.clamp(moved())
             placeable.place(
                 x = ((windowWidth - side) / 2f + offset.x).roundToInt(),
                 y = ((windowHeight - side) / 2f + offset.y).roundToInt()
@@ -793,7 +838,7 @@ private fun MainScreenTabletPortraitPreview() {
 
 /**
  * Preview of the game area at the size a phone gives it: the scene is larger than the card, so the
- * room is shown cut off at its edges and can be dragged around.
+ * room is shown cut off at its edges and can be dragged and pinched around.
  */
 @Preview(name = "PetStage — Phone", showBackground = true, widthDp = 312, heightDp = 312)
 @Composable

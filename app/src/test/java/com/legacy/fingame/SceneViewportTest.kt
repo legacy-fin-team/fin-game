@@ -11,7 +11,7 @@ import org.junit.Test
 
 /**
  * The window the game area looks at the scene through: how big the room is drawn, how big the card
- * showing it comes out, how far the player may drag it and where it stands to begin with.
+ * showing it comes out, how far the player may drag it and how a pinch changes all of that.
  */
 class SceneViewportTest {
 
@@ -22,18 +22,30 @@ class SceneViewportTest {
      * @param availableWidth widest the game area may be, in screen pixels.
      * @param availableHeight tallest it may be; square, like the card itself, unless stated.
      * @param pixelSize screen pixels per pixel of the artwork the scene is meant to be drawn at.
+     * @param maxZoom how many times past its starting size a pinch may blow the scene up.
      * @return The viewport of such an area.
      */
     private fun viewport(
         availableWidth: Float,
         availableHeight: Float = availableWidth,
-        pixelSize: Float = 8f
+        pixelSize: Float = 8f,
+        maxZoom: Float = 2f
     ) = SceneViewport.of(
         availableWidth = availableWidth,
         availableHeight = availableHeight,
         scenePixels = scenePixels,
-        pixelSize = pixelSize
+        pixelSize = pixelSize,
+        maxZoom = maxZoom
     )
+
+    /**
+     * @param focusX a spot of the window, in screen pixels from the middle of it.
+     * @param moved how far the scene is moved inside the window.
+     * @return Which pixel of the artwork, counted from the middle of the scene, that spot of the
+     * window is over — the thing a pinch has to keep under the fingers holding it.
+     */
+    private fun SceneViewport.artPixelUnder(focusX: Float, moved: SceneOffset): Float =
+        (focusX - moved.x) / scale
 
     @Test
     fun `a small window blows the scene up past its edges, by whole pixels of the artwork`() {
@@ -184,8 +196,18 @@ class SceneViewportTest {
 
         assertEquals(1024f, window.sceneSide, 0f)
         assertEquals(0f, window.windowSide, 0f)
+        assertEquals(1f, window.minScale, 0f)
         assertEquals(SceneOffset(x = 10f, y = 10f), window.clamp(SceneOffset(x = 10f, y = 10f)))
-        assertTrue(window.isDraggable)
+        assertEquals(
+            9f,
+            window.zoomedAt(
+                rawScale = 9f,
+                focusX = 0f,
+                focusY = 0f,
+                moved = SceneOffset.NONE
+            ).viewport.scale,
+            0f
+        )
     }
 
     @Test
@@ -193,7 +215,118 @@ class SceneViewportTest {
         val window = viewport(availableWidth = 700f)
 
         assertEquals(0f, window.scale % 1f, 0f)
-        assertEquals(0f, window.sceneSide % window.scale, 0f)
+        assertEquals(9f, window.steppedTo(8.7f).scale, 0f)
+        assertEquals(7f, window.steppedTo(7.2f).scale, 0f)
+        assertEquals(11f, window.withScale(10.6f).scale, 0f)
+    }
+
+    @Test
+    fun `a pinch resting between two sizes leaves the scene at the one it is drawn at`() {
+        val window = viewport(availableWidth = 700f)
+
+        // Half a step past is where the nearest whole size changes, and fingers trembling right
+        // there would have the pixel grid shivering between two of them.
+        assertEquals(8f, window.steppedTo(8.5f).scale, 0f)
+        assertEquals(8f, window.steppedTo(7.5f).scale, 0f)
+        assertEquals(9f, window.steppedTo(8.7f).scale, 0f)
+        assertEquals(9f, window.steppedTo(8.7f).steppedTo(9.3f).scale, 0f)
+    }
+
+    @Test
+    fun `a pinch keeps the pixel of the art between the fingers between the fingers`() {
+        val window = viewport(availableWidth = 700f)
+        val held = 120f
+        val under = window.artPixelUnder(focusX = held, moved = SceneOffset.NONE)
+
+        val zoomed = window.zoomedAt(
+            rawScale = 9f,
+            focusX = held,
+            focusY = -60f,
+            moved = SceneOffset.NONE
+        )
+
+        assertEquals(9f, zoomed.viewport.scale, 0f)
+        assertEquals(
+            under,
+            zoomed.viewport.artPixelUnder(focusX = held, moved = zoomed.offset),
+            0.001f
+        )
+    }
+
+    @Test
+    fun `a pinch goes no further than the sizes the scene may be drawn at`() {
+        val window = viewport(availableWidth = 700f)
+
+        // 128 * 5 = 640 is the largest whole blow-up the area holds, and twice the size the art is
+        // meant to have is as large as the room may get.
+        assertEquals(5f, window.minScale, 0f)
+        assertEquals(16f, window.maxScale, 0f)
+        assertEquals(
+            16f,
+            window.zoomedAt(rawScale = 900f, focusX = 0f, focusY = 0f, moved = SceneOffset.NONE)
+                .viewport.scale,
+            0f
+        )
+        assertEquals(
+            5f,
+            window.zoomedAt(rawScale = 0.01f, focusX = 0f, focusY = 0f, moved = SceneOffset.NONE)
+                .viewport.scale,
+            0f
+        )
+    }
+
+    @Test
+    fun `a pinch that shrinks the scene into the card holds the drag and the card to it`() {
+        val window = viewport(availableWidth = 700f)
+        val dragged = window.clamp(SceneOffset(x = window.free, y = window.free))
+
+        val zoomed = window.zoomedAt(
+            rawScale = window.minScale,
+            focusX = 0f,
+            focusY = 0f,
+            moved = dragged
+        )
+
+        assertEquals(640f, zoomed.viewport.sceneSide, 0f)
+        assertEquals(640f, zoomed.viewport.windowSide, 0f)
+        assertFalse(zoomed.viewport.isDraggable)
+        assertEquals(SceneOffset.NONE, zoomed.offset)
+    }
+
+    @Test
+    fun `a pinch at the edge of the scene does not pull an empty band into view`() {
+        val window = viewport(availableWidth = 700f)
+        val corner = window.focusedOn(sceneX = 0f, sceneY = 0f)
+
+        // Blowing the room up around the far corner of the window would carry the scene well past
+        // its own edge if the drag were not held to it.
+        val zoomed = window.zoomedAt(
+            rawScale = 16f,
+            focusX = -350f,
+            focusY = -350f,
+            moved = corner
+        )
+
+        assertEquals(16f, zoomed.viewport.scale, 0f)
+        assertEquals(zoomed.viewport.free, zoomed.offset.x, 0f)
+        assertEquals(zoomed.viewport.free, zoomed.offset.y, 0f)
+    }
+
+    @Test
+    fun `a size the player pinched to is held to what an area of another shape allows`() {
+        val phone = viewport(availableWidth = 700f)
+        val pinched = phone.zoomedAt(
+            rawScale = 5f,
+            focusX = 0f,
+            focusY = 0f,
+            moved = SceneOffset.NONE
+        ).viewport
+
+        // A tablet cannot draw the room that small: it would leave a card larger than the scene.
+        val tablet = viewport(availableWidth = 1440f)
+
+        assertEquals(5f, pinched.scale, 0f)
+        assertEquals(11f, tablet.heldScale(pinched.scale), 0f)
     }
 
     @Test

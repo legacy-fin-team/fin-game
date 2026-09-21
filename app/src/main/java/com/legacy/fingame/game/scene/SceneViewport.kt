@@ -1,5 +1,6 @@
 package com.legacy.fingame.game.scene
 
+import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
@@ -11,6 +12,16 @@ import kotlin.math.roundToInt
  * the pet is exactly half a scene away from either edge.
  */
 private const val PET_PLACE_IN_SCENE = 0.5f
+
+/**
+ * How far a pinch has to carry the scale past the size the scene is drawn at before it is redrawn
+ * one whole pixel larger or smaller.
+ *
+ * Half a step is where the nearest whole number changes; everything past that is the hold that
+ * keeps a finger trembling right on that spot from flipping the scene between two sizes over and
+ * over, which is what the pixel grid would be seen shivering as.
+ */
+private const val SCALE_STEP_HOLD = 0.6f
 
 /**
  * How far the scene is moved inside the window the game area looks at it through, in screen pixels,
@@ -39,6 +50,15 @@ data class SceneOffset(val x: Float, val y: Float) {
 }
 
 /**
+ * What a pinch left behind: the scene blown up to a new size, and the drag that keeps what was
+ * between the fingers where it was.
+ *
+ * @property viewport the viewport at the new size.
+ * @property offset how far the scene is moved inside it, already held to its edges.
+ */
+data class SceneZoom(val viewport: SceneViewport, val offset: SceneOffset)
+
+/**
  * The window the game area looks at the scene through, and the scene behind it.
  *
  * The scene — the room with the pet and everything standing in it — is a square picture of
@@ -49,7 +69,8 @@ data class SceneOffset(val x: Float, val y: Float) {
  * of the card around the room — there is no card left over to show (see [windowSide]).
  *
  * When the scene is the larger of the two only a part of it is visible at a time and the player
- * drags the rest into view.
+ * drags the rest into view; a pinch changes [scale] between [minScale] and [maxScale] (see
+ * [zoomedAt]).
  *
  * This is the whole geometry of the game area and it knows nothing about Compose: the UI measures
  * how much room the area has, builds a viewport out of it and asks it how big the card is, how big
@@ -61,12 +82,17 @@ data class SceneOffset(val x: Float, val y: Float) {
  * @property scale how many screen pixels one pixel of the artwork takes up. Always a whole number:
  * the scene is pixel art, and anything else would smear its grid across the screen and make some
  * pixels wider than their neighbours.
+ * @property minScale smallest [scale] the player may pinch down to, i.e. the largest whole blow-up
+ * at which the whole room still fits into the game area.
+ * @property maxScale largest [scale] the player may pinch up to.
  */
 data class SceneViewport(
     val availableWidth: Float,
     val availableHeight: Float,
     val scenePixels: Int,
-    val scale: Float
+    val scale: Float,
+    val minScale: Float,
+    val maxScale: Float
 ) {
 
     /**
@@ -132,6 +158,68 @@ data class SceneViewport(
     )
 
     /**
+     * @param scale how big a pixel of the artwork is wanted, in screen pixels.
+     * @return That size rounded to a whole number of screen pixels and held between [minScale] and
+     * [maxScale] — the sizes the scene may actually be drawn at.
+     */
+    fun heldScale(scale: Float): Float =
+        max(1f, scale.roundToInt().toFloat()).coerceIn(minScale, maxScale)
+
+    /**
+     * @param scale how big a pixel of the artwork is to be, in screen pixels.
+     * @return The same viewport with the scene drawn at that size, as far as [heldScale] allows it.
+     */
+    fun withScale(scale: Float): SceneViewport = copy(scale = heldScale(scale))
+
+    /**
+     * Follows a pinch that has carried the scale to [rawScale].
+     *
+     * A pinch travels smoothly, and the scene does not: it is only ever drawn at a whole number of
+     * screen pixels per pixel of its artwork, so it steps from one size to the next as the fingers
+     * pass the point between them — with a hold of [SCALE_STEP_HOLD] around that point, so fingers
+     * resting on it do not make the pixel grid shiver between two sizes.
+     *
+     * @param rawScale the size the fingers have asked for, which is any number at all.
+     * @return The viewport at the whole size that asks for, or this very viewport when the pinch
+     * has not carried far enough to change the size the scene is drawn at.
+     */
+    fun steppedTo(rawScale: Float): SceneViewport {
+        val asked = rawScale.coerceIn(minScale, maxScale)
+        return if (abs(asked - scale) > SCALE_STEP_HOLD) withScale(asked) else this
+    }
+
+    /**
+     * Blows the scene up or down around the spot the fingers hold, the way a map behaves: whatever
+     * is between the fingers stays between them, and the rest of the room grows away from it.
+     *
+     * @param rawScale the size the pinch has carried the scale to, as [steppedTo] takes it.
+     * @param focusX how far the middle of the pinch is to the right of the middle of the window, in
+     *   screen pixels.
+     * @param focusY how far it is below the middle of the window.
+     * @param moved how far the scene is moved right now.
+     * @return The viewport at the new size and the move that keeps the spot under the fingers where
+     * it is, held to the edges of the scene at that size.
+     */
+    fun zoomedAt(
+        rawScale: Float,
+        focusX: Float,
+        focusY: Float,
+        moved: SceneOffset
+    ): SceneZoom {
+        val zoomed = steppedTo(rawScale)
+        val grown = zoomed.scale / scale
+        return SceneZoom(
+            viewport = zoomed,
+            offset = zoomed.clamp(
+                SceneOffset(
+                    x = focusX - (focusX - moved.x) * grown,
+                    y = focusY - (focusY - moved.y) * grown
+                )
+            )
+        )
+    }
+
+    /**
      * Holds a move along one axis to what the scene has hidden along it.
      *
      * @param moved how far the scene is being moved that way.
@@ -145,35 +233,44 @@ data class SceneViewport(
     companion object {
 
         /**
-         * Builds the viewport of a measured game area, picking how big the scene is drawn.
+         * Builds the viewport of a measured game area, picking how big the scene is drawn to begin
+         * with and how far the player may pinch it either way.
          *
          * The scene takes [pixelSize] — the size a pixel of the game is meant to have — and falls
          * back to the largest whole blow-up that still fits into the area when the area is bigger
          * than that, so a tablet shows the whole room instead of a needlessly small picture in the
-         * middle of a large card.
+         * middle of a large card. That same blow-up is as far as a pinch may take the scale down
+         * ([minScale]): there is no point in shrinking the room past the card it is shown in, as
+         * the card shrinks with it (see [windowSide]).
          *
          * @param availableWidth widest the game area may be, in screen pixels.
          * @param availableHeight tallest it may be, in screen pixels.
          * @param scenePixels side of the scene in the pixels the art itself is made of, i.e.
          *   [GameLayer.BACKGROUND]'s [GameLayer.spritePixels].
          * @param pixelSize how many screen pixels one pixel of the art should take up.
+         * @param maxZoom how many times past the size it starts at the player may blow the scene
+         *   up.
          * @return The viewport of that area with the scene sized to it.
          */
         fun of(
             availableWidth: Float,
             availableHeight: Float,
             scenePixels: Int,
-            pixelSize: Float
+            pixelSize: Float,
+            maxZoom: Float
         ): SceneViewport {
             val artPixels = max(1, scenePixels)
             val side = max(0f, min(availableWidth, availableHeight))
             val fitting = max(1f, floor(side / artPixels))
             val wanted = max(1f, pixelSize.roundToInt().toFloat())
+            val started = max(fitting, wanted)
             return SceneViewport(
                 availableWidth = availableWidth,
                 availableHeight = availableHeight,
                 scenePixels = artPixels,
-                scale = max(fitting, wanted)
+                scale = started,
+                minScale = fitting,
+                maxScale = max(started, (started * max(1f, maxZoom)).roundToInt().toFloat())
             )
         }
     }
