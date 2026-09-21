@@ -743,8 +743,9 @@ private fun ItemSprite(
 }
 
 /**
- * An item's price: the coin sprite and the number of coins. Shared between [ShopItemCard]'s two
- * layouts, which only differ in how big the coin sprite is drawn.
+ * An item's price: the coin sprite and the number of coins, set larger than the item's name so
+ * the price is the first thing read on a card. Shared between [ShopItemCard]'s two layouts, which
+ * only differ in how big the coin sprite is drawn.
  *
  * @param price the item's price, in coins.
  * @param iconSize size of the coin sprite.
@@ -768,7 +769,7 @@ private fun ItemPriceRow(
         )
         Text(
             text = price.toString(),
-            style = MaterialTheme.typography.titleMedium,
+            style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
