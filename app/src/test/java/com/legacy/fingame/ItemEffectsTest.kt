@@ -93,6 +93,17 @@ class ItemEffectsTest {
     }
 
     @Test
+    fun `a wide card fits the whole shelf into one row of chips`() {
+        // A card laid out sideways (a phone held sideways) has the width for three chips and no
+        // height for a second row of them, so even the cake reserves a single row there.
+        val food = listOf(TestItems.APPLE, TestItems.FISH, TestItems.CAKE)
+
+        assertEquals(1, ShopShelf.effectRowsOf(food, chipsPerRow = 3))
+        assertEquals(1, ShopShelf.effectRowsOf(listOf(TestItems.CAKE), chipsPerRow = 3))
+        assertEquals(0, ShopShelf.effectRowsOf(listOf(TestItems.HAT), chipsPerRow = 3))
+    }
+
+    @Test
     fun `a shelf of items the pet feels nothing about keeps no room at all`() {
         assertEquals(0, ShopShelf.effectRowsOf(listOf(TestItems.HAT, TestItems.LAMP), 2))
         assertEquals(0, ShopShelf.effectRowsOf(emptyList(), 2))

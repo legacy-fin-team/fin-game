@@ -5,6 +5,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
@@ -38,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -97,36 +99,47 @@ private val ItemCellMinSize = 152.dp
 
 /**
  * Sizes the shop swaps in on a short screen — a phone held sideways — where a card is laid out
- * sideways too: the sprite on one side, everything that is said about the item on the other.
+ * sideways too: the sprite on one side, what is said about the item in the middle, and the way to
+ * buy it on the other.
  *
- * The cell is wider, because a card now has to hold the sprite and the widest of the purchase
- * controls next to each other; the sprite and the coin are smaller, because the height a card may
- * take is all the height the screen has. Unlike [ItemCellMinSize] this is not bound by a
- * two-column promise — a phone held sideways is wide enough on its own — so it is sized purely for
- * the label to have room.
+ * The cell is wider, because a card now has to hold all three next to each other; everything else is
+ * smaller, because the height a card may take is all the height the screen has, and a card that does
+ * not fit into it is a card the player has to scroll for. Unlike [ItemCellMinSize] the cell's own
+ * width is not bound by a two-column promise — a phone held sideways is wide enough on its own — so
+ * it is sized purely for the three columns to have room. The sprite is not a constant at all: it is
+ * given the room the screen turns out to have, see [shortScreenCardSpriteSize].
  */
 private val ShortScreenItemCellMinSize = 288.dp
-private val ShortScreenCardSpriteSize = 96.dp
 private val ShortScreenStarButtonSize = 28.dp
 private val ShortScreenPriceIconSize = 24.dp
+private val ShortScreenVariantButtonSize = 30.dp
+private val ShortScreenCounterButtonSize = 40.dp
+private val ShortScreenCloseButtonSize = 48.dp
 
-/** Gap between the shelves and the column of controls standing beside them on a short screen. */
-private val ShortScreenRailGap = 12.dp
+/** Gap between the variant picker of a sideways card and the control that buys the item. */
+private val ShortScreenPurchaseGap = 6.dp
+
+/** Gap the shop's grid keeps between its columns and its rows, and around its content. */
+private val ShopGridGap = 12.dp
+private val ShopGridContentPadding = 4.dp
 
 /**
- * How many effect chips a card fits into one row, and the gap between them.
+ * How many effect chips a stacked card fits into one row, and the gap between them.
  *
  * Two is what the narrowest card the shop lays out has room for — `134.dp` of content (see
  * [ItemCellMinSize]) against a chip drawn `compact`, which is sized to take under half of that at
- * any font scale (see [com.legacy.fingame.ui.components.StatValueChip]) — and it is also what the
- * wider card of a short screen uses, so a shelf keeps room for the same number of rows in either
- * layout. An item with three effects therefore takes two rows and never a chip cut in half.
+ * any font scale (see [com.legacy.fingame.ui.components.StatValueChip]). An item with three effects
+ * therefore takes two rows and never a chip cut in half. A card laid out sideways is wider, and is
+ * allowed all three of them in one row; see [ShortScreenEffectChipsPerRow]. How many of the two or
+ * three actually go in a row is counted from the width and the font scale, see [effectChipsPerRow].
  */
 private const val EffectChipsPerRow = 2
-private val EffectChipGap = 4.dp
 
 /** Gap between an item's price and the effects it has on the pet. */
 private val EffectsRowTopGap = 6.dp
+
+/** Padding between a stacked card's edge and what is in it. */
+private val ItemCardPadding = 12.dp
 
 /** Sizes shared by the windows the shop opens over itself; see [ShopDialogBlock]. */
 private val DialogMaxWidth = 320.dp
@@ -164,12 +177,15 @@ private enum class ShopWindow {
  * Shop screen: the registered items of one category at a time, and the balance they are paid from.
  *
  * Layout:
- * - Top: the player's balance and a close button.
- * - Below that: the title of the current category, then a scrollable grid of item cards
- *   ([ShopItemCard]), one per item of [items]; a category with nothing on its shelves says so
- *   instead of showing an empty grid. On a short screen — a phone held sideways, see
- *   [GameDimens.isShortScreen] — the cards are laid out sideways too, sprite beside the details
- *   rather than above them, so a card's height stops depending on how wide the grid made it.
+ * - Top: the player's balance and a close button, with the title of the current category under them
+ *   — or, on a short screen, all three in a single line, since every line of the header is a line
+ *   the cards below it do not get.
+ * - Below that: a scrollable grid of item cards ([ShopItemCard]), one per item of [items]; a category
+ *   with nothing on its shelves says so instead of showing an empty grid. On a short screen — a phone
+ *   held sideways, see [GameDimens.isShortScreen] — the cards are laid out sideways too, sprite
+ *   beside the details and the purchase controls beside both, and are sized to the room the grid
+ *   turns out to have (see [shortScreenCardSpriteSize]) so that a whole row of them is read without
+ *   scrolling for the bottom of a card.
  * - Bottom: one button per category in a row that scrolls horizontally (so the row can hold any
  *   number of categories) next to the "Купить" button, which shows what the cart costs and is
  *   disabled while — and only while — the cart is empty. A cart the player cannot afford is still
@@ -217,14 +233,15 @@ fun ShopScreen(
     // was told they cannot afford is not changed by being told.
     var window by remember { mutableStateOf(ShopWindow.NONE) }
     // Cards of one screen are cut to the same pattern, so they end up the same height: room for a
-    // variant picker is kept on every card of a category where any item has variants at all, and
-    // room for as many rows of effects as the busiest item of the category needs — none at all in a
-    // category whose items do nothing to the pet, where the cards end right under the price.
+    // variant picker is kept on every card of a category where any item has variants at all. Room
+    // for the rows of effects is kept the same way, but that one waits until the grid has been
+    // measured — how many chips go in a row is a question about the card's own width.
     val reserveVariantRow = items.any { item -> item.hasSeveralVariants }
-    val reservedEffectRows = ShopShelf.effectRowsOf(items, EffectChipsPerRow)
     // A phone held sideways has no height to spare for a card that stacks its sprite over its
     // price and controls; the card is laid out sideways there instead, see [ShopItemCard].
     val isShortScreen = GameDimens.isShortScreen
+    val cellMinSize = if (isShortScreen) ShortScreenItemCellMinSize else ItemCellMinSize
+    val fontScale = LocalDensity.current.fontScale
 
     Column(
         modifier = modifier
@@ -232,29 +249,46 @@ fun ShopScreen(
             .systemBarsPadding()
             .padding(16.dp)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Top
-        ) {
-            BalanceChip(balance = state.balance)
-            Spacer(modifier = Modifier.weight(1f))
-            SpriteButton(
-                assetPath = Sprites.CLOSE,
-                contentDescription = "Закрыть магазин",
-                onClick = onClose,
-                size = CloseButtonSize
-            )
+        // On a screen with height to spare the header is read top to bottom: the balance and the way
+        // out, then the name of the shelf below them. On a short one all three stand in a single
+        // line — the height that costs is height a card would have had.
+        if (isShortScreen) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                BalanceChip(balance = state.balance)
+                CategoryTitle(
+                    category = state.selectedCategory,
+                    modifier = Modifier.weight(1f)
+                )
+                SpriteButton(
+                    assetPath = Sprites.CLOSE,
+                    contentDescription = "Закрыть магазин",
+                    onClick = onClose,
+                    size = ShortScreenCloseButtonSize
+                )
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                BalanceChip(balance = state.balance)
+                Spacer(modifier = Modifier.weight(1f))
+                SpriteButton(
+                    assetPath = Sprites.CLOSE,
+                    contentDescription = "Закрыть магазин",
+                    onClick = onClose,
+                    size = CloseButtonSize
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            CategoryTitle(category = state.selectedCategory)
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = state.selectedCategory.title(),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -272,28 +306,59 @@ fun ShopScreen(
                     modifier = Modifier.align(Alignment.Center)
                 )
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(
-                        minSize = if (isShortScreen) ShortScreenItemCellMinSize else ItemCellMinSize
-                    ),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(items = items, key = { item -> item.id }) { item ->
-                        ShopItemCard(
-                            item = item,
-                            pickedVariantId = state.pickedVariantOf(item),
-                            quantity = state.quantities[item.id] ?: 0,
-                            mode = modeOf(item, state),
-                            reserveVariantRow = reserveVariantRow,
-                            reservedEffectRows = reservedEffectRows,
-                            horizontalLayout = isShortScreen,
-                            onPickVariant = { variantId -> onPickVariant(item.id, variantId) },
-                            onIncrease = { onIncrease(item.id) },
-                            onDecrease = { onDecrease(item.id) }
-                        )
+                // The grid is measured before the cards are built, so a sideways card can be sized
+                // to the room that is actually left between the header and the bottom bar instead of
+                // to a number that happened to fit one phone.
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    val cellWidth = shopGridCellWidth(
+                        gridWidth = maxWidth,
+                        minCellWidth = cellMinSize,
+                        gap = ShopGridGap
+                    )
+                    val spriteSize = shortScreenCardSpriteSize(
+                        cardHeight = maxHeight - ShopGridContentPadding * 2,
+                        cellWidth = cellWidth
+                    )
+                    // How many chips go in a row is the same question for the shelf, which reserves
+                    // the rows, and for the card, which draws them — so it is asked once, here.
+                    val effectChipsPerRow = effectChipsPerRow(
+                        availableWidth = if (isShortScreen) {
+                            shortScreenDetailsWidth(cellWidth = cellWidth, spriteSize = spriteSize)
+                        } else {
+                            cellWidth - ItemCardPadding * 2
+                        },
+                        fontScale = fontScale,
+                        maxChips = if (isShortScreen) {
+                            ShortScreenEffectChipsPerRow
+                        } else {
+                            EffectChipsPerRow
+                        }
+                    )
+                    val reservedEffectRows = ShopShelf.effectRowsOf(items, effectChipsPerRow)
+
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = cellMinSize),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(vertical = ShopGridContentPadding),
+                        horizontalArrangement = Arrangement.spacedBy(ShopGridGap),
+                        verticalArrangement = Arrangement.spacedBy(ShopGridGap)
+                    ) {
+                        items(items = items, key = { item -> item.id }) { item ->
+                            ShopItemCard(
+                                item = item,
+                                pickedVariantId = state.pickedVariantOf(item),
+                                quantity = state.quantities[item.id] ?: 0,
+                                mode = modeOf(item, state),
+                                reserveVariantRow = reserveVariantRow,
+                                reservedEffectRows = reservedEffectRows,
+                                effectChipsPerRow = effectChipsPerRow,
+                                horizontalLayout = isShortScreen,
+                                horizontalSpriteSize = spriteSize,
+                                onPickVariant = { variantId -> onPickVariant(item.id, variantId) },
+                                onIncrease = { onIncrease(item.id) },
+                                onDecrease = { onDecrease(item.id) }
+                            )
+                        }
                     }
                 }
             }
@@ -722,6 +787,28 @@ private fun CoinAmount(
 }
 
 /**
+ * Name of the shelf the player is looking at, over the grid of its cards. Shared between the shop's
+ * two headers, which differ only in whether it stands on a line of its own or beside the balance.
+ *
+ * @param category the section being shown.
+ * @param modifier modifier applied to the text.
+ */
+@Composable
+private fun CategoryTitle(
+    category: ItemCategory,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = category.title(),
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.onBackground,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier
+    )
+}
+
+/**
  * Name of a shop section as the player reads it.
  *
  * @return The Russian title of the category.
@@ -765,10 +852,11 @@ private fun modeOf(item: Item, state: GameUiState): ShopItemMode = when {
  * the tallest of them.
  *
  * On a screen with no height to spare ([horizontalLayout]) the card is laid out sideways instead of
- * stacked: the sprite on the left, the name, price, variant picker and purchase control in a column
- * to its right. A vertical card is as tall as the grid is wide, and on a phone held sideways that is
- * taller than the screen; turned on its side, the card fits into the height the screen has left once
- * the bottom bar with the cart and the "Купить" button is given its share.
+ * stacked, and it is not two columns but three: the sprite, then the name, the price and the effects
+ * beside it, then the variant picker over the purchase control on the far side. A stacked card is as
+ * tall as the grid made it wide, and on a phone held sideways that is taller than the screen; spread
+ * across the width instead, a whole row of cards is read without scrolling for the bottom of it —
+ * which is what the sprite gives way for, see [shortScreenCardSpriteSize].
  *
  * @param item the item to show.
  * @param pickedVariantId variant the item is shown and would be bought in.
@@ -778,8 +866,13 @@ private fun modeOf(item: Item, state: GameUiState): ShopItemMode = when {
  *   but one variant; true when any item on the same shelf has several of them.
  * @param reservedEffectRows how many rows of effect chips the card keeps room for, however many its
  *   own item fills; the shelf's own answer, see [ShopShelf.effectRowsOf]. Zero keeps no room at all.
+ * @param effectChipsPerRow how many chips one of those rows holds; the same number the shelf counted
+ *   its rows with, so what is reserved is what is drawn.
  * @param horizontalLayout whether to lay the card out sideways, sprite beside the details rather
  *   than above them; true on a short screen, see [GameDimens.isShortScreen].
+ * @param horizontalSpriteSize side of the sprite in that sideways layout, as the room the screen has
+ *   left allows (see [shortScreenCardSpriteSize]); ignored by the stacked layout, where the sprite is
+ *   as wide as the card itself.
  * @param onPickVariant called with the id of the variant the player picked.
  * @param onIncrease called to put one more of this item into the cart.
  * @param onDecrease called to take one of this item out of the cart.
@@ -793,7 +886,9 @@ private fun ShopItemCard(
     mode: ShopItemMode,
     reserveVariantRow: Boolean,
     reservedEffectRows: Int,
+    effectChipsPerRow: Int,
     horizontalLayout: Boolean,
+    horizontalSpriteSize: Dp,
     onPickVariant: (String) -> Unit,
     onIncrease: () -> Unit,
     onDecrease: () -> Unit,
@@ -811,7 +906,7 @@ private fun ShopItemCard(
     ) {
         if (horizontalLayout) {
             Row(
-                modifier = Modifier.padding(12.dp),
+                modifier = Modifier.padding(ShortScreenCardPadding),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(ShortScreenRailGap)
             ) {
@@ -821,7 +916,7 @@ private fun ShopItemCard(
                     inGoals = inGoals,
                     onToggleGoals = { inGoals = !inGoals },
                     starButtonSize = ShortScreenStarButtonSize,
-                    modifier = Modifier.size(ShortScreenCardSpriteSize)
+                    modifier = Modifier.size(horizontalSpriteSize)
                 )
 
                 Column(modifier = Modifier.weight(1f)) {
@@ -834,33 +929,39 @@ private fun ShopItemCard(
                     ItemEffectsRow(
                         item = item,
                         reservedRows = reservedEffectRows,
+                        chipsPerRow = effectChipsPerRow,
                         alignment = Alignment.Start,
                         modifier = Modifier.padding(top = EffectsRowTopGap)
                     )
+                }
 
+                Column(
+                    modifier = Modifier.width(ShortScreenPurchaseWidth),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(ShortScreenPurchaseGap)
+                ) {
                     ItemVariantRow(
                         item = item,
                         pickedVariantId = pickedVariantId,
                         reserveVariantRow = reserveVariantRow,
                         onPickVariant = onPickVariant,
-                        contentAlignment = Alignment.CenterStart,
-                        modifier = Modifier.padding(top = 8.dp)
+                        contentAlignment = Alignment.Center,
+                        buttonSize = ShortScreenVariantButtonSize
                     )
-
-                    Spacer(modifier = Modifier.height(10.dp))
 
                     PurchaseControl(
                         mode = mode,
                         quantity = quantity,
                         onIncrease = onIncrease,
                         onDecrease = onDecrease,
+                        counterButtonSize = ShortScreenCounterButtonSize,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
             }
         } else {
             Column(
-                modifier = Modifier.padding(12.dp),
+                modifier = Modifier.padding(ItemCardPadding),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 ItemSprite(
@@ -885,6 +986,7 @@ private fun ShopItemCard(
                 ItemEffectsRow(
                     item = item,
                     reservedRows = reservedEffectRows,
+                    chipsPerRow = effectChipsPerRow,
                     alignment = Alignment.CenterHorizontally,
                     modifier = Modifier.padding(top = EffectsRowTopGap)
                 )
@@ -1011,14 +1113,16 @@ private fun ItemPriceRow(
  * [com.legacy.fingame.ui.components.EffectChip] per effect, the very chips the inventory shows the
  * same item's effects in once it is owned.
  *
- * The chips wrap by whole chips and never by halves: a row holds [EffectChipsPerRow] of them, so an
- * item with three effects reads as two and one rather than as two and a cropped third. The block
- * keeps the height of [reservedRows] rows whatever its own item fills, which is how a cake and the
- * apple beside it end at the same height; a shelf that reserved nothing (clothes, decorations)
- * renders nothing at all, so no gap is left for it either.
+ * The chips wrap by whole chips and never by halves: a row holds [chipsPerRow] of them, so an item
+ * with three effects reads as two and one on a stacked card rather than as two and a cropped third,
+ * and as all three at once on a card laid out sideways. The block keeps the height of [reservedRows]
+ * rows whatever its own item fills, which is how a cake and the apple beside it end at the same
+ * height; a shelf that reserved nothing (clothes, decorations) renders nothing at all, so no gap is
+ * left for it either.
  *
  * @param item the item whose effects to show.
  * @param reservedRows rows of chips the shelf keeps room for; see [ShopShelf.effectRowsOf].
+ * @param chipsPerRow how many chips go in one row, the same number [reservedRows] was counted with.
  * @param alignment where the chips sit within the card's width: centred under a vertical card,
  *   left-aligned beside the sprite of a horizontal one.
  * @param modifier modifier applied to the block.
@@ -1027,6 +1131,7 @@ private fun ItemPriceRow(
 private fun ItemEffectsRow(
     item: Item,
     reservedRows: Int,
+    chipsPerRow: Int,
     alignment: Alignment.Horizontal,
     modifier: Modifier = Modifier
 ) {
@@ -1040,7 +1145,7 @@ private fun ItemEffectsRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(EffectChipGap, alignment),
             verticalArrangement = Arrangement.spacedBy(EffectChipGap),
-            maxItemsInEachRow = EffectChipsPerRow
+            maxItemsInEachRow = chipsPerRow
         ) {
             item.effects.forEach { (stat, value) ->
                 EffectChip(stat = stat, value = value, compact = true)
@@ -1059,8 +1164,10 @@ private fun ItemEffectsRow(
  * @param reserveVariantRow whether the shelf this card sits on keeps room for this row at all.
  * @param onPickVariant called with the id of the variant the player picked.
  * @param contentAlignment where the row of variant buttons sits within the reserved height; centered
- *   under a vertical card, left-aligned next to the sprite of a horizontal one.
+ *   under a vertical card, and over the purchase control of a horizontal one.
  * @param modifier modifier applied to the row's box.
+ * @param buttonSize size of one variant button; smaller on a card laid out sideways, where the row
+ *   stands in a column whose height a card cannot spare.
  */
 @Composable
 private fun ItemVariantRow(
@@ -1069,12 +1176,13 @@ private fun ItemVariantRow(
     reserveVariantRow: Boolean,
     onPickVariant: (String) -> Unit,
     contentAlignment: Alignment,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    buttonSize: Dp = VariantButtonSize
 ) {
     if (!reserveVariantRow) return
 
     Box(
-        modifier = modifier.height(spriteButtonHeight(VariantButtonSize)),
+        modifier = modifier.height(spriteButtonHeight(buttonSize)),
         contentAlignment = contentAlignment
     ) {
         if (item.hasSeveralVariants) {
@@ -1087,7 +1195,7 @@ private fun ItemVariantRow(
                         assetPath = item.getIconPath(variantId),
                         contentDescription = "Вариант «$variantId»",
                         onClick = { onPickVariant(variantId) },
-                        size = VariantButtonSize,
+                        size = buttonSize,
                         selected = variantId == pickedVariantId
                     )
                 }
@@ -1113,6 +1221,8 @@ private fun ItemVariantRow(
  * @param onIncrease called to put one more of the item into the cart.
  * @param onDecrease called to take one of the item out of the cart.
  * @param modifier modifier applied to the control's box.
+ * @param counterButtonSize size of the +/- buttons, and with it the height of the slot the control
+ *   sits in; smaller on a card laid out sideways, which has the screen's whole height to fit into.
  */
 @Composable
 private fun PurchaseControl(
@@ -1120,10 +1230,11 @@ private fun PurchaseControl(
     quantity: Int,
     onIncrease: () -> Unit,
     onDecrease: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    counterButtonSize: Dp = CounterButtonSize
 ) {
     Box(
-        modifier = modifier.heightIn(min = spriteButtonHeight(CounterButtonSize)),
+        modifier = modifier.heightIn(min = spriteButtonHeight(counterButtonSize)),
         contentAlignment = Alignment.Center
     ) {
         when (mode) {
@@ -1135,7 +1246,7 @@ private fun PurchaseControl(
                     assetPath = Sprites.MINUS,
                     contentDescription = "Уменьшить количество",
                     onClick = { if (quantity > 0) onDecrease() },
-                    size = CounterButtonSize
+                    size = counterButtonSize
                 )
                 Text(
                     text = quantity.toString(),
@@ -1148,7 +1259,7 @@ private fun PurchaseControl(
                     assetPath = Sprites.PLUS,
                     contentDescription = "Увеличить количество",
                     onClick = onIncrease,
-                    size = CounterButtonSize
+                    size = counterButtonSize
                 )
             }
 
@@ -1268,8 +1379,9 @@ private fun ShopScreenLightPreview() {
 }
 
 /**
- * Preview of [ShopScreen] in the light theme, landscape orientation: the case the cards have to
- * survive without a card's height running past the screen and under the bottom bar.
+ * Preview of [ShopScreen] in the light theme, landscape orientation: the clothes rack, i.e. the
+ * shelf whose cards carry a variant picker over their purchase control, which is the tallest that
+ * third column of a sideways card ever gets — and it still has to end above the bottom bar.
  */
 @Preview(name = "Shop — Landscape", showBackground = true, widthDp = 891, heightDp = 411)
 @Composable
@@ -1474,8 +1586,9 @@ private fun ShopScreenClothesShelfPreview() {
 
 /**
  * Preview of the food shelf on a phone held sideways, where a card is laid out sideways too: the
- * effects stand in the right-hand column under the price, same as they stand under it in a vertical
- * card.
+ * sprite, then the name with the price and all three of the cake's effects in one row beside it,
+ * then the counter that buys it. The whole first row of cards has to be readable here without
+ * scrolling — the bottom of every card above the bar with the categories and "Купить".
  */
 @Preview(name = "Shop — Landscape food", showBackground = true, widthDp = 891, heightDp = 411)
 @Composable
@@ -1485,6 +1598,60 @@ private fun ShopScreenLandscapeFoodPreview() {
             ShopScreen(
                 state = GameUiState(balance = 300, quantities = mapOf("cake" to 1), cartPrice = 40),
                 items = PreviewItems,
+                cartLines = emptyList(),
+                onSelectCategory = {},
+                onPickVariant = { _, _ -> },
+                onIncrease = {},
+                onDecrease = {},
+                onBuy = { true },
+                onClose = {}
+            )
+        }
+    }
+}
+
+/**
+ * The same shelf on the smallest phone held sideways this game is played on: less height for the
+ * card and less width for the row it stands in, so the sprite gives way on both counts (see
+ * [shortScreenCardSpriteSize]) and the card still ends above the bottom bar.
+ */
+@Preview(name = "Shop — Landscape 800x360", showBackground = true, widthDp = 800, heightDp = 360)
+@Composable
+private fun ShopScreenLandscapeNarrowPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ShopScreen(
+                state = GameUiState(balance = 300, quantities = mapOf("cake" to 1), cartPrice = 40),
+                items = PreviewItems,
+                cartLines = emptyList(),
+                onSelectCategory = {},
+                onPickVariant = { _, _ -> },
+                onIncrease = {},
+                onDecrease = {},
+                onBuy = { true },
+                onClose = {}
+            )
+        }
+    }
+}
+
+/**
+ * The clothes rack at that same smallest size: the shelf whose cards are the tallest, on the screen
+ * with the least height to give them.
+ */
+@Preview(
+    name = "Shop — Landscape 800x360, clothes",
+    showBackground = true,
+    widthDp = 800,
+    heightDp = 360
+)
+@Composable
+private fun ShopScreenLandscapeNarrowClothesPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ShopScreen(
+                state = GameUiState(balance = 300, selectedCategory = ItemCategory.CLOTHES),
+                items = PreviewClothes,
                 cartLines = emptyList(),
                 onSelectCategory = {},
                 onPickVariant = { _, _ -> },
