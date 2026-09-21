@@ -169,6 +169,7 @@ fun FinGameApp(
                             worn = state.worn,
                             catalog = itemRegistry
                         ),
+                        stats = state.stats,
                         onUseItem = { selection -> vm.useItem(selection) },
                         onToggleWorn = { selection -> vm.toggleWorn(selection) },
                         onClose = vm::closeScreen

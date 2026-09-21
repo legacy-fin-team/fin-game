@@ -48,11 +48,13 @@ import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.items.ItemUse
+import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.game.stats.StatKind
 import com.legacy.fingame.ui.components.PillButton
 import com.legacy.fingame.ui.components.Sprite
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
+import com.legacy.fingame.ui.components.StatChip
 import com.legacy.fingame.ui.components.StatValueChip
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
@@ -75,6 +77,9 @@ private val PopupScreenMargin = 12.dp
  *
  * Layout:
  * - Top: the screen title and a close button.
+ * - Below that, pinned above the grid so scrolling it never carries the row away: [InventoryStatsRow],
+ *   the same per-stat chips the main screen shows next to the pet, in one line that never wraps or
+ *   scrolls off a normal phone width and only turns scrollable itself if it ever has to.
  * - Below that: a scrollable grid of item cards ([InventoryCell]), one per owned item and variant,
  *   each showing how many of it there are and whether it is on the pet right now. An empty inventory
  *   says so instead of showing an empty grid.
@@ -87,6 +92,9 @@ private val PopupScreenMargin = 12.dp
  * itself once the last one is eaten, since there is nothing left to act on.
  *
  * @param entries the owned items to show, as [com.legacy.fingame.game.items.Inventory] built them.
+ * @param stats the pet's current stats, read into [InventoryStatsRow]; the same
+ *   [com.legacy.fingame.game.GameUiState.stats] the main screen reads its own stat chips from, so
+ *   eating an item here moves both in step.
  * @param onUseItem called with the item the pet should eat or play with.
  * @param onToggleWorn called with the item that should be put on or taken off.
  * @param onClose called when the close button is pressed.
@@ -95,6 +103,7 @@ private val PopupScreenMargin = 12.dp
 @Composable
 fun InventoryScreen(
     entries: List<InventoryEntry>,
+    stats: PetStats,
     onUseItem: (ItemSelection) -> Unit,
     onToggleWorn: (ItemSelection) -> Unit,
     onClose: () -> Unit,
@@ -130,6 +139,13 @@ fun InventoryScreen(
                 size = CloseButtonSize
             )
         }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        InventoryStatsRow(
+            stats = stats,
+            modifier = Modifier.fillMaxWidth()
+        )
 
         Spacer(modifier = Modifier.height(12.dp))
 
@@ -175,6 +191,32 @@ fun InventoryScreen(
                 }
             }
         }
+    }
+}
+
+/**
+ * The pet's stats in one row at the top of the inventory: the same [StatChip] the main screen shows
+ * next to the pet, one per [StatKind], reading [stats] instead of a bar so a stat added to that enum
+ * shows up here without a change to this screen.
+ *
+ * Never wraps to a second line and never crops a chip: as long as every chip fits in the width it is
+ * given the row simply lays them out, same as the main screen does; on a screen too narrow for that —
+ * narrower than this game promises a phone gets — the row scrolls sideways instead, the same way the
+ * shop's category row and an item's variant picker fall back to scrolling.
+ *
+ * @param stats the pet's current stats.
+ * @param modifier modifier applied to the row.
+ */
+@Composable
+private fun InventoryStatsRow(
+    stats: PetStats,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        StatKind.entries.forEach { stat -> StatChip(stat = stat, stats = stats) }
     }
 }
 
@@ -508,7 +550,16 @@ private val PreviewEntries = listOf(
     )
 )
 
-/** Preview of [InventoryScreen] in the light theme. */
+/** Stats the previews show in [InventoryStatsRow]: a pet a little hungry, otherwise doing fine. */
+private val PreviewStats = PetStats(
+    mapOf(
+        StatKind.HEALTH to 90,
+        StatKind.HUNGER to 35,
+        StatKind.PLEASURE to 70
+    )
+)
+
+/** Preview of [InventoryScreen] in the light theme, stats row included. */
 @Preview(name = "Inventory — Light", showBackground = true)
 @Composable
 private fun InventoryScreenLightPreview() {
@@ -516,6 +567,7 @@ private fun InventoryScreenLightPreview() {
         Surface(color = MaterialTheme.colorScheme.background) {
             InventoryScreen(
                 entries = PreviewEntries,
+                stats = PreviewStats,
                 onUseItem = {},
                 onToggleWorn = {},
                 onClose = {}
@@ -532,6 +584,27 @@ private fun InventoryScreenEmptyPreview() {
         Surface(color = MaterialTheme.colorScheme.background) {
             InventoryScreen(
                 entries = emptyList(),
+                stats = PreviewStats,
+                onUseItem = {},
+                onToggleWorn = {},
+                onClose = {}
+            )
+        }
+    }
+}
+
+/**
+ * Preview of [InventoryScreen] at 360.dp: the stats row's promise that three chips fit one line
+ * without scrolling on an ordinary phone width.
+ */
+@Preview(name = "Inventory — Narrow 360dp", showBackground = true, widthDp = 360, heightDp = 640)
+@Composable
+private fun InventoryScreenNarrowPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            InventoryScreen(
+                entries = PreviewEntries,
+                stats = PreviewStats,
                 onUseItem = {},
                 onToggleWorn = {},
                 onClose = {}
