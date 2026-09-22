@@ -5,6 +5,10 @@ import android.util.Log
 import com.legacy.fingame.game.PlayerState
 import com.legacy.fingame.game.PlayerStateStore
 import com.legacy.fingame.game.animals.AnimalSelection
+import com.legacy.fingame.game.economy.BudgetDraft
+import com.legacy.fingame.game.economy.BudgetResult
+import com.legacy.fingame.game.economy.BudgetState
+import com.legacy.fingame.game.economy.Deposit
 import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.game.stats.StatKind
@@ -14,7 +18,10 @@ import com.legacy.fingame.game.stats.StatKind
  * the app being closed and the process being killed.
  *
  * Every value is stored under a key of its own rather than as one blob, so a state that grew a
- * new field still reads back on a device that saved it before the field existed.
+ * new field still reads back on a device that saved it before the field existed. The one
+ * exception is [PlayerState.moneyLog]: it is a list of variable length, and a key per record
+ * would turn the preferences into a file of thousands of lines, so it is written as a single
+ * string by [MoneyLogCodec] instead.
  *
  * @param context current local application context. Used to get access to SharedPreferences.
  */
@@ -35,6 +42,28 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         private const val KEY_STATS_UPDATED_AT = "stats_updated_at"
         private const val KEY_PET_BORN_AT = "pet_born_at"
         private const val KEY_GAME_NOW = "game_now"
+        private const val KEY_SAVINGS = "savings"
+        private const val KEY_DEPOSIT_AMOUNT = "deposit_amount"
+        private const val KEY_DEPOSIT_TERM_DAYS = "deposit_term_days"
+        private const val KEY_DEPOSIT_RATE_PERCENT = "deposit_rate_percent"
+        private const val KEY_DEPOSIT_OPENED_DAY = "deposit_opened_day"
+        private const val KEY_BUDGET_PRESENT = "budget_present"
+        private const val KEY_BUDGET_PLANNED = "budget_planned"
+        private const val KEY_BUDGET_PLANNED_SAVINGS = "budget_planned_savings"
+        private const val KEY_BUDGET_PLANNED_DEPOSIT = "budget_planned_deposit"
+        private const val KEY_BUDGET_SPENT = "budget_spent"
+        private const val KEY_BUDGET_START_DAY = "budget_start_day"
+        private const val KEY_PREVIOUS_BUDGET_PRESENT = "previous_budget_present"
+        private const val KEY_PREVIOUS_BUDGET_PLANNED = "previous_budget_planned"
+        private const val KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS = "previous_budget_planned_savings"
+        private const val KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT = "previous_budget_planned_deposit"
+        private const val KEY_PREVIOUS_BUDGET_ACTUAL = "previous_budget_actual"
+        private const val KEY_BUDGET_DRAFT_PRESENT = "budget_draft_present"
+        private const val KEY_BUDGET_DRAFT_SAVINGS = "budget_draft_savings"
+        private const val KEY_BUDGET_DRAFT_DEPOSIT_AMOUNT = "budget_draft_deposit_amount"
+        private const val KEY_BUDGET_DRAFT_DEPOSIT_TERM_DAYS = "budget_draft_deposit_term_days"
+        private const val KEY_PLANNING_OPEN = "planning_open"
+        private const val KEY_MONEY_LOG = "money_log"
 
         /** Prefix of the key one stat bar is stored under, completed by [StatKind.xmlName]. */
         private const val KEY_STAT_PREFIX = "stat_"
@@ -71,6 +100,13 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             petName = preferences.getString(KEY_PET_NAME, null) ?: defaults.petName,
             subLocationIndex = preferences.getInt(KEY_SUB_LOCATION_INDEX, defaults.subLocationIndex),
             balance = preferences.getInt(KEY_BALANCE, defaults.balance),
+            savings = preferences.getInt(KEY_SAVINGS, defaults.savings),
+            deposit = readDeposit(),
+            budget = readBudget(),
+            previousBudgetResult = readPreviousBudgetResult(),
+            budgetDraft = readBudgetDraft(),
+            planningOpen = preferences.getBoolean(KEY_PLANNING_OPEN, defaults.planningOpen),
+            moneyLog = MoneyLogCodec.decode(preferences.getString(KEY_MONEY_LOG, null)),
             lastDailyBonusDay = preferences.getLong(
                 KEY_LAST_DAILY_BONUS_DAY,
                 defaults.lastDailyBonusDay
@@ -105,6 +141,37 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             .putLong(KEY_STATS_UPDATED_AT, state.statsUpdatedAtMillis)
             .putLong(KEY_PET_BORN_AT, state.petBornAtMillis)
             .putLong(KEY_GAME_NOW, state.gameNowMillis)
+            .putInt(KEY_SAVINGS, state.savings)
+            .putInt(KEY_DEPOSIT_AMOUNT, state.deposit?.amount ?: 0)
+            .putInt(KEY_DEPOSIT_TERM_DAYS, state.deposit?.termDays ?: 0)
+            .putInt(KEY_DEPOSIT_RATE_PERCENT, state.deposit?.ratePercent ?: 0)
+            .putLong(KEY_DEPOSIT_OPENED_DAY, state.deposit?.openedDay ?: 0L)
+            .putBoolean(KEY_BUDGET_PRESENT, state.budget != null)
+            .putInt(KEY_BUDGET_PLANNED, state.budget?.planned ?: 0)
+            .putInt(KEY_BUDGET_PLANNED_SAVINGS, state.budget?.plannedSavings ?: 0)
+            .putInt(KEY_BUDGET_PLANNED_DEPOSIT, state.budget?.plannedDeposit ?: 0)
+            .putInt(KEY_BUDGET_SPENT, state.budget?.spent ?: 0)
+            .putLong(KEY_BUDGET_START_DAY, state.budget?.startDay ?: 0L)
+            .putBoolean(KEY_PREVIOUS_BUDGET_PRESENT, state.previousBudgetResult != null)
+            .putInt(KEY_PREVIOUS_BUDGET_PLANNED, state.previousBudgetResult?.planned ?: 0)
+            .putInt(
+                KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS,
+                state.previousBudgetResult?.plannedSavings ?: 0
+            )
+            .putInt(
+                KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT,
+                state.previousBudgetResult?.plannedDeposit ?: 0
+            )
+            .putInt(KEY_PREVIOUS_BUDGET_ACTUAL, state.previousBudgetResult?.actual ?: 0)
+            .putBoolean(KEY_BUDGET_DRAFT_PRESENT, state.budgetDraft != null)
+            .putInt(KEY_BUDGET_DRAFT_SAVINGS, state.budgetDraft?.savings ?: 0)
+            .putInt(KEY_BUDGET_DRAFT_DEPOSIT_AMOUNT, state.budgetDraft?.depositAmount ?: 0)
+            .putInt(
+                KEY_BUDGET_DRAFT_DEPOSIT_TERM_DAYS,
+                state.budgetDraft?.depositTermDays ?: Deposit.MIN_TERM_DAYS
+            )
+            .putBoolean(KEY_PLANNING_OPEN, state.planningOpen)
+            .putString(KEY_MONEY_LOG, MoneyLogCodec.encode(state.moneyLog))
 
         StatKind.entries.forEach { stat ->
             editor.putInt(KEY_STAT_PREFIX + stat.xmlName, state.stats[stat])
@@ -177,6 +244,78 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
                 .coerceIn(PetStats.MIN_VALUE, PetStats.MAX_VALUE)
         }
     )
+
+    /**
+     * Reads back what [save] wrote for [PlayerState.deposit].
+     *
+     * A deposit only counts as existing when it has a body: a save with no deposit writes zero
+     * into all four keys, and a zero body never turns into anything.
+     *
+     * @return The player's deposit, or null when there is none.
+     */
+    private fun readDeposit(): Deposit? {
+        val amount = preferences.getInt(KEY_DEPOSIT_AMOUNT, 0)
+        if (amount <= 0) return null
+
+        return Deposit(
+            amount = amount,
+            termDays = preferences.getInt(KEY_DEPOSIT_TERM_DAYS, Deposit.MIN_TERM_DAYS)
+                .coerceIn(Deposit.TERM_DAYS),
+            ratePercent = preferences.getInt(KEY_DEPOSIT_RATE_PERCENT, 0),
+            openedDay = preferences.getLong(KEY_DEPOSIT_OPENED_DAY, 0L)
+        )
+    }
+
+    /**
+     * Reads back what [save] wrote for [PlayerState.budget].
+     *
+     * @return The confirmed budget of the current period, or null when there is none.
+     */
+    private fun readBudget(): BudgetState? {
+        if (!preferences.getBoolean(KEY_BUDGET_PRESENT, false)) return null
+
+        return BudgetState(
+            planned = preferences.getInt(KEY_BUDGET_PLANNED, 0),
+            plannedSavings = preferences.getInt(KEY_BUDGET_PLANNED_SAVINGS, 0),
+            plannedDeposit = preferences.getInt(KEY_BUDGET_PLANNED_DEPOSIT, 0),
+            spent = preferences.getInt(KEY_BUDGET_SPENT, 0),
+            startDay = preferences.getLong(KEY_BUDGET_START_DAY, 0L)
+        )
+    }
+
+    /**
+     * Reads back what [save] wrote for [PlayerState.previousBudgetResult].
+     *
+     * @return The outcome of the last period, or null when none has closed yet.
+     */
+    private fun readPreviousBudgetResult(): BudgetResult? {
+        if (!preferences.getBoolean(KEY_PREVIOUS_BUDGET_PRESENT, false)) return null
+
+        return BudgetResult(
+            planned = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED, 0),
+            plannedSavings = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS, 0),
+            plannedDeposit = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT, 0),
+            actual = preferences.getInt(KEY_PREVIOUS_BUDGET_ACTUAL, 0)
+        )
+    }
+
+    /**
+     * Reads back what [save] wrote for [PlayerState.budgetDraft].
+     *
+     * @return The unfinished layout, or null when the player has not touched it.
+     */
+    private fun readBudgetDraft(): BudgetDraft? {
+        if (!preferences.getBoolean(KEY_BUDGET_DRAFT_PRESENT, false)) return null
+
+        return BudgetDraft(
+            savings = preferences.getInt(KEY_BUDGET_DRAFT_SAVINGS, 0),
+            depositAmount = preferences.getInt(KEY_BUDGET_DRAFT_DEPOSIT_AMOUNT, 0),
+            depositTermDays = preferences.getInt(
+                KEY_BUDGET_DRAFT_DEPOSIT_TERM_DAYS,
+                Deposit.MIN_TERM_DAYS
+            ).coerceIn(Deposit.TERM_DAYS)
+        )
+    }
 
     /**
      * @param owned one entry of [PlayerState.owned].

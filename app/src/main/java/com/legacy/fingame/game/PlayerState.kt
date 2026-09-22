@@ -2,7 +2,12 @@ package com.legacy.fingame.game
 
 import com.legacy.fingame.game.animals.AnimalSelection
 import com.legacy.fingame.game.animals.Growth
+import com.legacy.fingame.game.economy.BudgetDraft
+import com.legacy.fingame.game.economy.BudgetResult
+import com.legacy.fingame.game.economy.BudgetState
+import com.legacy.fingame.game.economy.Deposit
 import com.legacy.fingame.game.economy.Economy
+import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.stats.PetStats
 
@@ -46,12 +51,33 @@ import com.legacy.fingame.game.stats.PetStats
  * [com.legacy.fingame.game.economy.FastForwardClock.fastForwardTo]), so neither the time a demo
  * build skipped nor a device clock moved back since can take the pet's age, its bars or its daily
  * bonus back to where they were before.
+ * @property savings деньги, которые игрок отложил: тратить их напрямую нельзя, но переложить
+ * обратно на текущий счёт можно в любой момент. У игрока, который никогда не планировал бюджет,
+ * их нет.
+ * @property deposit вклад, открытый в банке, или null, когда вклада нет. Вклад бывает только
+ * один одновременно, и его тело недоступно, пока он не погашен.
+ * @property budget подтверждённый бюджет текущего периода, или null, когда период ещё не
+ * начинался — до самого первого планирования или пока идёт планирование следующего.
+ * @property previousBudgetResult итог прошлого периода, который показывается при планировании,
+ * или null, когда ни один период ещё не закрывался.
+ * @property budgetDraft раскладка, которую игрок набрал, но не подтвердил, или null, когда он к
+ * ней не притрагивался. Хранится, чтобы экран планирования можно было закрыть и вернуться к нему.
+ * @property planningOpen открыто ли планирование: становится true при получении бонуса дня и
+ * false при подтверждении бюджета.
+ * @property moneyLog журнал изменений текущего счёта, новейшее первым.
  */
 data class PlayerState(
     val selection: AnimalSelection? = null,
     val petName: String = "",
     val subLocationIndex: Int = 0,
     val balance: Int = Economy.STARTING_BALANCE,
+    val savings: Int = 0,
+    val deposit: Deposit? = null,
+    val budget: BudgetState? = null,
+    val previousBudgetResult: BudgetResult? = null,
+    val budgetDraft: BudgetDraft? = null,
+    val planningOpen: Boolean = false,
+    val moneyLog: MoneyLog = MoneyLog.EMPTY,
     val lastDailyBonusDay: Long = Economy.NEVER_CLAIMED,
     val owned: Map<ItemSelection, Int> = emptyMap(),
     val worn: Set<ItemSelection> = emptySet(),
