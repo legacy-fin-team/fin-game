@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -46,8 +45,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.legacy.fingame.game.GameUiState
 import com.legacy.fingame.game.items.CartLine
 import com.legacy.fingame.game.items.Item
@@ -58,6 +55,8 @@ import com.legacy.fingame.game.items.ShopShelf
 import com.legacy.fingame.game.stats.StatKind
 import com.legacy.fingame.ui.components.BalanceChip
 import com.legacy.fingame.ui.components.EffectChip
+import com.legacy.fingame.ui.components.GameDialog
+import com.legacy.fingame.ui.components.GameDialogBlock
 import com.legacy.fingame.ui.components.PillButton
 import com.legacy.fingame.ui.components.Sprite
 import com.legacy.fingame.ui.components.SpriteButton
@@ -141,9 +140,7 @@ private val EffectsRowTopGap = 6.dp
 /** Padding between a stacked card's edge and what is in it. */
 private val ItemCardPadding = 12.dp
 
-/** Sizes shared by the windows the shop opens over itself; see [ShopDialogBlock]. */
-private val DialogMaxWidth = 320.dp
-private val DialogCloseButtonSize = 44.dp
+/** Coin sprite size used next to a sum in the shop's confirmation windows. */
 private val DialogCoinSize = 20.dp
 
 /** Size of an item's sprite on a line of the cart in [PurchaseConfirmBlock]. */
@@ -457,7 +454,7 @@ private fun PurchaseConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    ShopDialog(onDismiss = onDismiss) {
+    GameDialog(onDismiss = onDismiss) {
         PurchaseConfirmBlock(
             lines = lines,
             total = total,
@@ -486,102 +483,8 @@ private fun NotEnoughMoneyDialog(
     shortfall: Int,
     onDismiss: () -> Unit
 ) {
-    ShopDialog(onDismiss = onDismiss) {
+    GameDialog(onDismiss = onDismiss) {
         NotEnoughMoneyBlock(shortfall = shortfall, onDismiss = onDismiss)
-    }
-}
-
-/**
- * The frame both of the shop's windows are hung in: a window sized by what is in it rather than by
- * the platform's dialog width, so the card keeps the proportions of the rest of the game's windows,
- * and centred in the screen with a margin of its own.
- *
- * A tap outside it and the system back gesture close it, which is [onDismiss]'s job either way.
- *
- * @param onDismiss called when the window should be closed without anything happening.
- * @param content the block the window shows; see [ShopDialogBlock].
- */
-@Composable
-private fun ShopDialog(
-    onDismiss: () -> Unit,
-    content: @Composable () -> Unit
-) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            content()
-        }
-    }
-}
-
-/**
- * The card both of the shop's windows are built out of, so the two look like one game and not like
- * two: the same rounded surface, the same title over the same column of content, and the cross that
- * closes it.
- *
- * The cross sits on the top-right corner and hangs half-way over the edge of the card, the way the
- * inventory's item window wears it.
- *
- * The title wraps onto a second line rather than being cut short: a window's title is written to be
- * read whole, and the font scale it is read at is the player's to choose.
- *
- * @param title what the window is about, in one short line.
- * @param closeDescription what the cross does, announced to screen readers.
- * @param onDismiss called when the cross is pressed.
- * @param modifier modifier applied to the block root.
- * @param content what the window says under its title, laid out in the card's column: evenly spaced
- *   and centred, ending with the button that acts on it.
- */
-@Composable
-private fun ShopDialogBlock(
-    title: String,
-    closeDescription: String,
-    onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    // Half of the cross hangs outside the card, so the card keeps that much room around itself.
-    val overhang = GameDimens.buttonSize(DialogCloseButtonSize) / 2
-
-    Box(modifier = modifier) {
-        Surface(
-            modifier = Modifier
-                .padding(top = overhang, end = overhang)
-                .widthIn(max = DialogMaxWidth),
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, GameColors.cardStroke),
-            shadowElevation = 6.dp
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center
-                )
-                content()
-            }
-        }
-
-        SpriteButton(
-            assetPath = Sprites.CLOSE,
-            contentDescription = closeDescription,
-            onClick = onDismiss,
-            size = DialogCloseButtonSize,
-            modifier = Modifier.align(Alignment.TopEnd)
-        )
     }
 }
 
@@ -605,7 +508,7 @@ private fun PurchaseConfirmBlock(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    ShopDialogBlock(
+    GameDialogBlock(
         title = "Покупка",
         closeDescription = "Отменить покупку",
         onDismiss = onDismiss,
@@ -657,7 +560,7 @@ private fun NotEnoughMoneyBlock(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    ShopDialogBlock(
+    GameDialogBlock(
         title = "Не хватает монет",
         closeDescription = "Закрыть окно",
         onDismiss = onDismiss,
