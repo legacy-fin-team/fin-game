@@ -51,6 +51,7 @@ import com.legacy.fingame.ui.components.GameDialog
 import com.legacy.fingame.ui.components.GameDialogBlock
 import com.legacy.fingame.ui.components.PillButton
 import com.legacy.fingame.ui.components.PillButtonMinLabelSize
+import com.legacy.fingame.ui.components.PillStyle
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.components.pillButtonAutoSizeRange
@@ -607,7 +608,24 @@ private fun ConfirmBudgetDialog(
         GameDialogBlock(
             title = "Бюджет",
             closeDescription = "Отменить подтверждение",
-            onDismiss = onDismiss
+            onDismiss = onDismiss,
+            actions = {
+                PillButton(
+                    text = "Подтвердить",
+                    onClick = onConfirm,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = PillStyle.Primary,
+                    compact = true
+                )
+                // Рядом с крестиком, который свисает с угла: крестик ребёнок не находит.
+                PillButton(
+                    text = "Отмена",
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = PillStyle.Text,
+                    compact = true
+                )
+            }
         ) {
             AmountRow(label = SpendKind.MUST.title, value = draft.mustSpend.toString())
             AmountRow(label = SpendKind.WANT.title, value = draft.wantSpend.toString())
@@ -620,11 +638,10 @@ private fun ConfirmBudgetDialog(
             AmountRow(label = "Останется", value = Budget.savingsOf(draft, total).toString())
             Text(
                 text = "После подтверждения бюджет не изменить.",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
-            PillButton(text = "Подтвердить", onClick = onConfirm)
         }
     }
 }
@@ -749,7 +766,23 @@ private fun CloseDepositDialog(
         GameDialogBlock(
             title = "Проценты сгорят",
             closeDescription = "Оставить вклад",
-            onDismiss = onDismiss
+            onDismiss = onDismiss,
+            actions = {
+                PillButton(
+                    text = "Закрыть вклад",
+                    onClick = onConfirm,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = PillStyle.Primary,
+                    compact = true
+                )
+                PillButton(
+                    text = "Оставить",
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = PillStyle.Text,
+                    compact = true
+                )
+            }
         ) {
             Text(
                 text = "Досрочное закрытие вернёт только $amount, проценты не начислятся.",
@@ -767,7 +800,6 @@ private fun CloseDepositDialog(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
-            PillButton(text = "Закрыть вклад", onClick = onConfirm)
         }
     }
 }

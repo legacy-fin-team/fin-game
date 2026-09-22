@@ -26,6 +26,9 @@ import com.legacy.fingame.ui.theme.GameDimens
 private val DialogMaxWidth = 320.dp
 private val DialogCloseButtonSize = 44.dp
 
+/** Room between the buttons of a window, and between them and what stands above them. */
+private val DialogActionsGap = 8.dp
+
 /**
  * The frame every window of the game is hung in: a window sized by what is in it rather than by
  * the platform's dialog width, so the card keeps the proportions of the rest of the game's windows,
@@ -72,7 +75,15 @@ fun GameDialog(
  * @param onDismiss called when the cross is pressed.
  * @param modifier modifier applied to the block root.
  * @param content what the window says under its title, laid out in the card's column: evenly spaced
- *   and centred, ending with the button that acts on it.
+ *   and centred.
+ * @param actions the buttons the window ends with, stacked one under another and each as wide as
+ *   the card: the action first, as a [PillStyle.Primary] pill, and under it the way out —
+ *   "Отмена" — as a [PillStyle.Text] one. A column and not a row on purpose, and not only when the
+ *   two do not fit beside each other: the card is 280 dp wide inside its padding, and "Подтвердить"
+ *   next to "Отмена" wants 335 of them at the largest font scale the game is read at. Trying the row
+ *   first and falling back would mean the same window looking like two different windows depending
+ *   on the player's font setting, which is worse than a column that is always a column. Empty by
+ *   default, for a window that only tells the player something.
  */
 @Composable
 fun GameDialogBlock(
@@ -80,6 +91,7 @@ fun GameDialogBlock(
     closeDescription: String,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
+    actions: @Composable ColumnScope.() -> Unit = {},
     content: @Composable ColumnScope.() -> Unit
 ) {
     // Half of the cross hangs outside the card, so the card keeps that much room around itself.
@@ -107,6 +119,12 @@ fun GameDialogBlock(
                     textAlign = TextAlign.Center
                 )
                 content()
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(DialogActionsGap),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    content = actions
+                )
             }
         }
 
@@ -115,6 +133,9 @@ fun GameDialogBlock(
             contentDescription = closeDescription,
             onClick = onDismiss,
             size = DialogCloseButtonSize,
+            // The cross belongs to no group of tabs, so nothing is kept under it for an underline
+            // it would never draw — which is what used to push it off the corner it hangs on.
+            showIndicator = false,
             modifier = Modifier.align(Alignment.TopEnd)
         )
     }

@@ -57,6 +57,7 @@ import com.legacy.fingame.ui.components.EffectChip
 import com.legacy.fingame.ui.components.GameDialog
 import com.legacy.fingame.ui.components.GameDialogBlock
 import com.legacy.fingame.ui.components.PillButton
+import com.legacy.fingame.ui.components.PillStyle
 import com.legacy.fingame.ui.components.Sprite
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
@@ -511,7 +512,23 @@ private fun PurchaseConfirmBlock(
         title = "Покупка",
         closeDescription = "Отменить покупку",
         onDismiss = onDismiss,
-        modifier = modifier
+        modifier = modifier,
+        actions = {
+            PillButton(
+                text = "Купить",
+                onClick = onConfirm,
+                modifier = Modifier.fillMaxWidth(),
+                style = PillStyle.Primary,
+                compact = true
+            )
+            PillButton(
+                text = "Отмена",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+                style = PillStyle.Text,
+                compact = true
+            )
+        }
     ) {
         Column(
             modifier = Modifier
@@ -538,7 +555,6 @@ private fun PurchaseConfirmBlock(
             labelColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        PillButton(text = "Купить", onClick = onConfirm)
     }
 }
 
@@ -563,7 +579,18 @@ private fun NotEnoughMoneyBlock(
         title = "Не хватает монет",
         closeDescription = "Закрыть окно",
         onDismiss = onDismiss,
-        modifier = modifier
+        modifier = modifier,
+        actions = {
+            // Единственное, что тут можно сделать, — закрыть окно, так что кнопка одна и та же,
+            // что крестик; отдельной «Отмены» под ней не бывает.
+            PillButton(
+                text = "Понятно",
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth(),
+                style = PillStyle.Primary,
+                compact = true
+            )
+        }
     ) {
         PriceRow(
             label = "Ещё нужно",
@@ -579,7 +606,6 @@ private fun NotEnoughMoneyBlock(
             textAlign = TextAlign.Center
         )
 
-        PillButton(text = "ОК", onClick = onDismiss)
     }
 }
 
@@ -930,7 +956,7 @@ private fun ItemNameText(
 ) {
     Text(
         text = name,
-        style = MaterialTheme.typography.bodyLarge,
+        style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurface,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
