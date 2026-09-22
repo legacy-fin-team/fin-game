@@ -113,7 +113,9 @@ fun Sprite(
  *   real file yet — a button whose icon is still missing from `assets/` would otherwise render
  *   [SpriteLoader]'s `error.webp` placeholder, which reads as a bug rather than as unfinished art.
  *   The fallback keeps the same size, press feedback and underline as the sprite it stands in for,
- *   so once the file is added the button becomes an icon with no change at the call site. Left
+ *   so once the file is added the button becomes an icon with no change at the call site. Its own
+ *   text carries no semantics of its own — [contentDescription] on the outer button already says
+ *   what the button does, so a screen reader is meant to read that once, not the caption too. Left
  *   `null` — the default — a button whose sprite is missing still falls back to `error.webp`, which
  *   is what every other [SpriteButton] call wants.
  */
@@ -208,6 +210,9 @@ fun SpriteButton(
             ) {
                 Text(
                     text = label,
+                    // The outer Column already carries contentDescription for the whole button;
+                    // without this, TalkBack would also read the caption as its own node.
+                    modifier = Modifier.clearAndSetSemantics {},
                     style = labelTextStyle,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
