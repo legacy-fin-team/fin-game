@@ -1,5 +1,6 @@
 package com.legacy.fingame.ui.screens
 
+import com.legacy.fingame.game.economy.SpendKind
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -11,6 +12,26 @@ import java.util.Locale
  * арабскими, и час записи оказался бы написан иначе, чем все остальные числа игры.
  */
 private val TimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
+
+/**
+ * Неразрывный пробел: строка не рвётся на нём, и то, что стоит после него, не уезжает на
+ * следующую строку одно.
+ */
+const val NoBreakSpace = "\u00A0"
+
+/**
+ * Точка-разделитель внутри фразы: «Закроется через 3 дн · день 4», «Купить · 90».
+ *
+ * Перед точкой — неразрывный пробел, после — обычный: узкая строка рвётся после точки, и точка
+ * остаётся в конце строки, рядом со словом перед ней, а не открывает следующую строку одна.
+ */
+const val DotSeparator = "$NoBreakSpace· "
+
+/**
+ * Тире внутри фразы: «Плюс — не потратили всё». Устроено как [DotSeparator]: тире не переносится
+ * в начало строки.
+ */
+const val DashSeparator = "$NoBreakSpace— "
 
 /**
  * Подпись про вклад в шапке — та, что стоит рядом с деньгами.
@@ -65,22 +86,6 @@ fun timeTextOf(millis: Long, zone: ZoneId = ZoneId.systemDefault()): String =
     TimeFormat.format(Instant.ofEpochMilli(millis).atZone(zone))
 
 /**
- * Столбец времени в журнале: номер игрового дня и час записи.
- *
- * @param gameDay день записи.
- * @param oldestGameDay день самой старой хранимой записи.
- * @param millis момент записи, в миллисекундах.
- * @param zone часовой пояс, в котором его читают; по умолчанию пояс устройства.
- * @return Строка вида `Д8 · 16:09`.
- */
-fun dayTimeTextOf(
-    gameDay: Long,
-    oldestGameDay: Long,
-    millis: Long,
-    zone: ZoneId = ZoneId.systemDefault()
-): String = "Д${dayNumberOf(gameDay, oldestGameDay)} · ${timeTextOf(millis, zone)}"
-
-/**
  * День, от которого игроку считаются номера дней.
  *
  * Счёт ведётся от самой старой записи журнала, и один и тот же день называется одним и тем же
@@ -126,6 +131,20 @@ fun depositMaturityTextOf(maturityDay: Long, todayDay: Long, oldestGameDay: Long
     return if (daysLeft == 0L) {
         "Закроется сегодня"
     } else {
-        "Закроется через $daysLeft дн · день ${dayNumberOf(maturityDay, oldestGameDay)}"
+        "Закроется через $daysLeft${NoBreakSpace}дн${DotSeparator}день$NoBreakSpace" +
+            dayNumberOf(maturityDay, oldestGameDay)
     }
 }
+
+/**
+ * Предупреждение о покупке сверх плана — одной короткой строкой, которую ребёнок прочтёт целиком.
+ *
+ * Раньше это было предложение «С этой покупкой обязательные траты будут на 15 больше плана»: на
+ * узком экране с крупным шрифтом оно занимало четыре строки красным. Покупку оно не запрещает —
+ * план игрока его собственный, — только называет, на сколько он будет нарушен.
+ *
+ * @param kind группа трат, которую покупка выводит за план.
+ * @param over на сколько монет траты этой группы выйдут за план.
+ * @return Строка вида `Обязательные: +15 сверх плана`.
+ */
+fun overspendTextOf(kind: SpendKind, over: Int): String = "${kind.title}: +$over сверх плана"

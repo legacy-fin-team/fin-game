@@ -157,7 +157,7 @@ fun InventoryScreen(
         ) {
             if (entries.isEmpty()) {
                 Text(
-                    text = "Инвентарь пуст — купите что-нибудь в магазине",
+                    text = "Инвентарь пуст${DashSeparator}купите что-нибудь в магазине",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,

@@ -179,7 +179,7 @@ private fun SpeciesStep(
 
         Text(
             text = if (previousPetMissingFromData) {
-                "Твой питомец никуда не делся — просто обновилась игра, " +
+                "Твой питомец никуда не делся${DashSeparator}просто обновилась игра, " +
                     "и такого питомца в ней больше нет. Выбери другого: " +
                     "он будет расти вместе с твоими накоплениями"
             } else {
@@ -358,7 +358,7 @@ private fun NoAnimalsMessage(modifier: Modifier = Modifier) {
 
         Text(
             text = "Данные о животных не прочитались: в игре не осталось ни одного питомца, " +
-                "и начать её сейчас нельзя. Перезапуск и переустановка тут не помогут — " +
+                "и начать её сейчас нельзя. Перезапуск и переустановка тут не помогут$DashSeparator" +
                 "нужна исправленная версия игры.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
