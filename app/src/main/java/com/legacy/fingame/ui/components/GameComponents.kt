@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.TextAutoSize
@@ -48,6 +49,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Devices
@@ -466,8 +468,10 @@ fun BalanceChip(
  * @param progress fraction of the goal completed, in the `0f..1f` range; values outside that range
  *   are clamped before being used.
  * @param modifier modifier applied to the outer [Surface].
- * @param title label displayed above the progress bar, truncated with an ellipsis if it does not
- *   fit on one line. Stated by the caller rather than defaulted here: a card that names the goal
+ * @param title label displayed above the progress bar, wrapped onto a second line when it does not
+ *   fit on one — the card is cut to the width of the chips above it, and on a narrow phone with the
+ *   system text turned up "Текущая цель" is wider than that — and only cut with an ellipsis if even
+ *   two lines are not enough. Stated by the caller rather than defaulted here: a card that names the goal
  *   out of its own pocket says the same thing whatever the player is actually saving for.
  */
 @Composable
@@ -492,7 +496,7 @@ fun GoalCard(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
+                    maxLines = GoalTitleMaxLines,
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.padding(top = 8.dp))
@@ -530,6 +534,9 @@ fun GoalCard(
  * to the pixel art around them; eight read as a bar the child can see filling up.
  */
 private val GoalProgressHeight = 8.dp
+
+/** How many lines the goal card's title may take before it is cut; see [GoalCard]. */
+private const val GoalTitleMaxLines = 2
 
 /** Padding around the label of a [PillButton] on a phone; enlarged on tablets. */
 private val PillHorizontalPadding = 20.dp
@@ -659,6 +666,11 @@ fun compactEffectChipHeight(): Dp {
  *
  * Several of these sit in a row next to the balance instead of taking up half the screen with bars.
  *
+ * The chip is always as wide as it is at [StatFullValue]: a value is "100%" one moment and "0%" the
+ * next, and a chip that followed its own text would make the row — and everything the main screen
+ * lays out from the width of that row, the demo's time button included — move under the player's
+ * finger between two taps.
+ *
  * @param stat the stat to show.
  * @param stats the pet's stats to read [stat] from.
  * @param modifier modifier applied to the outer [Surface].
@@ -679,9 +691,13 @@ fun StatChip(
         value = "${(fraction * 100).roundToInt()}%",
         valueColor = statValueColor(fraction),
         modifier = modifier,
-        compact = compact
+        compact = compact,
+        reservedValue = StatFullValue
     )
 }
+
+/** The widest value a [StatChip] ever says: a stat is never fuller than that. */
+private const val StatFullValue = "100%"
 
 /**
  * Chip made of a stat's icon and one short value next to it, the shape every stat is shown in —
@@ -699,6 +715,10 @@ fun StatChip(
  *   chip in every part — icon, value, shape — only sized so that two of them fit a card's width
  *   side by side. A compact chip is exactly [compactEffectChipHeight] tall, so a layout can keep
  *   room for a row of them in advance.
+ * @param reservedValue the widest text [value] can ever be, or `null` — the default — for a chip
+ *   that is as wide as what it says. When given, the value keeps at least the room this text takes
+ *   in the chip's own style and stands in the middle of it, so the chip is one width whatever it
+ *   says at the moment.
  */
 @Composable
 fun StatValueChip(
@@ -706,7 +726,8 @@ fun StatValueChip(
     value: String,
     valueColor: Color,
     modifier: Modifier = Modifier,
-    compact: Boolean = false
+    compact: Boolean = false,
+    reservedValue: String? = null
 ) {
     val sizeModifier = if (compact) Modifier.height(compactEffectChipHeight()) else Modifier
     val textStyle = if (compact) {
@@ -722,6 +743,17 @@ fun StatValueChip(
         styleFontSize = textStyle.fontSize,
         density = LocalDensity.current
     )
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val reservedWidth = if (reservedValue == null) {
+        0.dp
+    } else {
+        remember(reservedValue, textStyle, density) {
+            with(density) {
+                textMeasurer.measure(text = reservedValue, style = textStyle).size.width.toDp()
+            }
+        }
+    }
 
     Surface(
         modifier = modifier
@@ -752,8 +784,10 @@ fun StatValueChip(
             )
             Text(
                 text = value,
+                modifier = Modifier.widthIn(min = reservedWidth),
                 style = textStyle,
                 color = valueColor,
+                textAlign = TextAlign.Center,
                 maxLines = 1,
                 autoSize = TextAutoSize.StepBased(
                     minFontSize = minFontSize,

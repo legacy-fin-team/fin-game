@@ -43,12 +43,14 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.SemanticsPropertyReceiver
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.legacy.fingame.DemoMode
@@ -214,21 +216,24 @@ private val PlayerStats: List<StatKind> = StatKind.entries.sortedBy { it != Stat
  * How many stat chips stand on one line while there is width for them: all of them, so the pet's
  * state reads as one strip instead of a ragged two-and-one block.
  *
- * A compact chip is `79.dp` on the narrowest screen the game is laid out for with the system text
- * turned up as far as it goes (360 dp, font scale 1.3): a 16 dp icon, a 4 dp gap, three glyphs of
- * `labelSmall` at 11 sp and 8 dp of padding on either side. Three of them with the [ActionGap]
- * between come to 253 dp of the 328 the screen leaves — room to spare. A screen with less than that
- * wraps the last chip onto a line of its own rather than squeezing them.
+ * A compact stat chip keeps the room of "100%" whatever it says (see [StatChip]): a 16 dp icon, a
+ * 4 dp gap, four glyphs of `labelSmall` at 11 sp and 8 dp of padding on either side — `82.dp` at the
+ * ordinary font scale and `96.dp` at 1.3. Three of them with the [ActionGap] between come to 262 dp
+ * and 304 dp, and the narrowest screen the game is laid out for (360 dp) leaves 328 — room for all
+ * three, though not beside the settings button, so there the strip stands under the button instead
+ * (see [PlayerCorner]). A screen with less than that wraps the last chip onto a line of its own
+ * rather than squeezing them.
  */
 private const val ChipsPerRow = 3
 
 /** Separator between the pet's name and the sub-location it is in, in the badge above the pet. */
-private const val StageTitleSeparator = " · "
+private const val StageTitleSeparator = DotSeparator
 
 /**
- * How many lines the badge above the pet may take. The separator of [stageTitleOf] carries spaces
- * on both sides, so a badge too narrow for the whole title breaks it between the pet's name and the
- * sub-location instead of cutting the name of the place off.
+ * How many lines the badge above the pet may take. The separator of [stageTitleOf] carries a space
+ * after it — the one before it does not break — so a badge too narrow for the whole title breaks it
+ * between the pet's name and the sub-location instead of cutting the name of the place off, and the
+ * dot stays at the end of the first line rather than opening the second.
  */
 private const val StageBadgeMaxLines = 2
 
@@ -314,6 +319,26 @@ internal fun timeButtonTopOf(
     val reachesAcross = width - timeButtonWidth < topStart.width + gap
     return if (reachesAcross) max(underButtons, topStart.height + gap) else underButtons
 }
+
+/**
+ * Where a line of the corner with the player's things goes down the screen, given the settings
+ * button standing in the top end corner beside it.
+ *
+ * The button is a fixed sprite and is never squeezed: a corner that handed it only what the
+ * player's things left over drew it at no size at all on a narrow phone. Instead every line of the
+ * player's corner either fits in the width the button leaves beside it and stays where it is, or is
+ * too wide for that and is moved down past the bottom of the button, where it has the whole width.
+ *
+ * @param top where the line would stand with nothing beside it, in screen pixels from the top of
+ *   the corner.
+ * @param width how wide the line came out, in screen pixels.
+ * @param roomBeside the width the button leaves beside it, the gap between the two included.
+ * @param clearanceBottom how far down the button reaches, gap under it included.
+ * @return Where the top of the line goes: [top] when it fits beside the button, otherwise [top] or
+ * the bottom of the button, whichever is lower.
+ */
+internal fun clearedTopOf(top: Int, width: Int, roomBeside: Int, clearanceBottom: Int): Int =
+    if (width <= roomBeside) top else max(top, clearanceBottom)
 
 /**
  * The room the corner blocks of the main screen leave in the middle of it for the pet, in screen
@@ -466,9 +491,24 @@ fun MainScreen(
         // action buttons sit right under that corner.
         val controlsInRow = !upright && GameDimens.isShortScreen
 
+        // Stacked, the top end corner is the settings button alone: a sprite of a fixed size the
+        // player's things keep clear of themselves (see [PlayerCorner]) rather than a block the
+        // stage squeezes to whatever they leave over.
+        val settingsSize = GameDimens.buttonSize(SecondaryActionSize)
+
         MainScreenStage(
             modifier = Modifier.fillMaxSize(),
-            topStart = { PlayerCorner(state = state) },
+            topStartKeepsClear = !controlsInRow,
+            topStart = {
+                PlayerCorner(
+                    state = state,
+                    clearance = if (controlsInRow) {
+                        DpSize.Zero
+                    } else {
+                        DpSize(width = settingsSize + BlockGap, height = settingsSize + ChipGap)
+                    }
+                )
+            },
             topEnd = {
                 ControlsCorner(
                     inRow = controlsInRow,
@@ -549,9 +589,15 @@ fun MainScreen(
  * @param modifier modifier applied to the layout; the screen always states its size here, since a
  *   layout of corners has no size of its own to speak of.
  * @param gap how much room to leave between the corner blocks and the middle.
+ * @param topStartKeepsClear whether [topStart] keeps clear of [topEnd] by itself, as [PlayerCorner]
+ *   does of the settings button standing beside it: then both top blocks are measured at their own
+ *   size, the full width for the one and what it needs for the other, and neither is squeezed by
+ *   what the other takes. Otherwise — a phone held sideways, where [topEnd] is a whole row of
+ *   buttons — the player's things keep the width they need and the buttons take what is left.
  */
 @Composable
 private fun MainScreenStage(
+    topStartKeepsClear: Boolean,
     topStart: @Composable () -> Unit,
     topEnd: @Composable () -> Unit,
     timeButton: @Composable () -> Unit,
@@ -574,13 +620,21 @@ private fun MainScreenStage(
 
         val topStartOne = topStartAt.first()
         val topEndOne = topEndAt.first()
-        val topEndRoom = (width - gapPx - topStartOne.minIntrinsicWidth(height)).coerceIn(0, width)
-        val topEndPlaced = topEndOne.measure(
-            loose.copy(maxWidth = min(topEndOne.maxIntrinsicWidth(height), topEndRoom))
-        )
-        val topStartPlaced = topStartOne.measure(
-            loose.copy(maxWidth = (width - gapPx - topEndPlaced.width).coerceAtLeast(0))
-        )
+        val topEndPlaced: Placeable
+        val topStartPlaced: Placeable
+        if (topStartKeepsClear) {
+            topEndPlaced = topEndOne.measure(loose)
+            topStartPlaced = topStartOne.measure(loose)
+        } else {
+            val topEndRoom =
+                (width - gapPx - topStartOne.minIntrinsicWidth(height)).coerceIn(0, width)
+            topEndPlaced = topEndOne.measure(
+                loose.copy(maxWidth = min(topEndOne.maxIntrinsicWidth(height), topEndRoom))
+            )
+            topStartPlaced = topStartOne.measure(
+                loose.copy(maxWidth = (width - gapPx - topEndPlaced.width).coerceAtLeast(0))
+            )
+        }
         // Нижние углы делят одну строку так же, как верхние: угол с кнопками действий берёт,
         // сколько ему нужно, а кнопкам денег остаётся остальное — их надписи ужимаются сами.
         val bottomEndPlaced = bottomEndAt.first().measure(loose)
@@ -653,7 +707,14 @@ private val Placeable.block: CornerBlock get() = CornerBlock(width = width, heig
  * The money keeps a line to itself and the stats share the one below it ([ChipsPerRow]): the
  * balance chip carries the money and the deposit and grows with both, so standing it next to a stat
  * would leave the stat a sliver on a narrow screen — and the three stats in a row of their own read
- * as one thing, the state of the pet, instead of a ragged two-and-one block.
+ * as one thing, the state of the pet, instead of a ragged two-and-one block. Every stat chip keeps
+ * the room of its widest value, "100%", whatever it says right now (see [StatChip]), so the strip —
+ * and everything on the screen laid out from its width — stays put while the stats run down.
+ *
+ * The corner keeps clear of the settings button beside it by itself ([clearance]): a line that fits
+ * in the width the button leaves stays where it is, a wider one is moved down past the button
+ * ([clearedTopOf]). The button is never squeezed for the corner's sake, and the corner is never
+ * squeezed for the button's.
  *
  * The goal card is drawn exactly as wide as the chips above it rather than at some width of its own:
  * measured here instead of being told to fill what it is given, so the right edge of the card lands
@@ -662,26 +723,29 @@ private val Placeable.block: CornerBlock get() = CornerBlock(width = width, heig
  * was offered, most of it empty.
  *
  * @param state game state the chips and the card are filled from.
+ * @param clearance the room the settings button takes in the top end corner of the space the corner
+ *   is given, gaps included; [DpSize.Zero] when there is nothing there to keep clear of.
  * @param modifier modifier applied to the corner.
  */
 @Composable
 private fun PlayerCorner(
     state: GameUiState,
+    clearance: DpSize,
     modifier: Modifier = Modifier
 ) {
-    val chips: @Composable () -> Unit = {
-        Column(verticalArrangement = Arrangement.spacedBy(ChipGap)) {
-            BalanceChip(balance = state.balance, depositAmount = state.depositAmount)
-            // The stats wrap rather than being squeezed: a screen too narrow for all of them side
-            // by side starts a new line instead of shrinking the chips below what they can say.
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(ActionGap),
-                verticalArrangement = Arrangement.spacedBy(ChipGap),
-                maxItemsInEachRow = ChipsPerRow
-            ) {
-                PlayerStats.forEach { stat ->
-                    StatChip(stat = stat, stats = state.stats, compact = true)
-                }
+    val balance: @Composable () -> Unit = {
+        BalanceChip(balance = state.balance, depositAmount = state.depositAmount)
+    }
+    val stats: @Composable () -> Unit = {
+        // The stats wrap rather than being squeezed: a screen too narrow for all of them side by
+        // side starts a new line instead of shrinking the chips below what they can say.
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(ActionGap),
+            verticalArrangement = Arrangement.spacedBy(ChipGap),
+            maxItemsInEachRow = ChipsPerRow
+        ) {
+            PlayerStats.forEach { stat ->
+                StatChip(stat = stat, stats = state.stats, compact = true)
             }
         }
     }
@@ -689,20 +753,41 @@ private fun PlayerCorner(
         GoalCard(progress = DemoGoalProgress, title = DemoGoalTitle)
     }
 
-    Layout(contents = listOf(chips, goal), modifier = modifier) { measurables, constraints ->
-        val chipsPlaced = measurables[0].first().measure(constraints)
-        // The card is handed the width the chips came out at, and no choice about it.
-        val goalPlaced = measurables[1].first().measure(
-            constraints.copy(minWidth = chipsPlaced.width, maxWidth = chipsPlaced.width)
-        )
+    Layout(contents = listOf(balance, stats, goal), modifier = modifier) { measurables, constraints ->
         val gapPx = ChipGap.roundToPx()
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val roomBeside = (constraints.maxWidth - clearance.width.roundToPx()).coerceAtLeast(0)
+        val clearanceBottom = clearance.height.roundToPx()
+
+        // The money always fits beside the button: it is measured against what the button leaves.
+        val balancePlaced = measurables[0].first().measure(loose.copy(maxWidth = roomBeside))
+        val statsPlaced = measurables[1].first().measure(loose)
+        val chipsWidth = max(balancePlaced.width, statsPlaced.width)
+        // The card is handed the width the chips came out at, and no choice about it.
+        val goalPlaced = measurables[2].first().measure(
+            loose.copy(minWidth = chipsWidth, maxWidth = chipsWidth)
+        )
+
+        val statsTop = clearedTopOf(
+            top = balancePlaced.height + gapPx,
+            width = statsPlaced.width,
+            roomBeside = roomBeside,
+            clearanceBottom = clearanceBottom
+        )
+        val goalTop = clearedTopOf(
+            top = statsTop + statsPlaced.height + gapPx,
+            width = goalPlaced.width,
+            roomBeside = roomBeside,
+            clearanceBottom = clearanceBottom
+        )
 
         layout(
-            width = max(chipsPlaced.width, goalPlaced.width),
-            height = chipsPlaced.height + gapPx + goalPlaced.height
+            width = max(chipsWidth, goalPlaced.width),
+            height = goalTop + goalPlaced.height
         ) {
-            chipsPlaced.place(x = 0, y = 0)
-            goalPlaced.place(x = 0, y = chipsPlaced.height + gapPx)
+            balancePlaced.place(x = 0, y = 0)
+            statsPlaced.place(x = 0, y = statsTop)
+            goalPlaced.place(x = 0, y = goalTop)
         }
     }
 }
@@ -778,6 +863,12 @@ private fun ControlsCorner(
  * be the thing the player is meant to press, and the screen keeps its one filled button for the
  * daily bonus under the pet.
  *
+ * The label is the short "+12 ч" rather than "Вперёд 12 ч": the strip of stats keeps the room of
+ * "100%" in every chip now, and on an ordinary 411 dp phone that leaves about a hundred dp beside
+ * the player's things — room for five glyphs and the compact padding, not for eleven. The long label
+ * did not fit there and dropped the button below the whole corner, standing alone in the empty half
+ * of the screen (see [timeButtonTopOf]). The words are still said in full to a screen reader.
+ *
  * @param onClick called when the button is pressed.
  * @param modifier modifier applied to the button.
  */
@@ -787,9 +878,11 @@ private fun FastForwardButton(
     modifier: Modifier = Modifier
 ) {
     PillButton(
-        text = "Вперёд ${DemoMode.FAST_FORWARD_HOURS} ч",
+        text = "+${DemoMode.FAST_FORWARD_HOURS}${NoBreakSpace}ч",
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.semantics {
+            contentDescription = "Вперёд на ${DemoMode.FAST_FORWARD_HOURS} часов"
+        },
         style = PillStyle.Tonal,
         compact = true
     )

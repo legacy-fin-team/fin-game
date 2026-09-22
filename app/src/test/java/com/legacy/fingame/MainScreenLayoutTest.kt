@@ -2,6 +2,7 @@ package com.legacy.fingame
 
 import com.legacy.fingame.ui.screens.CornerBlock
 import com.legacy.fingame.ui.screens.bottomRowFit
+import com.legacy.fingame.ui.screens.clearedTopOf
 import com.legacy.fingame.ui.screens.stageBandOf
 import com.legacy.fingame.ui.screens.timeButtonTopOf
 import org.junit.Assert.assertEquals
@@ -178,11 +179,12 @@ class MainScreenLayoutTest {
             gap = 12
         )
 
-        assertEquals(235, band.left)
+        // The start side is the strip of stats, which keeps the room of "100%" in every chip.
+        assertEquals(274, band.left)
         assertEquals(513, band.right)
         assertEquals(0, band.top)
         assertEquals(280, band.bottom)
-        assertEquals(278, band.width)
+        assertEquals(239, band.width)
         assertEquals(280, band.height)
     }
 
@@ -200,16 +202,17 @@ class MainScreenLayoutTest {
      * The block with the player's things, as an upright phone measures it.
      *
      * The width is set by the strip of three compact stat chips, which is the widest line of the
-     * block and the line the goal card under it is cut to: a chip is an icon of 16, a gap of 4,
-     * three glyphs of `labelSmall` and 8 of padding on either side, and three of them stand 8
-     * apart. The height is the balance chip, that strip and the goal card, with a gap between each.
+     * block and the line the goal card under it is cut to: a chip is an icon of 16, a gap of 4, the
+     * room of "100%" — four glyphs of `labelSmall` — whatever the stat says, and 8 of padding on
+     * either side, and three of them stand 8 apart. The height is the balance chip, that strip and
+     * the goal card, with a gap between each.
      *
      * @param large whether the system text is turned up, which is what makes every one of them
      *   wider and taller.
      * @return Size of the block, in dp.
      */
     private fun playerCorner(large: Boolean = false): CornerBlock = CornerBlock(
-        width = if (large) 253 else 223,
+        width = if (large) 304 else 262,
         height = if (large) 176 else 158
     )
 
@@ -227,20 +230,24 @@ class MainScreenLayoutTest {
      */
     private fun timeButtonTopOn(screenWidth: Float, large: Boolean = false): Int = timeButtonTopOf(
         width = (screenWidth - 16f * 2).toInt(),
-        // Eleven glyphs of `bodyMedium` and 12 of padding on either side: the button is a compact
-        // one now, and narrower than it was when it carried the screen's largest label.
-        timeButtonWidth = if (large) 210 else 167,
+        // "+12 ч": five glyphs of `bodyMedium` and 12 of padding on either side, compact.
+        timeButtonWidth = if (large) 110 else 90,
         topStart = playerCorner(large),
         topEnd = controlsCorner,
         gap = 12
     )
 
     @Test
-    fun `on a phone the time button hangs below the player's things, at the end of the screen`() {
-        // 411dp and 360dp, with the system text as it comes: the player's things now take the
-        // width of a strip of three stat chips, and the button no longer has room to stand beside
-        // them, so it steps down past them instead of following the settings button above it.
-        assertEquals(playerCorner().height + 12, timeButtonTopOn(screenWidth = 411f))
+    fun `on an ordinary phone the time button stands beside the player's things, under the settings`() {
+        // 411dp, with the system text as it comes: the strip of stats takes 262 of the 379, and the
+        // short "+12 ч" fits in what is left, so it follows the settings button above it — level
+        // with the top of the goal card — instead of standing alone below the whole corner.
+        assertEquals(controlsCorner.height + 12, timeButtonTopOn(screenWidth = 411f))
+    }
+
+    @Test
+    fun `on the narrowest phone the time button hangs below the player's things`() {
+        // 360dp: 328 less the 262 of the stats leaves no room for the button beside them.
         assertEquals(playerCorner().height + 12, timeButtonTopOn(screenWidth = 360f))
     }
 
@@ -267,7 +274,7 @@ class MainScreenLayoutTest {
         listOf(320f, 360f, 411f, 800f).forEach { screenWidth ->
             listOf(false, true).forEach { large ->
                 val width = (screenWidth - 16f * 2).toInt()
-                val timeButtonWidth = if (large) 230 else 188
+                val timeButtonWidth = if (large) 110 else 90
                 val top = timeButtonTopOn(screenWidth = screenWidth, large = large)
                 val player = playerCorner(large)
 
@@ -299,5 +306,40 @@ class MainScreenLayoutTest {
         assertEquals(band.top, band.bottom)
         assertTrue(band.top in 0..300)
         assertEquals(288, band.width)
+    }
+
+    @Test
+    fun `a line of the player's things that fits beside the settings button stays where it is`() {
+        // 411dp: the strip of stats is 262 wide, and the button leaves 303 of the 379 beside it.
+        assertEquals(44, clearedTopOf(top = 44, width = 262, roomBeside = 303, clearanceBottom = 72))
+    }
+
+    @Test
+    fun `a line too wide to stand beside the settings button goes down past it`() {
+        // 360dp: the button leaves 252 of the 328, and the strip of stats needs 262 — or 304 with
+        // the system text turned up. Squeezed in beside the button, it took the button's own room
+        // and left the button drawn at no size at all.
+        assertEquals(72, clearedTopOf(top = 44, width = 262, roomBeside = 252, clearanceBottom = 72))
+        assertEquals(72, clearedTopOf(top = 44, width = 304, roomBeside = 252, clearanceBottom = 72))
+    }
+
+    @Test
+    fun `a line already below the settings button is not moved at all`() {
+        assertEquals(104, clearedTopOf(top = 104, width = 304, roomBeside = 252, clearanceBottom = 72))
+    }
+
+    @Test
+    fun `the time button stays put while the stats run down`() {
+        // Every stat chip keeps the room of "100%", so the corner is one width at 100% and at 0%, and
+        // the button a second tap is aimed at is still where the first one found it.
+        val full = timeButtonTopOn(screenWidth = 411f)
+        val empty = timeButtonTopOf(
+            width = (411f - 16f * 2).toInt(),
+            timeButtonWidth = 90,
+            topStart = playerCorner(),
+            topEnd = controlsCorner,
+            gap = 12
+        )
+        assertEquals(full, empty)
     }
 }
