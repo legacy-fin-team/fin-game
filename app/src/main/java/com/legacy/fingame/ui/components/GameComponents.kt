@@ -47,6 +47,8 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.game.stats.StatKind
+import com.legacy.fingame.ui.screens.balancesDescriptionOf
+import com.legacy.fingame.ui.screens.balancesTextOf
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
@@ -174,20 +176,41 @@ fun SpriteButton(
 }
 
 /**
- * Player balance pill: coin sprite plus the coins the player has.
+ * Пилюля со счетами игрока: иконка монеты и три числа через чёрточку — текущие деньги, сбережения
+ * и тело вклада (`100 | 200 | 510`).
  *
- * @param balance number of coins to show, taken from
- *   [com.legacy.fingame.game.GameUiState.balance].
- * @param modifier modifier applied to the outer [Surface].
+ * Иконка одна на все три: три иконки в углу экрана не помещаются, а чёрточка читается как «и ещё»
+ * не хуже. Проценты по вкладу здесь не показываются — они ещё не начислены, и показывать их как
+ * деньги игрока значило бы обещать.
+ *
+ * Надпись всегда в одну строку и ужимается вместе с шириной пилюли, как ужимается надпись на
+ * [PillButton], поэтому при крупном системном шрифте на узком экране числа не обрезаются.
+ *
+ * @param balance текущие деньги, из [com.legacy.fingame.game.GameUiState.balance].
+ * @param savings сбережения, из [com.legacy.fingame.game.GameUiState.savings].
+ * @param depositAmount тело вклада, из [com.legacy.fingame.game.GameUiState.depositAmount].
+ * @param modifier модификатор внешнего [Surface].
  */
 @Composable
 fun BalanceChip(
     balance: Int,
+    savings: Int,
+    depositAmount: Int,
     modifier: Modifier = Modifier
 ) {
-    val text = balance.toString()
+    val text = balancesTextOf(balance, savings, depositAmount)
+    val description = balancesDescriptionOf(balance, savings, depositAmount)
+    val textStyle = MaterialTheme.typography.labelLarge
+    val (minFontSize, maxFontSize) = pillButtonAutoSizeRange(
+        minLabelSize = PillButtonMinLabelSize,
+        styleFontSize = textStyle.fontSize,
+        density = LocalDensity.current
+    )
+
     Surface(
-        modifier = modifier.wrapContentSize(),
+        modifier = modifier
+            .wrapContentSize()
+            .semantics { contentDescription = description },
         shape = RoundedCornerShape(50),
         color = MaterialTheme.colorScheme.secondaryContainer,
         border = BorderStroke(1.dp, GameColors.cardStroke)
@@ -204,8 +227,14 @@ fun BalanceChip(
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSecondaryContainer
+                style = textStyle,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                maxLines = 1,
+                softWrap = false,
+                autoSize = TextAutoSize.StepBased(
+                    minFontSize = minFontSize,
+                    maxFontSize = maxFontSize
+                )
             )
         }
     }
@@ -624,7 +653,7 @@ private fun PreviewContent() {
                 onClick = {},
                 selected = true
             )
-            BalanceChip(balance = 12400)
+            BalanceChip(balance = 12400, savings = 3200, depositAmount = 500)
         }
         GoalCard(title = "Велосипед", progress = 0.64f)
         val stats = PetStats(

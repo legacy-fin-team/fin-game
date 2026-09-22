@@ -643,7 +643,11 @@ private fun PlayerCorner(
             horizontalArrangement = Arrangement.spacedBy(ActionGap),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            BalanceChip(balance = state.balance)
+            BalanceChip(
+                balance = state.balance,
+                savings = state.savings,
+                depositAmount = state.depositAmount
+            )
             StatChip(stat = StatKind.HEALTH, stats = state.stats)
         }
 
