@@ -71,4 +71,22 @@ class AmountStepsTest {
         assertEquals(0, amountSnappedTo(raw = 50f, max = 0))
         assertEquals(0, amountSteppedBy(value = 0, delta = 1, max = 0))
     }
+
+    @Test
+    fun `the step of a plan stays the same while its lines change`() {
+        // Раскладываются 250: шаг — от всей суммы, 25, и он не сходит на 10, когда соседняя строка
+        // забрала часть и строке осталось 150. Раньше шаг считался от остатка, и «плюс» давал 25,
+        // а следующий — 10.
+        val total = 250
+        val step = amountStepOf(total)
+        val want = 100
+        var must = 0
+        val seen = mutableListOf<Int>()
+        repeat(3) {
+            must = amountSteppedBy(value = must, delta = 1, max = total - want, step = step)
+            seen += must
+        }
+        assertEquals(25, step)
+        assertEquals(listOf(25, 50, 75), seen)
+    }
 }

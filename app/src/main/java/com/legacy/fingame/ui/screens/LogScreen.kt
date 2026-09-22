@@ -16,12 +16,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -33,6 +35,7 @@ import com.legacy.fingame.ui.components.PillButton
 import com.legacy.fingame.ui.components.PillStyle
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
+import com.legacy.fingame.ui.components.pillButtonAutoSizeRange
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
@@ -50,6 +53,19 @@ private val RowMinHeight = 48.dp
 
 /** Отступ строки сверху и снизу: плотность списка задаётся здесь и только здесь. */
 private val RowVerticalPadding = 8.dp
+
+/**
+ * Зазор между названием операции и часом под ним. Строки однострочные и обрезаны по кеглю, так что
+ * без зазора хвосты букв названия касались цифр времени.
+ */
+private val RowTextGap = 4.dp
+
+/**
+ * Мельче этого название операции не ужимается. Физический размер, от системного шрифта не зависит:
+ * на 360 dp при шрифте 1.3 «Проценты по вкладу» помещается целиком около 13 dp, и до пола остаётся
+ * запас.
+ */
+private val ReasonMinSize = 9.dp
 
 /** Зазор между названием операции и суммой. */
 private val RowColumnGap = 12.dp
@@ -215,7 +231,9 @@ private fun DayHeader(
  * Двух зон хватает там, где не хватало трёх столбцов: раньше название получало остаток после двух
  * жёстких колонок и на узком экране переносилось на вторую строку, а время ужималось до кегля,
  * который ни с чем на экране не совпадал. Теперь название занимает всё, что остаётся от столбца
- * сумм ([AmountColumnMinWidth]), и ужимать в строке нечего — весь текст написан своим размером.
+ * сумм ([AmountColumnMinWidth]). Название всегда в одну строку: не помещается — ужимается целиком
+ * (`autoSize` до [ReasonMinSize]), а не обрезается многоточием посреди слова. Под ним с зазором
+ * [RowTextGap] — час записи.
  *
  * День в строке не повторяется: его называет [DayHeader], который висит над группой всё время,
  * пока группа на экране.
@@ -228,6 +246,13 @@ private fun MoneyLogRow(
     entry: MoneyEntry,
     modifier: Modifier = Modifier
 ) {
+    val reasonStyle = MaterialTheme.typography.bodyMedium
+    val (reasonMinFontSize, reasonMaxFontSize) = pillButtonAutoSizeRange(
+        minLabelSize = ReasonMinSize,
+        styleFontSize = reasonStyle.fontSize,
+        density = LocalDensity.current
+    )
+
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -235,13 +260,22 @@ private fun MoneyLogRow(
             .padding(vertical = RowVerticalPadding),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(RowTextGap)
+        ) {
+            // Перенос не отключается: только так `autoSize` меряет название по ширине, которая у
+            // него есть, и узнаёт, что оно не помещается.
             Text(
                 text = entry.reason,
-                style = MaterialTheme.typography.bodyMedium,
+                style = reasonStyle,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                autoSize = TextAutoSize.StepBased(
+                    minFontSize = reasonMinFontSize,
+                    maxFontSize = reasonMaxFontSize
+                )
             )
             Text(
                 text = timeTextOf(entry.timestampMillis),

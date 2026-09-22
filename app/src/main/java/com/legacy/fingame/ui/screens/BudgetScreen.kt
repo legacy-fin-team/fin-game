@@ -3,6 +3,7 @@ package com.legacy.fingame.ui.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
@@ -16,8 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -33,10 +34,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -45,7 +48,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import com.legacy.fingame.game.GameUiState
 import com.legacy.fingame.game.economy.Budget
@@ -68,6 +73,7 @@ import com.legacy.fingame.ui.components.pillButtonAutoSizeRange
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
+import kotlin.math.max
 
 /** Размер крестика, закрывающего экран. */
 private val CloseButtonSize = 40.dp
@@ -94,6 +100,9 @@ private val AmountRowMinHeight = 32.dp
 /** Наименьшая ширина значения: по ней числа выстраиваются в колонку у правого края строки. */
 private val AmountValueMinWidth = 72.dp
 
+/** Зазор между подписью строки «подпись — значение» и её значением. */
+private val AmountLabelGap = 8.dp
+
 /**
  * Мельче этого подпись строки «подпись — значение» не ужимается.
  *
@@ -103,17 +112,43 @@ private val AmountValueMinWidth = 72.dp
  */
 private val AmountLabelMinSize = 9.dp
 
-/** Зазор между цифрами срока вклада — и по горизонтали, и между строками, если ряд перенесётся. */
+/** Зазор между строками цифр срока вклада, если ряд перенесётся. */
 private val TermChipGap = 8.dp
 
+/** Подпись суммы, которая уходит на новый вклад, в раскладке. */
+private const val DepositLabel = "На вклад"
+
+/** Зазор между строками карточки бюджета — тот же, что держит сама карточка ([BudgetCard]). */
+private val BudgetCardGap = 8.dp
+
 /**
- * Наименьшая ширина цифры срока.
+ * Общий кегль для подписей группы строк одного уровня — «Обязательные» и «Необязательные» в
+ * раскладке.
  *
- * Все шесть кнопок выходят одной ширины, как бы ни была широка сама цифра: без этого минимума
- * кнопка с «2» и кнопка с «7» при обычном шрифте различались бы на пиксель-другой, и ряд шёл бы
- * неровно.
+ * Шрифт игры моноширинный: подпись из n знаков занимает n кеглей в ширину, какие бы ни были буквы.
+ * Поэтому кегль, при котором помещается самая длинная подпись группы, считается делением, и тот же
+ * кегль отдаётся всем строкам группы: каждая, ужимаясь сама, ужала бы только длинное слово, и два
+ * заголовка одного уровня вышли бы разного размера. Лишний знак в делителе — запас на межбуквенный
+ * интервал и округление, как у подписи [com.legacy.fingame.ui.components.SpriteButton].
+ *
+ * @param labelRoom ширина, которая остаётся подписи в строке, в dp.
+ * @param longestLabel сколько знаков в самой длинной подписи группы.
+ * @param styleSize обычный кегль подписи, в dp — с учётом системного шрифта.
+ * @param floor мельче этого подпись не ужимается, в dp.
+ * @return Кегль в dp: обычный, когда подпись помещается и так; меньше — ровно настолько, чтобы
+ * поместилась самая длинная; не меньше [floor]; и обычный, когда подписей нет или места нет вовсе
+ * (считать не от чего).
  */
-private val TermChipMinWidth = 40.dp
+internal fun sharedLabelSizeOf(
+    labelRoom: Float,
+    longestLabel: Int,
+    styleSize: Float,
+    floor: Float
+): Float {
+    if (longestLabel <= 0 || labelRoom <= 0f) return styleSize
+    val fitting = labelRoom / (longestLabel + 1)
+    return fitting.coerceIn(minOf(floor, styleSize), styleSize)
+}
 
 /** Окно, открытое поверх экрана бюджета. Чисто экранное: игре до него дела нет. */
 private enum class BudgetWindow { NONE, CONFIRM_BUDGET, CLOSE_DEPOSIT }
@@ -155,7 +190,9 @@ fun BudgetScreen(
 ) {
     // Какое окно игрок открыл поверх экрана. Чисто экранное состояние: игре до него дела нет,
     // пока игрок не подтвердил то, о чём окно спрашивает.
-    var window by remember { mutableStateOf(BudgetWindow.NONE) }
+    // Переживает поворот и смену темы: активность при них пересоздаётся, и открытое окно иначе
+    // пропадало бы из-под пальца, хотя его причина никуда не делась.
+    var window by rememberSaveable { mutableStateOf(BudgetWindow.NONE) }
     val isShortScreen = GameDimens.isShortScreen
 
     // Бонус дня открывает новый период, поэтому, пока он не получен, раскладывать нечего: экран
@@ -345,7 +382,7 @@ private fun PreviousBudgetCard(result: BudgetResult, modifier: Modifier = Modifi
             ResultDivider()
             AmountRow(label = "На вкладе", value = result.plannedDeposit.toString())
         }
-        HintText(text = "Плюс — не потратили всё, минус — вышли за план")
+        HintText(text = "Плюс${DashSeparator}не потратили всё, минус${DashSeparator}вышли за план")
     }
 }
 
@@ -457,32 +494,64 @@ private fun PlanningCard(
 ) {
     // Сумма ушла из заголовка в первую строку карточки: «Распределите 250» при крупном системном
     // шрифте ломалось надвое, и число оказывалось на отдельной строке без подписи.
+    // Шаг один на всю раскладку и считается от всей суммы, а не от того, что осталось строке: остаток
+    // меняется с каждой правкой соседних строк, и шаг «плюса» менялся бы на ходу — 25, потом 10.
+    val step = amountStepOf(total)
+
     BudgetCard(title = "Распределите", modifier = modifier) {
         AmountRow(label = "Свободно", value = total.toString())
 
-        AmountPicker(
-            label = SpendKind.MUST.title,
-            value = draft.mustSpend,
-            max = total - draft.depositAmount - draft.wantSpend,
-            onValueChange = { onDraftChange(draft.copy(mustSpend = it)) },
-            hint = "Еда и игрушки"
-        )
+        // «Обязательные», «Необязательные» и «На вклад» — заголовки одного уровня, и кегль у них
+        // один: он считается один раз по самой длинной подписи, а не ужимается у каждой строки
+        // по-своему.
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val labelFontSize = with(LocalDensity.current) {
+                sharedLabelSizeOf(
+                    labelRoom = (maxWidth - AmountLabelGap - AmountValueMinWidth).value,
+                    longestLabel = maxOf(
+                        SpendKind.MUST.title.length,
+                        SpendKind.WANT.title.length,
+                        DepositLabel.length
+                    ),
+                    styleSize = MaterialTheme.typography.bodyMedium.fontSize.toDp().value,
+                    floor = AmountLabelMinSize.value
+                ).dp.toSp()
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(BudgetCardGap)) {
+                AmountPicker(
+                    label = SpendKind.MUST.title,
+                    value = draft.mustSpend,
+                    max = total - draft.depositAmount - draft.wantSpend,
+                    step = step,
+                    onValueChange = { onDraftChange(draft.copy(mustSpend = it)) },
+                    hint = "Еда и игрушки",
+                    labelFontSize = labelFontSize
+                )
 
-        AmountPicker(
-            label = SpendKind.WANT.title,
-            value = draft.wantSpend,
-            max = total - draft.depositAmount - draft.mustSpend,
-            onValueChange = { onDraftChange(draft.copy(wantSpend = it)) },
-            hint = "Декор и одежда"
-        )
+                AmountPicker(
+                    label = SpendKind.WANT.title,
+                    value = draft.wantSpend,
+                    max = total - draft.depositAmount - draft.mustSpend,
+                    step = step,
+                    onValueChange = { onDraftChange(draft.copy(wantSpend = it)) },
+                    hint = "Декор и одежда",
+                    labelFontSize = labelFontSize
+                )
+
+                if (depositAllowed) {
+                    AmountPicker(
+                        label = DepositLabel,
+                        value = draft.depositAmount,
+                        max = total - draft.mustSpend - draft.wantSpend,
+                        step = step,
+                        onValueChange = { onDraftChange(draft.copy(depositAmount = it)) },
+                        labelFontSize = labelFontSize
+                    )
+                }
+            }
+        }
 
         if (depositAllowed) {
-            AmountPicker(
-                label = "На вклад",
-                value = draft.depositAmount,
-                max = total - draft.mustSpend - draft.wantSpend,
-                onValueChange = { onDraftChange(draft.copy(depositAmount = it)) }
-            )
             TermPicker(
                 selected = draft.depositTermDays,
                 onSelect = { onDraftChange(draft.copy(depositTermDays = it)) }
@@ -500,14 +569,15 @@ private fun PlanningCard(
                 )
             }
         } else {
+            // Единственная подсказка про вклад на время раскладки: карточка вклада ниже в это время
+            // молчит, чтобы две подсказки не спорили друг с другом.
             HintText(
-                text = "Вклад уже открыт. Новый можно открыть только при планировании — в " +
-                    "начале следующего периода, после бонуса дня."
+                text = "Вклад уже открыт. Закроете его${DashSeparator}сможете открыть новый прямо здесь"
             )
         }
 
         AmountRow(label = "Останется", value = Budget.savingsOf(draft, total).toString())
-        HintText(text = "Останется — то, что вы планируете сохранить")
+        HintText(text = "Останется${DashSeparator}то, что вы планируете сохранить")
         PillButton(
             text = "Подтвердить",
             onClick = onConfirm,
@@ -521,8 +591,9 @@ private fun PlanningCard(
  * Набор суммы без цифр: ползунок и кнопки «плюс» и «минус» круглым шагом.
  *
  * Цифры не набираются руками нигде на этом экране: клавиатура на телефоне закрывает половину
- * раскладки, а игра про деньги, а не про набор чисел. Шаг берётся от самой суммы
- * ([amountStepOf]), поэтому из сотни набирается «по десять», а из десяти тысяч — «по тысяче».
+ * раскладки, а игра про деньги, а не про набор чисел. Шаг приходит от раскладки и считается от
+ * всей суммы ([amountStepOf]), поэтому из сотни набирается «по десять», а из десяти тысяч — «по
+ * тысяче», и за время раскладки он не меняется.
  *
  * Кнопок-ярлыков «Ничего», «Половина» и «Всё» здесь больше нет: на трёх суммах подряд они давали
  * девять одинаковых кнопок, от которых экран рябил, а отвечали они на вопрос, который ползунок
@@ -536,11 +607,14 @@ private fun PlanningCard(
  * @param label подпись суммы.
  * @param value сумма, которая набрана сейчас.
  * @param max сколько всего можно разложить в эту сумму.
+ * @param step шаг «плюса», «минуса» и ползунка — один на всю раскладку, см. [PlanningCard].
  * @param onValueChange вызывается с новой суммой.
  * @param modifier модификатор блока.
  * @param hint подпись под заголовком: что попадает в эту категорию. Стоит внутри самого пикера,
  *   сразу под своей строкой, а не после ползунка: снизу она читалась как заголовок следующего
  *   пикера, к которому не имеет отношения.
+ * @param labelFontSize общий кегль подписи, посчитанный для группы строк, или `null` — строка
+ *   ужимает подпись сама (см. [AmountRow]).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -548,11 +622,12 @@ private fun AmountPicker(
     label: String,
     value: Int,
     max: Int,
+    step: Int,
     onValueChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    hint: String? = null
+    hint: String? = null,
+    labelFontSize: TextUnit? = null
 ) {
-    val step = amountStepOf(max)
     // Раскладывать нечего: всё уже разошлось по другим строкам, и любое нажатие здесь вернуло бы
     // ту же сумму. Кнопка, которая отвечает нажатием и не меняет ничего, читается как сломанная.
     val enabled = max > 0
@@ -565,7 +640,7 @@ private fun AmountPicker(
     )
 
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        AmountRow(label = label, value = value.toString())
+        AmountRow(label = label, value = value.toString(), labelFontSize = labelFontSize)
         if (hint != null) {
             HintText(text = hint)
         }
@@ -622,7 +697,10 @@ private fun AmountPicker(
  * на узком экране с крупным системным шрифтом. Считается это так: на 360 dp внутри карточки
  * остаётся 296 dp; цифре нужно около 41 dp — один глиф 13 sp при шрифте 1.3 плюс поля компактной
  * кнопки по 12, — и шесть таких кнопок с пятью зазорами по 8 занимают 6 × 41 + 40 = 286 dp.
- * Кнопки не растягиваются на всю ширину: каждая по своей цифре, не уже [TermChipMinWidth].
+ * Каждая кнопка — круг: сторона — большее из ширины и высоты самой кнопки ([squareChip]), так что
+ * на планшете, где кнопка выше, она не вытягивается в овал. Лишняя ширина ряда расходится поровну
+ * между кнопками: на 360 dp при шрифте 1.3 её остаётся 20 dp на пять зазоров, и с постоянным
+ * зазором [TermChipGap] шестой круг переносился бы на вторую строку.
  *
  * Ряд — [FlowRow], а не простая строка, только как страховка: при шрифте крупнее 1.3 цифры
  * перенесутся на вторую строку, а не уедут за край карточки. При 1.3 и мельче перенос не
@@ -630,8 +708,9 @@ private fun AmountPicker(
  *
  * Ряду отключён общий для Material наименьший размер кнопки (48 × 48 dp): [PillButton] стоит на
  * `Surface(onClick = …)`, а тот его навязывает, и шесть кнопок по 48 с зазорами заняли бы 328 dp —
- * больше, чем есть в карточке. Высоту это не трогает: её держит собственный минимум кнопки (44 dp),
- * и палец по-прежнему попадает.
+ * больше, чем есть в карточке. Высоту это не трогает: её держит собственный минимум кнопки (44 dp,
+ * на планшете больше), и палец по-прежнему попадает. На 360 dp при шрифте 1.3 круг выходит 46 dp,
+ * шесть кругов — 276 dp из 296.
  *
  * Выбранный срок залит ([PillButton] с `selected = true`), остальные — с `selected = false` —
  * обведены контуром: выбранное заметнее невыбранного. Раньше выходило наоборот — невыбранные сроки
@@ -657,14 +736,14 @@ private fun TermPicker(
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(TermChipGap),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalArrangement = Arrangement.spacedBy(TermChipGap)
             ) {
                 Deposit.TERM_DAYS.forEach { term ->
                     PillButton(
                         text = term.toString(),
                         onClick = { onSelect(term) },
-                        modifier = Modifier.defaultMinSize(minWidth = TermChipMinWidth),
+                        modifier = Modifier.squareChip(),
                         compact = true,
                         selected = term == selected,
                         autoShrink = false
@@ -822,8 +901,8 @@ private fun spentOfPlannedText(spent: Int, planned: Int, over: Boolean): Annotat
  * @param deposit открытый вклад.
  * @param todayDay сегодняшний игровой день: от него считается, сколько вкладу осталось лежать.
  * @param oldestGameDay день, от которого игроку считаются номера дней (см. [firstDayOf]).
- * @param planningOpen идёт ли сейчас раскладка: от этого зависит, когда игрок сможет открыть
- *   новый вклад взамен закрытого.
+ * @param planningOpen идёт ли сейчас раскладка: тогда о новом вкладе говорит сама раскладка, а
+ *   карточка молчит; вне раскладки карточка говорит, когда новый вклад можно будет открыть.
  * @param onCloseEarly вызывается по кнопке досрочного закрытия.
  * @param modifier модификатор карточки.
  */
@@ -852,13 +931,11 @@ private fun DepositCard(
                 oldestGameDay = oldestGameDay
             )
         )
-        HintText(
-            text = if (planningOpen) {
-                "Закроете сейчас — сможете открыть новый прямо в этой раскладке"
-            } else {
-                "Новый вклад открывается только в начале периода, при планировании"
-            }
-        )
+        // Во время раскладки про новый вклад говорит сама раскладка (см. [PlanningCard]); вторая
+        // подсказка здесь повторяла бы её другими словами, а раньше и противоречила ей.
+        if (!planningOpen) {
+            HintText(text = "Новый вклад можно открыть при следующем планировании")
+        }
         PillButton(
             text = "Закрыть досрочно",
             onClick = onCloseEarly,
@@ -917,12 +994,29 @@ private fun CloseDepositDialog(
                 text = if (planningOpen) {
                     "Новый вклад можно открыть прямо в этой раскладке."
                 } else {
-                    "Новый вклад откроется только в начале периода, при планировании."
+                    "Новый вклад можно открыть при следующем планировании."
                 },
                 textAlign = TextAlign.Center
             )
         }
     }
+}
+
+/**
+ * Делает кнопку квадратной — а круглую пилюлю кругом: сторона — большее из того, что кнопке нужно
+ * в ширину и в высоту. Высоту кнопки держит её собственный минимум, который на планшете больше, а
+ * ширину — одна цифра, поэтому без этого кнопка срока на планшете выходила вытянутым овалом.
+ *
+ * @return Модификатор, который меряет кнопку квадратом.
+ */
+private fun Modifier.squareChip(): Modifier = layout { measurable, constraints ->
+    val width = measurable.maxIntrinsicWidth(Constraints.Infinity)
+    val height = measurable.minIntrinsicHeight(width)
+    val side = max(width, height)
+        .coerceIn(constraints.minWidth, constraints.maxWidth)
+        .coerceIn(constraints.minHeight, constraints.maxHeight)
+    val placeable = measurable.measure(Constraints.fixed(side, side))
+    layout(side, side) { placeable.place(0, 0) }
 }
 
 /** Карточка блока экрана бюджета: заголовок и содержимое на общей подложке. */
@@ -972,6 +1066,10 @@ private fun BudgetCard(
  * @param labelColor цвет подписи: обычно тише значения, но у итоговой строки — вровень с ним.
  * @param valueColor цвет значения: им отмечается перерасход и выгода. Части значения, у которых
  *   свой цвет, его не слушают.
+ * @param labelFontSize кегль подписи, общий для группы строк одного уровня (см. [sharedLabelSizeOf]),
+ *   или `null` — подпись ужимается сама, по своей ширине. Общий кегль уже посчитан так, чтобы
+ *   самая длинная подпись группы поместилась, поэтому `autoSize` с ним не нужен: он ужал бы одну
+ *   строку группы, а соседнюю оставил бы как есть.
  */
 @Composable
 private fun AmountRow(
@@ -980,9 +1078,12 @@ private fun AmountRow(
     modifier: Modifier = Modifier,
     stacked: Boolean = false,
     labelColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    valueColor: Color = MaterialTheme.colorScheme.onSurface
+    valueColor: Color = MaterialTheme.colorScheme.onSurface,
+    labelFontSize: TextUnit? = null
 ) {
-    val labelStyle = MaterialTheme.typography.bodyMedium
+    val labelStyle = MaterialTheme.typography.bodyMedium.let { style ->
+        if (labelFontSize == null) style else style.copy(fontSize = labelFontSize)
+    }
     val (labelMinFontSize, labelMaxFontSize) = pillButtonAutoSizeRange(
         minLabelSize = AmountLabelMinSize,
         styleFontSize = labelStyle.fontSize,
@@ -998,10 +1099,14 @@ private fun AmountRow(
             color = labelColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            autoSize = TextAutoSize.StepBased(
-                minFontSize = labelMinFontSize,
-                maxFontSize = labelMaxFontSize
-            )
+            autoSize = if (labelFontSize == null) {
+                TextAutoSize.StepBased(
+                    minFontSize = labelMinFontSize,
+                    maxFontSize = labelMaxFontSize
+                )
+            } else {
+                null
+            }
         )
     }
     val valueText: @Composable (Modifier) -> Unit = { valueModifier ->
@@ -1030,7 +1135,7 @@ private fun AmountRow(
             modifier = modifier
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = AmountRowMinHeight),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(AmountLabelGap),
             verticalAlignment = Alignment.CenterVertically
         ) {
             labelText(Modifier.weight(1f))
@@ -1048,6 +1153,7 @@ private fun AmountRow(
  * @param stacked разложить ли строку в два яруса.
  * @param labelColor цвет подписи.
  * @param valueColor цвет значения.
+ * @param labelFontSize общий кегль подписи группы или `null`.
  */
 @Composable
 private fun AmountRow(
@@ -1056,7 +1162,8 @@ private fun AmountRow(
     modifier: Modifier = Modifier,
     stacked: Boolean = false,
     labelColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    valueColor: Color = MaterialTheme.colorScheme.onSurface
+    valueColor: Color = MaterialTheme.colorScheme.onSurface,
+    labelFontSize: TextUnit? = null
 ) {
     AmountRow(
         label = label,
@@ -1064,7 +1171,8 @@ private fun AmountRow(
         modifier = modifier,
         stacked = stacked,
         labelColor = labelColor,
-        valueColor = valueColor
+        valueColor = valueColor,
+        labelFontSize = labelFontSize
     )
 }
 
