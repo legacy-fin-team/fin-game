@@ -343,6 +343,8 @@ class GameViewModel(
      * [PetStats.TICK_MILLIS] is kept for the next call instead of being dropped.
      */
     fun tick() {
+        settleMaturedDeposit()
+
         val current = _state.value
         val now = clock.nowMillis()
         val ticks = PetStats.ticksBetween(current.statsUpdatedAtMillis, now)
@@ -536,25 +538,28 @@ class GameViewModel(
 
         val owned = current.owned.toMutableMap()
         var logged = current
+        var spent = 0
         current.quantities.forEach { (itemId, quantity) ->
             if (quantity <= 0) return@forEach
             val item = catalog.findItemById(itemId) ?: return@forEach
             val key = ItemSelection(itemId, current.pickedVariantOf(item))
             owned[key] = (owned[key] ?: 0) + quantity
+            val cost = item.price * quantity
+            spent += cost
             logged = logged.logged(
                 reason = MoneyLog.purchaseReason(item.name, quantity),
-                delta = -item.price * quantity
+                delta = -cost
             )
         }
 
         _state.value = stateForNavigatingTo(Screen.MAIN).copy(
-            balance = current.balance - current.cartPrice,
+            balance = current.balance - spent,
             owned = owned.toMap(),
             quantities = emptyMap(),
             pickedVariants = emptyMap(),
             cartPrice = 0,
             moneyLog = logged.moneyLog,
-            budget = current.budget?.let { it.copy(spent = it.spent + current.cartPrice) }
+            budget = current.budget?.let { it.copy(spent = it.spent + spent) }
         )
         persist()
         return true
@@ -602,9 +607,16 @@ class GameViewModel(
     /**
      * Закрывает вклад до срока: тело возвращается на текущий счёт, проценты не начисляются.
      *
-     * @return True, когда вклад закрыт, false, когда вклада не было.
+     * Вклад, доживший до срока, сперва гасится [settleMaturedDeposit] — тому, кто дождался
+     * процентов, они не сгорают только потому, что игрок не заходил на экраны, которые обычно
+     * это замечают.
+     *
+     * @return True, когда вклад закрыт досрочно, false, когда вклада не было или он уже погашен
+     * (по сроку — тогда деньги на счету, но не через "досрочно").
      */
     fun closeDepositEarly(): Boolean {
+        settleMaturedDeposit()
+
         val current = _state.value
         val deposit = current.deposit ?: return false
 

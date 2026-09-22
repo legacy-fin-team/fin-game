@@ -395,4 +395,52 @@ class BudgetFlowTest {
         assertEquals(300, state.moneyLog.entries.first().delta)
         assertFalse(vm.closeDepositEarly())
     }
+
+    @Test
+    fun `closing a deposit that already matured settles it as matured, not as early`() {
+        val clock = FakeGameClock()
+        val store = FakePlayerStateStore(
+            PlayerState(
+                balance = 0,
+                deposit = Deposit.openedOn(
+                    amount = 100,
+                    termDays = 2,
+                    day = FakeGameClock.DEFAULT_DAY
+                )
+            )
+        )
+        val vm = testGameViewModel(store = store, clock = clock)
+
+        // Срок наступил, но игрок не заходил ни на один экран, который бы это заметил.
+        clock.day += 2
+        assertFalse(vm.closeDepositEarly())
+
+        val state = vm.state.value
+        assertNull(state.deposit)
+        assertEquals(104, state.balance)
+        assertEquals(
+            listOf(MoneyLog.REASON_DEPOSIT_INTEREST, MoneyLog.REASON_DEPOSIT_CLOSED),
+            state.moneyLog.entries.map { it.reason }
+        )
+    }
+
+    @Test
+    fun `buying a mixed cart charges exactly what the log lines add up to`() {
+        val vm = testGameViewModel()
+        vm.claimDailyBonus()
+        assertTrue(vm.confirmBudget())
+        val balanceBefore = vm.state.value.balance
+
+        vm.increaseQty(TestItems.APPLE.id)
+        vm.increaseQty(TestItems.APPLE.id)
+        vm.increaseQty(TestItems.FISH.id)
+        vm.increaseQty(TestItems.FISH.id)
+        vm.increaseQty(TestItems.FISH.id)
+        assertTrue(vm.buyCart())
+
+        val state = vm.state.value
+        val loggedSpent = -state.moneyLog.entries.take(2).sumOf { it.delta }
+        assertEquals(balanceBefore - state.balance, loggedSpent)
+        assertEquals(loggedSpent, state.budget?.spent)
+    }
 }
