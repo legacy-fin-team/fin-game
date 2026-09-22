@@ -21,6 +21,21 @@ class MoneyLogTest {
     }
 
     @Test
+    fun `the days are counted from the oldest record the log still holds`() {
+        // Пустому журналу отсчитывать дни не от чего, и он об этом честно говорит.
+        assertEquals(null, MoneyLog.EMPTY.oldestGameDay)
+
+        val log = MoneyLog.of(
+            listOf(
+                entry(reason = MoneyLog.REASON_DAILY_BONUS, delta = 100, day = 19_000L),
+                entry(reason = MoneyLog.REASON_REWARD, delta = 50, day = 19_004L)
+            )
+        )
+
+        assertEquals(19_000L, log.oldestGameDay)
+    }
+
+    @Test
     fun `the newest record comes first`() {
         val log = MoneyLog.EMPTY
             .plus(entry(MoneyLog.REASON_DAILY_BONUS, 50))

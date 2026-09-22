@@ -42,6 +42,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         private const val KEY_STATS_UPDATED_AT = "stats_updated_at"
         private const val KEY_PET_BORN_AT = "pet_born_at"
         private const val KEY_GAME_NOW = "game_now"
+        private const val KEY_CLOCK_SHIFT = "clock_shift"
         private const val KEY_DEPOSIT_AMOUNT = "deposit_amount"
         private const val KEY_DEPOSIT_TERM_DAYS = "deposit_term_days"
         private const val KEY_DEPOSIT_RATE_PERCENT = "deposit_rate_percent"
@@ -111,6 +112,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             KEY_STATS_UPDATED_AT,
             KEY_PET_BORN_AT,
             KEY_GAME_NOW,
+            KEY_CLOCK_SHIFT,
             KEY_DEPOSIT_AMOUNT,
             KEY_DEPOSIT_TERM_DAYS,
             KEY_DEPOSIT_RATE_PERCENT,
@@ -196,7 +198,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
                 defaults.statsUpdatedAtMillis
             ),
             petBornAtMillis = preferences.getLong(KEY_PET_BORN_AT, defaults.petBornAtMillis),
-            gameNowMillis = preferences.getLong(KEY_GAME_NOW, defaults.gameNowMillis)
+            gameNowMillis = preferences.getLong(KEY_GAME_NOW, defaults.gameNowMillis),
+            clockShiftMillis = preferences.getLong(KEY_CLOCK_SHIFT, defaults.clockShiftMillis)
         )
     }
 
@@ -218,6 +221,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             .putLong(KEY_STATS_UPDATED_AT, state.statsUpdatedAtMillis)
             .putLong(KEY_PET_BORN_AT, state.petBornAtMillis)
             .putLong(KEY_GAME_NOW, state.gameNowMillis)
+            .putLong(KEY_CLOCK_SHIFT, state.clockShiftMillis)
             .putInt(KEY_DEPOSIT_AMOUNT, state.deposit?.amount ?: 0)
             .putInt(KEY_DEPOSIT_TERM_DAYS, state.deposit?.termDays ?: 0)
             .putInt(KEY_DEPOSIT_RATE_PERCENT, state.deposit?.ratePercent ?: 0)

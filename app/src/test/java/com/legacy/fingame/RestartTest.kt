@@ -135,6 +135,20 @@ class RestartTest {
     }
 
     @Test
+    fun `the day a skip reached is the day the game comes back on`() {
+        val clock = FakeGameClock()
+        val store = storeWithPet(clock)
+        val firstRun = testGameViewModel(store = store, clock = clock)
+
+        firstRun.fastForward(Growth.STAGE_MILLIS)
+        assertEquals(clock.day + 1, firstRun.state.value.todayDay)
+
+        val nextRun = testGameViewModel(store = store, clock = clock)
+
+        assertEquals(clock.day + 1, nextRun.state.value.todayDay)
+    }
+
+    @Test
     fun `a skipped day that has already paid does not pay again after a restart`() {
         val clock = FakeGameClock()
         val store = storeWithPet(clock)

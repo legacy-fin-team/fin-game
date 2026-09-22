@@ -108,6 +108,9 @@ enum class Screen {
  * [PlayerState]; the screens ask [petAge] instead.
  * @property subLocationIndex index of the currently displayed sub-location within
  * [DemoContent.subLocationTitles], restored from [PlayerState.subLocationIndex].
+ * @property todayDay the game day it is right now, on the same scale as [Deposit.maturityDay]: days
+ * since the epoch, plus whatever a demo skipped. The screens turn it into the day number the player
+ * reads (see [com.legacy.fingame.ui.screens.dayNumberOf]) rather than showing it as it is.
  */
 data class GameUiState(
     val screen: Screen = Screen.MAIN,
@@ -132,7 +135,8 @@ data class GameUiState(
     val statsUpdatedAtMillis: Long = PlayerState.NEVER_UPDATED,
     val petAge: Int = Animal.FIRST_AGE,
     val petBornAtMillis: Long = Growth.NOT_BORN,
-    val subLocationIndex: Int = 0
+    val subLocationIndex: Int = 0,
+    val todayDay: Long = 0L
 ) {
     /**
      * Whether the player picked anything at all, i.e. whether there is a purchase to ask about.
@@ -353,7 +357,8 @@ class GameViewModel(
         _state.value = current.copy(
             stats = current.stats.decayedBy(ticks),
             statsUpdatedAtMillis = current.statsUpdatedAtMillis + ticks * PetStats.TICK_MILLIS,
-            petAge = age
+            petAge = age,
+            todayDay = clock.today()
         )
         persist()
     }
@@ -382,7 +387,8 @@ class GameViewModel(
             dailyBonusAvailable = Economy.isDailyBonusAvailable(
                 lastClaimedDay = current.lastDailyBonusDay,
                 today = clock.today()
-            )
+            ),
+            todayDay = clock.today()
         )
         tick()
         // The skipped time is remembered even when it moved neither a bar nor a stage, since the
@@ -852,9 +858,12 @@ class GameViewModel(
      */
     private fun restoredState(): GameUiState {
         val saved = store.load()
-        // The game's clock is picked up where the previous run left it instead of being started
-        // over: what the player was shown — the age stage, the bars, the day the bonus was paid on
-        // — was reached on that clock, and a clock starting behind it would take all three back.
+        // The time a demo skipped outlives a restart as a shift, not as a moment reached: the
+        // real time that passed while the app was closed runs on top of the skipped hours instead
+        // of eating them, so the bars keep falling and the day keeps counting in between.
+        clock.fastForward(saved.clockShiftMillis)
+        // And whatever the device's clock says, the game never goes back behind what the player was
+        // already shown — the age stage, the bars, the day the bonus was paid on.
         clock.fastForwardTo(saved.gameNowMillis)
         val now = clock.nowMillis()
         // A pet saved before the game kept track of time starts living now: the alternative is to
@@ -888,7 +897,8 @@ class GameViewModel(
             statsUpdatedAtMillis = statsUpdatedAt + ticks * PetStats.TICK_MILLIS,
             petAge = Growth.ageAt(bornAt, now),
             petBornAtMillis = bornAt,
-            subLocationIndex = existingSubLocation(saved.subLocationIndex)
+            subLocationIndex = existingSubLocation(saved.subLocationIndex),
+            todayDay = clock.today()
         )
     }
 
@@ -945,7 +955,8 @@ class GameViewModel(
                 stats = current.stats,
                 statsUpdatedAtMillis = current.statsUpdatedAtMillis,
                 petBornAtMillis = current.petBornAtMillis,
-                gameNowMillis = clock.nowMillis()
+                gameNowMillis = clock.nowMillis(),
+                clockShiftMillis = clock.shiftMillis
             )
         )
     }

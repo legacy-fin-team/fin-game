@@ -14,6 +14,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.TimeUnit
 
 /** Круг игрового периода: бонус дня, планирование, подтверждение, траты и следующий бонус. */
 class BudgetFlowTest {
@@ -493,6 +494,34 @@ class BudgetFlowTest {
             state.moneyLog.entries.map { it.reason }
         )
         assertEquals(listOf(10), state.moneyLog.entries.map { it.delta })
+    }
+
+    @Test
+    fun `a deposit opened after a skip matures while the app is closed`() {
+        val clock = FakeGameClock()
+        val store = FakePlayerStateStore(PlayerState(balance = 100))
+        val firstRun = testGameViewModel(store = store, clock = clock)
+
+        // Двенадцать часов дважды: вклад открывается днём, до которого игра дошла перемоткой.
+        firstRun.fastForward(TimeUnit.HOURS.toMillis(12))
+        firstRun.fastForward(TimeUnit.HOURS.toMillis(12))
+        assertTrue(firstRun.claimDailyBonus())
+        firstRun.updateBudgetDraft(
+            BudgetDraft(mustSpend = 0, wantSpend = 0, depositAmount = 100, depositTermDays = 2)
+        )
+        assertTrue(firstRun.confirmBudget())
+        assertEquals(
+            FakeGameClock.DEFAULT_DAY + 1 + 2,
+            firstRun.state.value.deposit?.maturityDay
+        )
+
+        // Приложение закрыто на час реального времени, за который календарь ушёл на два дня.
+        clock.millis += TimeUnit.HOURS.toMillis(1)
+        clock.day += 2
+        val nextRun = testGameViewModel(store = store, clock = clock)
+
+        assertNull(nextRun.state.value.deposit)
+        assertEquals(Economy.DAILY_BONUS + 104, nextRun.state.value.balance)
     }
 
     @Test

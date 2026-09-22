@@ -42,11 +42,25 @@ class FastForwardClock(private val source: GameClock) : GameClock {
     private var furthestMillis: Long = Long.MIN_VALUE
 
     /**
-     * @return The day [source] is on plus the whole days this clock has been pushed by. Whole days
-     * only, and counted from the shift rather than from a calendar, so a day passes after a full
-     * day's worth of pushing whatever time of day the demo happens to be shown at.
+     * Furthest day this clock has already told, so that it can never tell an earlier one; see
+     * [today]. [Long.MIN_VALUE] until it is asked for the first time, when there is no day yet to
+     * stay ahead of.
      */
-    override fun today(): Long = source.today() + shiftMillis / DAY_MILLIS
+    private var furthestDay: Long = Long.MIN_VALUE
+
+    /**
+     * @return The day [source] is on plus the whole days this clock has been pushed by, and never a
+     * day earlier than one this clock has already told. Whole days only, and counted from the shift
+     * rather than from a calendar, so a day passes after a full day's worth of pushing whatever
+     * time of day the demo happens to be shown at.
+     */
+    override fun today(): Long {
+        val day = source.today() + shiftMillis / DAY_MILLIS
+        if (day > furthestDay) {
+            furthestDay = day
+        }
+        return furthestDay
+    }
 
     /**
      * @return The moment [source] is at plus the shift, and never a moment earlier than one this
@@ -78,10 +92,12 @@ class FastForwardClock(private val source: GameClock) : GameClock {
     /**
      * Pushes this clock up to a given moment; a moment it is already past leaves it where it is.
      *
-     * This is how a clock is picked up where the previous run left it (see
-     * [com.legacy.fingame.game.PlayerState.gameNowMillis]) rather than started over: the time a demo
-     * build skipped is back after the app was closed, and a device clock that has been moved back in
-     * the meantime does not take the game's own time with it.
+     * This is the floor a new run holds its clock to (see
+     * [com.legacy.fingame.game.PlayerState.gameNowMillis]): a device clock that has been moved back
+     * while the app was closed does not take the game's own time with it. The time a demo build
+     * skipped comes back through [fastForward] instead (see
+     * [com.legacy.fingame.game.PlayerState.clockShiftMillis]), so the hours that really passed in
+     * between are added to it rather than taken off it.
      *
      * @param millis moment to push this clock up to, in milliseconds.
      */

@@ -31,6 +31,12 @@ data class MoneyEntry(
 data class MoneyLog(val entries: List<MoneyEntry> = emptyList()) {
 
     /**
+     * День самой старой хранимой записи — начало отсчёта дней, которые видит игрок, — или null,
+     * когда журнал пуст и отсчитывать пока не от чего.
+     */
+    val oldestGameDay: Long? get() = entries.lastOrNull()?.gameDay
+
+    /**
      * @param entry что произошло.
      * @return Журнал с этой записью впереди остальных; самая старая запись отбрасывается, если
      * журнал уже дорос до [MAX_ENTRIES].

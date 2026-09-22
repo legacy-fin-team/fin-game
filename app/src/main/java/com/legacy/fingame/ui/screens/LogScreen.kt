@@ -97,7 +97,7 @@ fun LogScreen(
     modifier: Modifier = Modifier
 ) {
     val entries = log.entries
-    val oldestGameDay = entries.lastOrNull()?.gameDay ?: 0L
+    val oldestGameDay = log.oldestGameDay ?: 0L
     val reasonStyle = logColumnStyleOf(MaterialTheme.typography.bodyMedium)
     val amountStyle = logColumnStyleOf(MaterialTheme.typography.labelLarge)
     val timeStyle = logColumnStyleOf(MaterialTheme.typography.labelMedium)

@@ -7,6 +7,7 @@ import com.legacy.fingame.game.economy.BudgetResult
 import com.legacy.fingame.game.economy.BudgetState
 import com.legacy.fingame.game.economy.Deposit
 import com.legacy.fingame.game.economy.Economy
+import com.legacy.fingame.game.economy.FastForwardClock
 import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.stats.PetStats
@@ -46,11 +47,15 @@ import com.legacy.fingame.game.stats.PetStats
  * there is no pet yet. The pet's age stage is worked out from it (see [Growth.ageAt]) instead of
  * being saved, so the pet grows while the app is closed and the stage can never drift.
  * @property gameNowMillis moment the game's own clock had reached when this state was saved, in
- * milliseconds, or [CLOCK_NEVER_SAVED] when no run has saved one yet. The next launch picks its
- * clock up here instead of starting it over (see
- * [com.legacy.fingame.game.economy.FastForwardClock.fastForwardTo]), so neither the time a demo
- * build skipped nor a device clock moved back since can take the pet's age, its bars or its daily
- * bonus back to where they were before.
+ * milliseconds, or [CLOCK_NEVER_SAVED] when no run has saved one yet. It is the floor the next
+ * launch holds its clock to (see [FastForwardClock.fastForwardTo]), so a device clock moved back in
+ * the meantime cannot take the pet's age, its bars or its daily bonus back to where they were
+ * before. How far the game runs ahead of the device is [clockShiftMillis] instead.
+ * @property clockShiftMillis how far the game's clock had been pushed ahead by the demo button when
+ * the state was saved, in milliseconds. The next launch pushes its clock by as much again (see
+ * [FastForwardClock.fastForward]), so the real time that passed while the app was closed runs on
+ * top of the skipped time rather than eating it. [FastForwardClock.NO_SHIFT] — the value a save
+ * from before the shift was kept reads as — means the clock was never pushed.
  * @property deposit вклад, открытый в банке, или null, когда вклада нет. Вклад бывает только
  * один одновременно, и его тело недоступно, пока он не погашен.
  * @property budget подтверждённый бюджет текущего периода, или null, когда период ещё не
@@ -80,7 +85,8 @@ data class PlayerState(
     val stats: PetStats = PetStats.FULL,
     val statsUpdatedAtMillis: Long = NEVER_UPDATED,
     val petBornAtMillis: Long = Growth.NOT_BORN,
-    val gameNowMillis: Long = CLOCK_NEVER_SAVED
+    val gameNowMillis: Long = CLOCK_NEVER_SAVED,
+    val clockShiftMillis: Long = FastForwardClock.NO_SHIFT
 ) {
     companion object {
         /**

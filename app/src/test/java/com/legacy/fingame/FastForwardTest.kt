@@ -76,6 +76,17 @@ class FastForwardTest {
     }
 
     @Test
+    fun `a clock never tells a day earlier than one it already told`() {
+        val source = FakeGameClock()
+        val clock = FastForwardClock(source)
+        val day = clock.today()
+
+        source.day -= 3
+
+        assertEquals(day, clock.today())
+    }
+
+    @Test
     fun `a clock cannot be pushed backwards`() {
         val clock = FastForwardClock(FakeGameClock())
 
@@ -198,6 +209,47 @@ class FastForwardTest {
             clock.millis + PetStats.TICK_MILLIS * 2,
             store.state.statsUpdatedAtMillis
         )
+    }
+
+    @Test
+    fun `the real time between two runs is added to the skipped time, not taken off it`() {
+        val clock = FakeGameClock()
+        val store = storeWithPet(clock)
+        val firstRun = testGameViewModel(store = store, clock = clock)
+
+        val skipped = PetStats.TICK_MILLIS * 12
+        firstRun.fastForward(skipped)
+        val hungerWhenClosed = firstRun.state.value.stats[StatKind.HUNGER]
+
+        // The app is closed and less real time passes than the demo had skipped: the very case in
+        // which the skipped hours used to be eaten by the wait instead of being kept under it.
+        val away = PetStats.TICK_MILLIS * 6
+        clock.millis += away
+        val nextRun = testGameViewModel(store = store, clock = clock)
+
+        assertEquals(
+            hungerWhenClosed - StatKind.HUNGER.decayPerTick * 6,
+            nextRun.state.value.stats[StatKind.HUNGER]
+        )
+        assertEquals(clock.millis + skipped, nextRun.state.value.statsUpdatedAtMillis)
+    }
+
+    @Test
+    fun `the day does not fall back after a restart with a skip left over`() {
+        val clock = FakeGameClock()
+        val store = storeWithPet(clock)
+        val firstRun = testGameViewModel(store = store, clock = clock)
+
+        firstRun.fastForward(halfDay)
+        firstRun.fastForward(halfDay)
+        val dayWhenClosed = firstRun.state.value.todayDay
+        assertEquals(clock.day + 1, dayWhenClosed)
+
+        // Half an hour of real time passes, over which the device's own calendar does not turn.
+        clock.millis += TimeUnit.MINUTES.toMillis(30)
+        val nextRun = testGameViewModel(store = store, clock = clock)
+
+        assertEquals(dayWhenClosed, nextRun.state.value.todayDay)
     }
 
     @Test
