@@ -2,14 +2,25 @@ package com.legacy.fingame
 
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.legacy.fingame.game.GameViewModel
 import com.legacy.fingame.game.items.ShopShelf
+import com.legacy.fingame.ui.components.PillButtonMinLabelSize
+import com.legacy.fingame.ui.screens.CounterButtonSize
+import com.legacy.fingame.ui.screens.CounterGap
 import com.legacy.fingame.ui.screens.EffectChipGap
+import com.legacy.fingame.ui.screens.EffectChipsPerRow
 import com.legacy.fingame.ui.screens.CompactEffectChipFixedWidth
 import com.legacy.fingame.ui.screens.CompactEffectChipValueWidth
+import com.legacy.fingame.ui.screens.ItemCardPadding
+import com.legacy.fingame.ui.screens.ItemCellMinSize
+import com.legacy.fingame.ui.screens.ShopGridGap
 import com.legacy.fingame.ui.screens.ShortScreenCardPadding
 import com.legacy.fingame.ui.screens.ShortScreenCardSpriteMaxSize
 import com.legacy.fingame.ui.screens.ShortScreenCardSpriteMinSize
 import com.legacy.fingame.ui.screens.ShortScreenEffectChipsPerRow
+import com.legacy.fingame.ui.screens.ShortScreenItemCellMinSize
+import com.legacy.fingame.ui.screens.ShortScreenPurchaseWidth
+import com.legacy.fingame.ui.screens.counterValueWidth
 import com.legacy.fingame.ui.screens.effectChipsPerRow
 import com.legacy.fingame.ui.screens.shopGridCellWidth
 import com.legacy.fingame.ui.screens.shortScreenCardSpriteSize
@@ -30,13 +41,21 @@ import org.junit.Test
 class ShopCardSizingTest {
 
     /** Smallest a shop cell may be on a short screen, as `GridCells.Adaptive` is told. */
-    private val shortScreenCellMinWidth = 288.dp
+    private val shortScreenCellMinWidth = ShortScreenItemCellMinSize
 
     /** Smallest a shop cell may be on an ordinary screen. */
-    private val cellMinWidth = 152.dp
+    private val cellMinWidth = ItemCellMinSize
 
     /** Gap the shop's grid keeps between two columns. */
-    private val gridGap = 12.dp
+    private val gridGap = ShopGridGap
+
+    /**
+     * Width a stacked card leaves for what is in it on the narrowest phone the shop still puts two
+     * cards to a row: a 360.dp screen, less its own 16.dp padding on either side, split in two by
+     * the grid, less the card's own padding on either side.
+     */
+    private val narrowCardContentWidth =
+        shopGridCellWidth(328.dp, cellMinWidth, gridGap) - ItemCardPadding * 2
 
     @Test
     fun `the grid splits its width the way an adaptive grid does`() {
@@ -75,7 +94,9 @@ class ShopCardSizingTest {
         // Height is not what runs out first here either — the cell's width is.
         val sprite = shortScreenCardSpriteSize(cardHeight = 149.dp, cellWidth = cellWidth)
 
-        assertEquals(70f, sprite.value, 0.01f)
+        // 378 of cell, less the card's padding and the two gaps of its rail, less the column that
+        // buys the item and the smallest the details beside it may be: 54 for the sprite.
+        assertEquals(54f, sprite.value, 0.01f)
         assertTrue("the sprite must stay smaller than it is on a roomier phone", sprite < ShortScreenCardSpriteMaxSize)
         assertDetailsFitTwoChips(cellWidth = cellWidth, spriteSize = sprite)
     }
@@ -164,6 +185,71 @@ class ShopCardSizingTest {
     @Test
     fun `a row too narrow for even one chip still holds one`() {
         assertEquals(1, effectChipsPerRow(10.dp, fontScale = 1f, maxChips = 3))
+    }
+
+    @Test
+    fun `a stacked card on the narrowest phone takes its chips one to a row`() {
+        // A compact chip is 72.dp wide at the ordinary font scale and the card has 134.dp of
+        // content: two of them stopped fitting side by side when the chip's own padding grew, so
+        // the pair is stacked rather than squeezed — and the shelf keeps the rows for it.
+        assertEquals(
+            1,
+            effectChipsPerRow(
+                availableWidth = narrowCardContentWidth,
+                fontScale = 1f,
+                maxChips = EffectChipsPerRow
+            )
+        )
+    }
+
+    @Test
+    fun `the counter fits the narrowest card whole, buttons, gaps and number`() {
+        val forTheNumber = counterValueWidth(
+            contentWidth = narrowCardContentWidth,
+            buttonSize = CounterButtonSize,
+            gap = CounterGap
+        )
+
+        // Nothing is left over and nothing is missing: the row is the two buttons, the two gaps and
+        // everything else. A number given a width of its own instead is a number that wraps.
+        assertEquals(
+            narrowCardContentWidth.value,
+            (CounterButtonSize * 2 + CounterGap * 2 + forTheNumber).value,
+            0.01f
+        )
+        assertTrue("the number was left $forTheNumber, i.e. nothing at all", forTheNumber > 0.dp)
+    }
+
+    @Test
+    fun `the number between the buttons has room for three digits`() {
+        val forTheNumber = counterValueWidth(
+            contentWidth = narrowCardContentWidth,
+            buttonSize = CounterButtonSize,
+            gap = CounterGap
+        )
+
+        // The cart counts to two digits (see the sideways card's own test below), and the third is
+        // the room a quantity has to grow into before anything is ever cropped again. The floor is
+        // the one a shrinking label stops at, so a digit is never drawn below it either.
+        assertTrue(
+            "three digits need ${PillButtonMinLabelSize * 3}, the card left $forTheNumber",
+            forTheNumber >= PillButtonMinLabelSize * 3
+        )
+    }
+
+    @Test
+    fun `the counter of a sideways card holds every quantity the cart counts to`() {
+        val forTheNumber = counterValueWidth(
+            contentWidth = ShortScreenPurchaseWidth,
+            buttonSize = CounterButtonSize,
+            gap = CounterGap
+        )
+        val digits = GameViewModel.MAX_ITEM_QUANTITY.toString().length
+
+        assertTrue(
+            "$digits digits need ${PillButtonMinLabelSize * digits}, the column left $forTheNumber",
+            forTheNumber >= PillButtonMinLabelSize * digits
+        )
     }
 
     /**

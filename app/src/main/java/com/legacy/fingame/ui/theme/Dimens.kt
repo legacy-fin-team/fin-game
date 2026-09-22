@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 
 /**
  * Smallest screen width, in dp, from which a device is treated as a tablet. This is the same
@@ -36,6 +37,17 @@ private const val ShortScreenHeightDp = 480
  * configuration and stay correct after a fold, rotation or window resize.
  */
 object GameDimens {
+    /**
+     * Widest a screen's own content is laid out, however wide the window is; what is left over goes
+     * to the margins on either side.
+     *
+     * A line of text or a row of cards spread across a tablet stops being read in one glance, and a
+     * game played on a phone should not turn into a spreadsheet on a bigger screen. The same number
+     * for every screen is the point of it: the shop, the budget and the log line up with each other
+     * instead of each ending somewhere else.
+     */
+    val ContentMaxWidth: Dp = 560.dp
+
     /**
      * Whether the app is running on a tablet-sized screen ([TabletSmallestWidthDp] and wider).
      *

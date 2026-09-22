@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,10 +21,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +48,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.legacy.fingame.game.GameUiState
+import com.legacy.fingame.game.GameViewModel
+import com.legacy.fingame.game.economy.Budget
+import com.legacy.fingame.game.economy.BudgetState
+import com.legacy.fingame.game.items.Cart
 import com.legacy.fingame.game.items.CartLine
 import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCategory
@@ -57,7 +64,9 @@ import com.legacy.fingame.ui.components.EffectChip
 import com.legacy.fingame.ui.components.GameDialog
 import com.legacy.fingame.ui.components.GameDialogBlock
 import com.legacy.fingame.ui.components.PillButton
+import com.legacy.fingame.ui.components.PillButtonMinLabelSize
 import com.legacy.fingame.ui.components.PillStyle
+import com.legacy.fingame.ui.components.pillButtonAutoSizeRange
 import com.legacy.fingame.ui.components.Sprite
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
@@ -71,12 +80,28 @@ import com.legacy.fingame.ui.theme.GameDimens
  * Sizes of the shop buttons on a phone; [com.legacy.fingame.ui.components.SpriteButton] enlarges
  * them on tablets, so these stay the compact values.
  */
-private val CloseButtonSize = 64.dp
+private val CloseButtonSize = 40.dp
 private val CategoryButtonSize = 56.dp
-private val CounterButtonSize = 48.dp
 private val StarButtonSize = 40.dp
 private val VariantButtonSize = 36.dp
-private val PriceIconSize = 32.dp
+
+/**
+ * Size of the "−" and "+" of a counter on a stacked card, and the gap between them and the number.
+ *
+ * The same 40.dp the sideways card and the budget's own amount pickers use: the counter has to fit
+ * the narrowest card the shop lays out twice to a row — `134.dp` inside its padding — with enough
+ * left between the buttons for a quantity of two digits at any font scale the game is played at,
+ * see [counterValueWidth].
+ */
+internal val CounterButtonSize = 40.dp
+internal val CounterGap = 8.dp
+
+/**
+ * Size of the coin next to an item's price. As big as the price itself is tall and no bigger: a card
+ * is read name first, and a coin drawn twice the size of the number beside it made the price the
+ * loudest thing on the shelf.
+ */
+private val PriceIconSize = 16.dp
 
 /**
  * Smallest width a vertical shop card's cell is allowed to shrink to. Bounded from above by the
@@ -89,12 +114,12 @@ private val PriceIconSize = 32.dp
  * At exactly that width, a card's own 12.dp padding leaves `134.dp` for [PurchaseControl], which
  * fills all of it (see [com.legacy.fingame.ui.components.PillButton]'s `Modifier.fillMaxWidth()`)
  * rather than wrapping its label — `134.dp` minus the compact pill padding it asks for leaves
- * `122.dp` for the label itself, more than the `112.dp` "Добавить" (the widest label a card's
+ * `110.dp` for the label itself, more than the `106.dp` "Добавить" (the widest label a card's
  * button ever shows) needs at its normal size and an ordinary font scale. A bigger font scale, or
  * a screen [ShopScreen] does not promise two columns to, is what the label's own shrink (see
  * [com.legacy.fingame.ui.components.PillButtonMinLabelSize]) is for.
  */
-private val ItemCellMinSize = 152.dp
+internal val ItemCellMinSize = 152.dp
 
 /**
  * Sizes the shop swaps in on a short screen — a phone held sideways — where a card is laid out
@@ -108,37 +133,36 @@ private val ItemCellMinSize = 152.dp
  * it is sized purely for the three columns to have room. The sprite is not a constant at all: it is
  * given the room the screen turns out to have, see [shortScreenCardSpriteSize].
  */
-private val ShortScreenItemCellMinSize = 288.dp
+internal val ShortScreenItemCellMinSize = 288.dp
 private val ShortScreenStarButtonSize = 28.dp
-private val ShortScreenPriceIconSize = 24.dp
-private val ShortScreenVariantButtonSize = 30.dp
-private val ShortScreenCounterButtonSize = 40.dp
+private val ShortScreenVariantButtonSize = 32.dp
 private val ShortScreenCloseButtonSize = 48.dp
 
 /** Gap between the variant picker of a sideways card and the control that buys the item. */
-private val ShortScreenPurchaseGap = 6.dp
+private val ShortScreenPurchaseGap = 8.dp
 
 /** Gap the shop's grid keeps between its columns and its rows, and around its content. */
-private val ShopGridGap = 12.dp
+internal val ShopGridGap = 12.dp
 private val ShopGridContentPadding = 4.dp
 
 /**
  * How many effect chips a stacked card fits into one row, and the gap between them.
  *
- * Two is what the narrowest card the shop lays out has room for — `134.dp` of content (see
- * [ItemCellMinSize]) against a chip drawn `compact`, which is sized to take under half of that at
- * any font scale (see [com.legacy.fingame.ui.components.StatValueChip]). An item with three effects
- * therefore takes two rows and never a chip cut in half. A card laid out sideways is wider, and is
- * allowed all three of them in one row; see [ShortScreenEffectChipsPerRow]. How many of the two or
- * three actually go in a row is counted from the width and the font scale, see [effectChipsPerRow].
+ * Two is the most a stacked card is ever given: an item of this game has at most three effects, and
+ * a card as tall as it is wide has the height for two rows of chips but not for a line of three
+ * across the narrowest phone. How many of the two actually go in a row is counted from the width and
+ * the font scale (see [effectChipsPerRow]) — on a `134.dp` card (see [ItemCellMinSize]) a compact
+ * chip at the ordinary font scale is `72.dp` wide, so it is one, and the pair is read one above the
+ * other rather than squeezed or cut in half. A card laid out sideways is wider and is allowed all
+ * three; see [ShortScreenEffectChipsPerRow].
  */
-private const val EffectChipsPerRow = 2
+internal const val EffectChipsPerRow = 2
 
 /** Gap between an item's price and the effects it has on the pet. */
-private val EffectsRowTopGap = 6.dp
+private val EffectsRowTopGap = 8.dp
 
 /** Padding between a stacked card's edge and what is in it. */
-private val ItemCardPadding = 12.dp
+internal val ItemCardPadding = 12.dp
 
 /** Coin sprite size used next to a sum in the shop's confirmation windows. */
 private val DialogCoinSize = 20.dp
@@ -183,15 +207,19 @@ private enum class ShopWindow {
  *   beside the details and the purchase controls beside both, and are sized to the room the grid
  *   turns out to have (see [shortScreenCardSpriteSize]) so that a whole row of them is read without
  *   scrolling for the bottom of a card.
- * - Bottom: one button per category in a row that scrolls horizontally (so the row can hold any
- *   number of categories) next to the "Купить" button, which shows what the cart costs and is
+ * - Bottom: one [CategoryButton] per category — the shelf's picture with its name under it — in a
+ *   row that scrolls horizontally (so the row can hold any number of categories) next to the
+ *   "Купить" button, the one filled button of this screen, which shows what the cart costs and is
  *   disabled while — and only while — the cart is empty. A cart the player cannot afford is still
  *   worth pressing: it is answered with a window saying by how much, not with a dead button.
  * - Over all of it, once "Купить" is pressed: [PurchaseConfirmDialog], where the player sees what
- *   the cart holds and what it costs before the coins are gone, or [NotEnoughMoneyDialog] when the
- *   cart costs more than the balance (see [GameUiState.cartShortfall]). The money is only spent
- *   from the first of them, so a pressed button is never a spent balance, and the second one spends
- *   nothing at all: it leaves the cart, the category and the scrolled position exactly as they were.
+ *   the cart holds, what it costs and whether it takes the running period past what was planned for
+ *   it (see [com.legacy.fingame.game.economy.Budget.overspendsOf]) before the coins are gone — the
+ *   plan is said out loud there, and broken there too if that is what the player wants; or
+ *   [NotEnoughMoneyDialog] when the cart costs more than the balance (see
+ *   [GameUiState.cartShortfall]). The money is only spent from the first of them, so a pressed
+ *   button is never a spent balance, and the second one spends nothing at all: it leaves the cart,
+ *   the category and the scrolled position exactly as they were.
  *
  * @param state current game state: the balance to show, which category is selected, what is in the
  *   cart with what it costs, and which items the player already owns.
@@ -240,164 +268,176 @@ fun ShopScreen(
     val cellMinSize = if (isShortScreen) ShortScreenItemCellMinSize else ItemCellMinSize
     val fontScale = LocalDensity.current.fontScale
 
-    Column(
+    // The content is kept to a width one glance reads and centred in whatever is left, the same way
+    // the budget's is: on a tablet, or on a phone held sideways, a grid spread over the whole width
+    // stops being a shelf and becomes a wall.
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .systemBarsPadding()
-            .padding(16.dp)
+            .systemBarsPadding(),
+        contentAlignment = Alignment.TopCenter
     ) {
-        // On a screen with height to spare the header is read top to bottom: the balance and the way
-        // out, then the name of the shelf below them. On a short one all three stand in a single
-        // line — the height that costs is height a card would have had.
-        if (isShortScreen) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                BalanceChip(balance = state.balance, depositAmount = state.depositAmount)
-                CategoryTitle(
-                    category = state.selectedCategory,
-                    modifier = Modifier.weight(1f)
-                )
-                SpriteButton(
-                    assetPath = Sprites.CLOSE,
-                    contentDescription = "Закрыть магазин",
-                    onClick = onClose,
-                    size = ShortScreenCloseButtonSize
-                )
+        Column(
+            modifier = Modifier
+                .fillMaxHeight()
+                .widthIn(max = GameDimens.ContentMaxWidth)
+                .padding(16.dp)
+        ) {
+            // On a screen with height to spare the header is read top to bottom: the balance and the way
+            // out, then the name of the shelf below them. On a short one all three stand in a single
+            // line — the height that costs is height a card would have had.
+            if (isShortScreen) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    BalanceChip(balance = state.balance, depositAmount = state.depositAmount)
+                    CategoryTitle(
+                        category = state.selectedCategory,
+                        modifier = Modifier.weight(1f)
+                    )
+                    SpriteButton(
+                        assetPath = Sprites.CLOSE,
+                        contentDescription = "Закрыть магазин",
+                        onClick = onClose,
+                        size = ShortScreenCloseButtonSize
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    BalanceChip(balance = state.balance, depositAmount = state.depositAmount)
+                    Spacer(modifier = Modifier.weight(1f))
+                    SpriteButton(
+                        assetPath = Sprites.CLOSE,
+                        contentDescription = "Закрыть магазин",
+                        onClick = onClose,
+                        size = CloseButtonSize
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                CategoryTitle(category = state.selectedCategory)
             }
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
             ) {
-                BalanceChip(balance = state.balance, depositAmount = state.depositAmount)
-                Spacer(modifier = Modifier.weight(1f))
-                SpriteButton(
-                    assetPath = Sprites.CLOSE,
-                    contentDescription = "Закрыть магазин",
-                    onClick = onClose,
-                    size = CloseButtonSize
-                )
+                if (items.isEmpty()) {
+                    Text(
+                        text = "В этом разделе пока нет товаров",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.align(Alignment.Center)
+                    )
+                } else {
+                    // The grid is measured before the cards are built, so a sideways card can be sized
+                    // to the room that is actually left between the header and the bottom bar instead of
+                    // to a number that happened to fit one phone.
+                    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                        val cellWidth = shopGridCellWidth(
+                            gridWidth = maxWidth,
+                            minCellWidth = cellMinSize,
+                            gap = ShopGridGap
+                        )
+                        val spriteSize = shortScreenCardSpriteSize(
+                            cardHeight = maxHeight - ShopGridContentPadding * 2,
+                            cellWidth = cellWidth
+                        )
+                        // How many chips go in a row is the same question for the shelf, which reserves
+                        // the rows, and for the card, which draws them — so it is asked once, here.
+                        val effectChipsPerRow = effectChipsPerRow(
+                            availableWidth = if (isShortScreen) {
+                                shortScreenDetailsWidth(cellWidth = cellWidth, spriteSize = spriteSize)
+                            } else {
+                                cellWidth - ItemCardPadding * 2
+                            },
+                            fontScale = fontScale,
+                            maxChips = if (isShortScreen) {
+                                ShortScreenEffectChipsPerRow
+                            } else {
+                                EffectChipsPerRow
+                            }
+                        )
+                        val reservedEffectRows = ShopShelf.effectRowsOf(items, effectChipsPerRow)
+
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = cellMinSize),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(vertical = ShopGridContentPadding),
+                            horizontalArrangement = Arrangement.spacedBy(ShopGridGap),
+                            verticalArrangement = Arrangement.spacedBy(ShopGridGap)
+                        ) {
+                            items(items = items, key = { item -> item.id }) { item ->
+                                ShopItemCard(
+                                    item = item,
+                                    pickedVariantId = state.pickedVariantOf(item),
+                                    quantity = state.quantities[item.id] ?: 0,
+                                    mode = modeOf(item, state),
+                                    reserveVariantRow = reserveVariantRow,
+                                    reservedEffectRows = reservedEffectRows,
+                                    effectChipsPerRow = effectChipsPerRow,
+                                    horizontalLayout = isShortScreen,
+                                    horizontalSpriteSize = spriteSize,
+                                    onPickVariant = { variantId -> onPickVariant(item.id, variantId) },
+                                    onIncrease = { onIncrease(item.id) },
+                                    onDecrease = { onDecrease(item.id) }
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            CategoryTitle(category = state.selectedCategory)
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-        ) {
-            if (items.isEmpty()) {
-                Text(
-                    text = "В этом разделе пока нет товаров",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            } else {
-                // The grid is measured before the cards are built, so a sideways card can be sized
-                // to the room that is actually left between the header and the bottom bar instead of
-                // to a number that happened to fit one phone.
-                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                    val cellWidth = shopGridCellWidth(
-                        gridWidth = maxWidth,
-                        minCellWidth = cellMinSize,
-                        gap = ShopGridGap
-                    )
-                    val spriteSize = shortScreenCardSpriteSize(
-                        cardHeight = maxHeight - ShopGridContentPadding * 2,
-                        cellWidth = cellWidth
-                    )
-                    // How many chips go in a row is the same question for the shelf, which reserves
-                    // the rows, and for the card, which draws them — so it is asked once, here.
-                    val effectChipsPerRow = effectChipsPerRow(
-                        availableWidth = if (isShortScreen) {
-                            shortScreenDetailsWidth(cellWidth = cellWidth, spriteSize = spriteSize)
-                        } else {
-                            cellWidth - ItemCardPadding * 2
-                        },
-                        fontScale = fontScale,
-                        maxChips = if (isShortScreen) {
-                            ShortScreenEffectChipsPerRow
-                        } else {
-                            EffectChipsPerRow
-                        }
-                    )
-                    val reservedEffectRows = ShopShelf.effectRowsOf(items, effectChipsPerRow)
-
-                    LazyVerticalGrid(
-                        columns = GridCells.Adaptive(minSize = cellMinSize),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(vertical = ShopGridContentPadding),
-                        horizontalArrangement = Arrangement.spacedBy(ShopGridGap),
-                        verticalArrangement = Arrangement.spacedBy(ShopGridGap)
-                    ) {
-                        items(items = items, key = { item -> item.id }) { item ->
-                            ShopItemCard(
-                                item = item,
-                                pickedVariantId = state.pickedVariantOf(item),
-                                quantity = state.quantities[item.id] ?: 0,
-                                mode = modeOf(item, state),
-                                reserveVariantRow = reserveVariantRow,
-                                reservedEffectRows = reservedEffectRows,
-                                effectChipsPerRow = effectChipsPerRow,
-                                horizontalLayout = isShortScreen,
-                                horizontalSpriteSize = spriteSize,
-                                onPickVariant = { variantId -> onPickVariant(item.id, variantId) },
-                                onIncrease = { onIncrease(item.id) },
-                                onDecrease = { onDecrease(item.id) }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
             Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                categories.forEach { category ->
-                    SpriteButton(
-                        assetPath = Sprites.shopCategory(category.xmlName),
-                        contentDescription = category.title(),
-                        onClick = { onSelectCategory(category) },
-                        size = CategoryButtonSize,
-                        selected = category == state.selectedCategory
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            PillButton(
-                text = if (state.cartPrice > 0) "Купить · ${state.cartPrice}" else "Купить",
-                // Pressing this opens a window and nothing else: which of the two it is, is the
-                // cart's own answer (see [GameUiState.canBuyCart]). Pressing it twice in a row asks
-                // for the same window twice, which is one window.
-                onClick = {
-                    window = if (state.canBuyCart) {
-                        ShopWindow.PURCHASE_CONFIRM
-                    } else {
-                        ShopWindow.NOT_ENOUGH_MONEY
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    categories.forEach { category ->
+                        CategoryButton(
+                            category = category,
+                            selected = category == state.selectedCategory,
+                            // A caption costs a line of height, and on a short screen every line of
+                            // the bottom bar is a line the cards above it do not get: there the
+                            // underline under the sprite has to say it on its own.
+                            showLabel = !isShortScreen,
+                            onClick = { onSelectCategory(category) }
+                        )
                     }
-                },
-                enabled = state.hasCart
-            )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                PillButton(
+                    text = if (state.cartPrice > 0) "Купить · ${state.cartPrice}" else "Купить",
+                    // Pressing this opens a window and nothing else: which of the two it is, is the
+                    // cart's own answer (see [GameUiState.canBuyCart]). Pressing it twice in a row asks
+                    // for the same window twice, which is one window.
+                    onClick = {
+                        window = if (state.canBuyCart) {
+                            ShopWindow.PURCHASE_CONFIRM
+                        } else {
+                            ShopWindow.NOT_ENOUGH_MONEY
+                        }
+                    },
+                    enabled = state.hasCart
+                )
+            }
         }
     }
 
@@ -417,6 +457,7 @@ fun ShopScreen(
             lines = cartLines,
             total = state.cartPrice,
             balance = state.balance,
+            budget = state.budget,
             // The purchase is the view model's to allow: a balance that fell between this window
             // opening and this press buys nothing and is answered by the other window instead.
             onConfirm = {
@@ -443,6 +484,8 @@ fun ShopScreen(
  * @param total what the whole cart costs.
  * @param balance the coins the player has, shown next to the total so the purchase can be weighed
  *   against what is left.
+ * @param budget the confirmed budget of the running period, which the cart is measured against; null
+ *   while no period has been planned, and then there is nothing to measure it against.
  * @param onConfirm called when the player pays for the cart.
  * @param onDismiss called when the window should be closed without buying anything.
  */
@@ -451,6 +494,7 @@ private fun PurchaseConfirmDialog(
     lines: List<CartLine>,
     total: Int,
     balance: Int,
+    budget: BudgetState?,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -459,6 +503,7 @@ private fun PurchaseConfirmDialog(
             lines = lines,
             total = total,
             balance = balance,
+            budget = budget,
             onConfirm = onConfirm,
             onDismiss = onDismiss
         )
@@ -492,9 +537,15 @@ private fun NotEnoughMoneyDialog(
  * The block the purchase window is made of: what the cart holds, what it costs, what the player is
  * left with, the button that pays for it and the cross that closes it.
  *
+ * A cart that takes the period past what was planned for it says so, in as many words as there are
+ * kinds of spending it overshoots — but it says it, it does not forbid it: the plan is the player's
+ * own, breaking it is the player's own decision, and the button that pays goes on working. Nothing
+ * is said at all while no period has been planned, since there is then no plan to break.
+ *
  * @param lines what the cart holds.
  * @param total what the whole cart costs.
  * @param balance the coins the player has.
+ * @param budget the confirmed budget of the running period, or null when none has been planned.
  * @param onConfirm called when the player pays for the cart.
  * @param onDismiss called when the cross is pressed.
  * @param modifier modifier applied to the block root.
@@ -504,10 +555,17 @@ private fun PurchaseConfirmBlock(
     lines: List<CartLine>,
     total: Int,
     balance: Int,
+    budget: BudgetState?,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Counted outside the composition and only when the cart or the plan changes: what the warning
+    // says is arithmetic on the period's plan, not a question about the window.
+    val overspends = remember(budget, lines) {
+        Budget.overspendsOf(budget = budget, cartSpend = Cart.spendByKindOf(lines))
+    }
+
     GameDialogBlock(
         title = "Покупка",
         closeDescription = "Отменить покупку",
@@ -555,6 +613,13 @@ private fun PurchaseConfirmBlock(
             labelColor = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
+        overspends.forEach { (kind, over) ->
+            Text(
+                text = "Это на $over больше, чем в плане на ${kind.title.lowercase()}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
     }
 }
 
@@ -581,8 +646,8 @@ private fun NotEnoughMoneyBlock(
         onDismiss = onDismiss,
         modifier = modifier,
         actions = {
-            // Единственное, что тут можно сделать, — закрыть окно, так что кнопка одна и та же,
-            // что крестик; отдельной «Отмены» под ней не бывает.
+            // Closing the window is the only thing to be done here, so the button does what the
+            // cross does and there is no "Отмена" under it to cancel a nothing.
             PillButton(
                 text = "Понятно",
                 onClick = onDismiss,
@@ -605,7 +670,6 @@ private fun NotEnoughMoneyBlock(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
         )
-
     }
 }
 
@@ -728,12 +792,63 @@ private fun CategoryTitle(
 ) {
     Text(
         text = category.title(),
-        style = MaterialTheme.typography.titleMedium,
+        style = MaterialTheme.typography.headlineSmall,
         color = MaterialTheme.colorScheme.onBackground,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = modifier
     )
+}
+
+/**
+ * One button of the row the shop's shelves are switched with: the section's sprite with, under it,
+ * the underline every selected sprite button carries and the name of the section in words.
+ *
+ * Both of those are there because either alone is too quiet: an underline three pixels thick is easy
+ * to miss on a row of four pictures, and the pictures themselves do not say which shelf is which to
+ * a player who has not learnt them yet. The caption is coloured too, so the selected section is told
+ * apart by three things at once rather than by one.
+ *
+ * @param category the section this button switches to.
+ * @param selected whether this is the section being shown.
+ * @param showLabel whether the name is written under the sprite; false where the height for a second
+ *   line is height a card would have had, see [GameDimens.isShortScreen].
+ * @param onClick called when the button is pressed.
+ * @param modifier modifier applied to the button's column.
+ */
+@Composable
+private fun CategoryButton(
+    category: ItemCategory,
+    selected: Boolean,
+    showLabel: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        SpriteButton(
+            assetPath = Sprites.shopCategory(category.xmlName),
+            contentDescription = category.title(),
+            onClick = onClick,
+            size = CategoryButtonSize,
+            selected = selected
+        )
+        if (showLabel) {
+            Text(
+                text = category.title(),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                maxLines = 1
+            )
+        }
+    }
 }
 
 /**
@@ -852,7 +967,7 @@ private fun ShopItemCard(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    ItemPriceRow(price = item.price, iconSize = ShortScreenPriceIconSize)
+                    ItemPriceRow(price = item.price)
 
                     ItemEffectsRow(
                         item = item,
@@ -882,7 +997,6 @@ private fun ShopItemCard(
                         quantity = quantity,
                         onIncrease = onIncrease,
                         onDecrease = onDecrease,
-                        counterButtonSize = ShortScreenCounterButtonSize,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -909,7 +1023,7 @@ private fun ShopItemCard(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                ItemPriceRow(price = item.price, iconSize = PriceIconSize)
+                ItemPriceRow(price = item.price)
 
                 ItemEffectsRow(
                     item = item,
@@ -928,7 +1042,7 @@ private fun ShopItemCard(
                     modifier = Modifier.padding(top = 8.dp)
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 PurchaseControl(
                     mode = mode,
@@ -996,39 +1110,38 @@ private fun ItemSprite(
             contentDescription = if (inGoals) "Убрать из целей" else "Добавить в цели",
             onClick = onToggleGoals,
             size = starButtonSize,
+            showIndicator = false,
             modifier = Modifier.align(Alignment.TopEnd)
         )
     }
 }
 
 /**
- * An item's price: the coin sprite and the number of coins, set larger than the item's name so
- * the price is the first thing read on a card. Shared between [ShopItemCard]'s two layouts, which
- * only differ in how big the coin sprite is drawn.
+ * An item's price: the coin sprite and the number of coins, written no larger than the item's own
+ * name — a card is read name first and price second, and a price set in 22.sp against a 13.sp name
+ * had that the wrong way round. Shared between [ShopItemCard]'s two layouts.
  *
  * @param price the item's price, in coins.
- * @param iconSize size of the coin sprite.
  * @param modifier modifier applied to the row.
  */
 @Composable
 private fun ItemPriceRow(
     price: Int,
-    iconSize: Dp,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Sprite(
             assetPath = Sprites.COIN,
             contentDescription = null,
-            modifier = Modifier.size(iconSize)
+            modifier = Modifier.size(PriceIconSize)
         )
         Text(
             text = price.toString(),
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -1137,20 +1250,18 @@ private fun ItemVariantRow(
  * bought again and again, an "Добавить"/"Убрать" toggle for a one-off, or a plain "Куплено" label
  * for something already owned. Shared between [ShopItemCard]'s two layouts.
  *
- * Sits in a slot as tall as the counter, its tallest form, so a card with a button ends at the same
- * height as one with a counter. Its caller passes `Modifier.fillMaxWidth()`, so a card's own width is
- * what [ShopItemMode.ADDABLE] and [ShopItemMode.PURCHASED]'s [PillButton] stretch into instead of
- * wrapping their own label — see [ItemCellMinSize] for why that is what lets a card's button hold its
- * label at one line without shrinking on an ordinary phone; [ShopItemMode.COUNTER]'s row of buttons
- * around the quantity just ends up centered in the same width, same as before.
+ * Sits in a slot no shorter than the counter, so a card with a button ends at the same height as one
+ * with a counter. Its caller passes `Modifier.fillMaxWidth()`, so a card's own width is what
+ * [ShopItemMode.ADDABLE]'s [PillButton] stretches into instead of wrapping its own label — see
+ * [ItemCellMinSize] for why that is what lets a card's button hold its label at one line without
+ * shrinking on an ordinary phone — and what [ShopItemMode.COUNTER] shares out between its two
+ * buttons and the quantity between them, see [counterValueWidth].
  *
  * @param mode which control to show.
  * @param quantity how many of the item are in the cart; shown by [ShopItemMode.COUNTER].
  * @param onIncrease called to put one more of the item into the cart.
  * @param onDecrease called to take one of the item out of the cart.
  * @param modifier modifier applied to the control's box.
- * @param counterButtonSize size of the +/- buttons, and with it the height of the slot the control
- *   sits in; smaller on a card laid out sideways, which has the screen's whole height to fit into.
  */
 @Composable
 private fun PurchaseControl(
@@ -1158,37 +1269,63 @@ private fun PurchaseControl(
     quantity: Int,
     onIncrease: () -> Unit,
     onDecrease: () -> Unit,
-    modifier: Modifier = Modifier,
-    counterButtonSize: Dp = CounterButtonSize
+    modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = modifier.heightIn(min = spriteButtonHeight(counterButtonSize)),
+        modifier = modifier.heightIn(
+            min = spriteButtonHeight(CounterButtonSize, showIndicator = false)
+        ),
         contentAlignment = Alignment.Center
     ) {
         when (mode) {
-            ShopItemMode.COUNTER -> Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SpriteButton(
-                    assetPath = Sprites.MINUS,
-                    contentDescription = "Уменьшить количество",
-                    onClick = { if (quantity > 0) onDecrease() },
-                    size = counterButtonSize
+            ShopItemMode.COUNTER -> {
+                val counterStyle = MaterialTheme.typography.labelLarge
+                val (counterMinSize, counterMaxSize) = pillButtonAutoSizeRange(
+                    minLabelSize = PillButtonMinLabelSize,
+                    styleFontSize = counterStyle.fontSize,
+                    density = LocalDensity.current
                 )
-                Text(
-                    text = quantity.toString(),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.width(28.dp)
-                )
-                SpriteButton(
-                    assetPath = Sprites.PLUS,
-                    contentDescription = "Увеличить количество",
-                    onClick = onIncrease,
-                    size = counterButtonSize
-                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(CounterGap)
+                ) {
+                    // Nothing to take out of the cart is a button that says so by going grey,
+                    // rather than one that darkens under the finger and then does nothing.
+                    SpriteButton(
+                        assetPath = Sprites.MINUS,
+                        contentDescription = "Уменьшить количество",
+                        onClick = onDecrease,
+                        size = CounterButtonSize,
+                        enabled = quantity > 0,
+                        showIndicator = false
+                    )
+                    // The number is given everything the buttons leave (see [counterValueWidth])
+                    // and shrinks within it instead of wrapping: a two-digit quantity used to be
+                    // boxed into 28.dp and came out as one digit over another. `softWrap` is left
+                    // alone on purpose — turning it off is what stops `autoSize` measuring the
+                    // width at all, see PillButton's own note.
+                    Text(
+                        text = quantity.toString(),
+                        style = counterStyle,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        autoSize = TextAutoSize.StepBased(
+                            minFontSize = counterMinSize,
+                            maxFontSize = counterMaxSize
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                    SpriteButton(
+                        assetPath = Sprites.PLUS,
+                        contentDescription = "Увеличить количество",
+                        onClick = onIncrease,
+                        size = CounterButtonSize,
+                        showIndicator = false
+                    )
+                }
             }
 
             // Stretched to the width PurchaseControl's own caller was given (a shop card's full
@@ -1196,22 +1333,28 @@ private fun PurchaseControl(
             // shrink is measured against, and a card is wide before the label is ever asked to
             // shrink at all. `compact` trims the padding around the label to match, so the width is
             // spent on the label rather than the margin around it.
+            // Tonal and not Primary: a filled green button on every card of a grid is a green
+            // lattice, and the one filled button of this screen is the "Купить" that pays for the
+            // whole cart. A card's button adds to it, it does not conclude anything.
             ShopItemMode.ADDABLE -> PillButton(
                 text = if (quantity > 0) "Убрать" else "Добавить",
                 onClick = { if (quantity > 0) onDecrease() else onIncrease() },
                 modifier = Modifier.fillMaxWidth(),
+                style = PillStyle.Tonal,
                 compact = true
             )
 
-            // A plain, unclickable pill: same shape and colors an "Куплено" label always had, now
-            // built from PillButton itself (disabled) instead of a copy of it, so it gets the same
-            // width and shrink-instead-of-crop treatment as the other two states for free.
-            ShopItemMode.PURCHASED -> PillButton(
+            // Not a button at all: there is nothing left to press here, and a disabled pill on a
+            // cream card reads as a broken button rather than as an answer. A word in the colour
+            // good news is written in says the same thing and takes nothing away from the cards
+            // around it that still have something to offer.
+            ShopItemMode.PURCHASED -> Text(
                 text = "Куплено",
-                onClick = {},
-                modifier = Modifier.fillMaxWidth(),
-                enabled = false,
-                compact = true
+                style = MaterialTheme.typography.labelMedium,
+                color = GameColors.success,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -1489,6 +1632,46 @@ private fun ShopScreenFoodShelfLargeFontScalePreview() {
 }
 
 /**
+ * The food shelf at the narrowest width and the biggest font scale the game is played at, with the
+ * cart already holding as many apples as it takes (see
+ * [com.legacy.fingame.game.GameViewModel.MAX_ITEM_QUANTITY]): the case the counter was broken in.
+ * The quantity has to stand on one line between the two buttons, and all three have to stay inside
+ * the card — a two-digit number used to come out as one digit above the other.
+ */
+@Preview(
+    name = "Shop — Full cart 360dp, fontScale 1.3",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 720,
+    fontScale = 1.3f
+)
+@Composable
+private fun ShopScreenFullCartPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            ShopScreen(
+                state = GameUiState(
+                    balance = 3_000,
+                    quantities = mapOf(
+                        "apple" to GameViewModel.MAX_ITEM_QUANTITY,
+                        "fish" to 9
+                    ),
+                    cartPrice = 1_710
+                ),
+                items = PreviewItems,
+                cartLines = PreviewCartLines,
+                onSelectCategory = {},
+                onPickVariant = { _, _ -> },
+                onIncrease = {},
+                onDecrease = {},
+                onBuy = { true },
+                onClose = {}
+            )
+        }
+    }
+}
+
+/**
  * Preview of the clothes rack at the same width: a shelf where nothing touches the pet's bars, so
  * the cards end right under the variant picker with no room kept for effects at all.
  */
@@ -1619,7 +1802,10 @@ private fun ShopScreenDarkPreview() {
     }
 }
 
-/** Preview of the window the player confirms a purchase in. */
+/**
+ * Preview of the window the player confirms a purchase in, with no period planned to weigh the cart
+ * against — and so with nothing said about a plan.
+ */
 @Preview(name = "Shop — Purchase confirmation", showBackground = true)
 @Composable
 private fun PurchaseConfirmDialogPreview() {
@@ -1629,6 +1815,51 @@ private fun PurchaseConfirmDialogPreview() {
                 lines = PreviewCartLines,
                 total = PreviewCartLines.sumOf { line -> line.price },
                 balance = 300,
+                budget = null,
+                onConfirm = {},
+                onDismiss = {},
+                modifier = Modifier.padding(16.dp)
+            )
+        }
+    }
+}
+
+/**
+ * The plan the previews shop against: a period where the necessities were given 40 coins, 30 of
+ * them are spent already, and the cart holds 55 more of food — 45 past the plan — while the 100
+ * planned for the rest of it is untouched, so exactly one of the two lines has anything to say.
+ */
+private val PreviewBudget = BudgetState(
+    plannedMust = 40,
+    plannedWant = 100,
+    plannedSavings = 60,
+    plannedDeposit = 0,
+    spentMust = 30,
+    spentWant = 0,
+    startDay = 0
+)
+
+/**
+ * Preview of the same window over a period whose plan the cart breaks, at the narrowest width and
+ * the biggest font scale the game is played at: the red line has to fit under the sums without
+ * pushing the button that pays off the window, and that button has to still be a button.
+ */
+@Preview(
+    name = "Shop — Purchase over the plan, 360dp, fontScale 1.3",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 640,
+    fontScale = 1.3f
+)
+@Composable
+private fun PurchaseOverThePlanDialogPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            PurchaseConfirmBlock(
+                lines = PreviewCartLines,
+                total = PreviewCartLines.sumOf { line -> line.price },
+                balance = 300,
+                budget = PreviewBudget,
                 onConfirm = {},
                 onDismiss = {},
                 modifier = Modifier.padding(16.dp)
