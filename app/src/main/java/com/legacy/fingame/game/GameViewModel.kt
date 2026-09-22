@@ -614,6 +614,81 @@ class GameViewModel(
     }
 
     /**
+     * Запоминает раскладку, которую игрок набирает на экране планирования, чтобы он мог закрыть
+     * экран и вернуться к ней — в том числе после перезапуска приложения.
+     *
+     * Раскладка приводится в допустимый вид ([Budget.normalize]) до того, как попадёт в состояние,
+     * поэтому раскладка, в которой суммы не сходятся, не сохраняется никогда.
+     *
+     * @param draft что набрал игрок; игнорируется, когда планирование не открыто — подтверждённый
+     * бюджет не переписывается.
+     */
+    fun updateBudgetDraft(draft: BudgetDraft) {
+        val current = _state.value
+        if (!current.planningOpen) return
+
+        _state.value = current.copy(
+            budgetDraft = Budget.normalize(
+                draft = draft,
+                total = current.totalToPlan,
+                depositAllowed = current.deposit == null
+            )
+        )
+        persist()
+    }
+
+    /**
+     * Подтверждает бюджет: деньги раскладываются по счетам, вклад — если игрок его выбрал —
+     * открывается, и начинается период, в котором план уже не меняется.
+     *
+     * @return True, когда бюджет подтверждён, false, когда планирование не открыто, то есть
+     * подтверждать нечего.
+     */
+    fun confirmBudget(): Boolean {
+        val current = _state.value
+        if (!current.planningOpen) return false
+
+        val total = current.totalToPlan
+        val draft = Budget.normalize(
+            draft = current.planningDraft,
+            total = total,
+            depositAllowed = current.deposit == null
+        )
+        val currentMoney = Budget.currentOf(draft, total)
+        val savingsDelta = draft.savings - current.savings
+
+        var next = current.copy(balance = currentMoney, savings = draft.savings)
+        if (savingsDelta > 0) {
+            next = next.logged(MoneyLog.REASON_TO_SAVINGS, -savingsDelta)
+        } else if (savingsDelta < 0) {
+            next = next.logged(MoneyLog.REASON_FROM_SAVINGS, -savingsDelta)
+        }
+        if (draft.depositAmount > 0) {
+            next = next.copy(
+                deposit = Deposit.openedOn(
+                    amount = draft.depositAmount,
+                    termDays = draft.depositTermDays,
+                    day = clock.today()
+                )
+            ).logged(MoneyLog.REASON_DEPOSIT_OPENED, -draft.depositAmount)
+        }
+
+        _state.value = next.copy(
+            budget = BudgetState(
+                planned = currentMoney,
+                plannedSavings = draft.savings,
+                plannedDeposit = draft.depositAmount,
+                spent = 0,
+                startDay = clock.today()
+            ),
+            planningOpen = false,
+            budgetDraft = null
+        )
+        persist()
+        return true
+    }
+
+    /**
      * Advances to the next sub-location, wrapping back to the first sub-location
      * after the last one. The pet stays there until the player moves it again, including
      * across app launches.

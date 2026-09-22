@@ -3,7 +3,9 @@ package com.legacy.fingame
 import com.legacy.fingame.game.GameUiState
 import com.legacy.fingame.game.PlayerState
 import com.legacy.fingame.game.Screen
+import com.legacy.fingame.game.economy.BudgetDraft
 import com.legacy.fingame.game.economy.BudgetState
+import com.legacy.fingame.game.economy.Deposit
 import com.legacy.fingame.game.economy.Economy
 import com.legacy.fingame.game.economy.MoneyLog
 import org.junit.Assert.assertEquals
@@ -135,5 +137,107 @@ class BudgetFlowTest {
         )
 
         assertFalse(confirmed.canPlanBudget)
+    }
+
+    @Test
+    fun `the draft is normalized and kept between visits to the screen`() {
+        val store = FakePlayerStateStore()
+        val clock = FakeGameClock()
+        val vm = testGameViewModel(store = store, clock = clock)
+        vm.claimDailyBonus()
+        val total = vm.state.value.totalToPlan
+
+        vm.updateBudgetDraft(
+            BudgetDraft(savings = total + 1_000, depositAmount = 50, depositTermDays = 99)
+        )
+
+        val draft = vm.state.value.planningDraft
+        assertEquals(total, draft.savings)
+        assertEquals(0, draft.depositAmount)
+        assertEquals(Deposit.MAX_TERM_DAYS, draft.depositTermDays)
+        // Закрыли экран, вернулись — раскладка на месте, в том числе после перезапуска.
+        vm.closeScreen()
+        assertEquals(draft, testGameViewModel(store = store, clock = clock).state.value.planningDraft)
+    }
+
+    @Test
+    fun `confirming the budget moves the money, opens the deposit and writes the log`() {
+        val store = FakePlayerStateStore(PlayerState(balance = 1_000))
+        val clock = FakeGameClock()
+        val vm = testGameViewModel(store = store, clock = clock)
+        vm.claimDailyBonus()
+
+        vm.updateBudgetDraft(
+            BudgetDraft(savings = 300, depositAmount = 400, depositTermDays = 5)
+        )
+        assertTrue(vm.confirmBudget())
+
+        val state = vm.state.value
+        assertEquals(1_000 + Economy.DAILY_BONUS - 300 - 400, state.balance)
+        assertEquals(300, state.savings)
+        assertEquals(400, state.deposit?.amount)
+        assertEquals(5, state.deposit?.termDays)
+        assertEquals(10, state.deposit?.ratePercent)
+        assertEquals(FakeGameClock.DEFAULT_DAY, state.deposit?.openedDay)
+        assertEquals(state.balance, state.budget?.planned)
+        assertEquals(300, state.budget?.plannedSavings)
+        assertEquals(400, state.budget?.plannedDeposit)
+        assertEquals(0, state.budget?.spent)
+        assertFalse(state.planningOpen)
+        assertNull(state.budgetDraft)
+
+        // Журнал: сначала перевод в сбережения, потом открытие вклада, новейшее первым.
+        assertEquals(
+            listOf(
+                MoneyLog.REASON_DEPOSIT_OPENED,
+                MoneyLog.REASON_TO_SAVINGS,
+                MoneyLog.REASON_DAILY_BONUS
+            ),
+            state.moneyLog.entries.map { it.reason }
+        )
+        assertEquals(listOf(-400, -300, Economy.DAILY_BONUS), state.moneyLog.entries.map { it.delta })
+    }
+
+    @Test
+    fun `a confirmed budget cannot be confirmed again`() {
+        val vm = testGameViewModel()
+        vm.claimDailyBonus()
+        assertTrue(vm.confirmBudget())
+
+        val planned = vm.state.value.budget?.planned
+        assertFalse(vm.confirmBudget())
+        assertEquals(planned, vm.state.value.budget?.planned)
+    }
+
+    @Test
+    fun `no deposit is opened while one is already running`() {
+        val store = FakePlayerStateStore(
+            PlayerState(
+                balance = 500,
+                deposit = Deposit.openedOn(amount = 200, termDays = 7, day = FakeGameClock.DEFAULT_DAY)
+            )
+        )
+        val vm = testGameViewModel(store = store)
+        vm.claimDailyBonus()
+
+        vm.updateBudgetDraft(BudgetDraft(savings = 0, depositAmount = 300, depositTermDays = 3))
+        assertTrue(vm.confirmBudget())
+
+        assertEquals(200, vm.state.value.deposit?.amount)
+        assertEquals(7, vm.state.value.deposit?.termDays)
+        assertEquals(500 + Economy.DAILY_BONUS, vm.state.value.balance)
+    }
+
+    @Test
+    fun `a draft cannot be edited or confirmed once the planning is over`() {
+        val vm = testGameViewModel()
+        vm.claimDailyBonus()
+        assertTrue(vm.confirmBudget())
+        val savings = vm.state.value.savings
+
+        vm.updateBudgetDraft(BudgetDraft(savings = 999, depositAmount = 0, depositTermDays = 2))
+
+        assertNull(vm.state.value.budgetDraft)
+        assertEquals(savings, vm.state.value.savings)
     }
 }
