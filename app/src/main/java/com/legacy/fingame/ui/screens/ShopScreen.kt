@@ -37,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +47,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -102,15 +105,25 @@ internal val CounterButtonSize = 40.dp
 internal val CounterGap = 8.dp
 
 /**
- * Height of the slot a card's purchase control stands in, whichever of the three it is: the 48.dp a
- * [PillButton] is measured at as a touch target (its Surface keeps any clickable at least that
- * tall), which is also taller than the [CounterButtonSize] counter and the "Куплено" line. One height
- * for all three is what keeps the cards of a shelf ending level, whatever each of them has to offer.
+ * Height of the slot a card's purchase control stands in, whichever of the three it is.
+ *
+ * 48.dp is the minimum interactive size Material gives a clickable `Surface(onClick = …)` — the
+ * surface a [PillButton] is built on — so a card's "Добавить" comes out that tall however small its
+ * own 44.dp minimum and its label would let it be. That is also taller than the [CounterButtonSize]
+ * counter and the "Куплено" line, so one height for all three is what keeps the cards of a shelf
+ * ending level, whatever each of them has to offer.
  */
 internal val PurchaseSlotHeight = 48.dp
 
-/** Side of the tick drawn before "Куплено": the height of the word beside it. */
+/**
+ * Side of the tick drawn before "Куплено" on a phone at the ordinary font scale. The tick is never
+ * drawn smaller than the word beside it is tall, so a larger system font or a tablet grows it too;
+ * see [CheckMark].
+ */
 private val CheckMarkSize = 12.dp
+
+/** Gap between the row of shelves and the "Купить" under it, and between the grid and that row. */
+private val BottomBarGap = 8.dp
 
 /**
  * Size of the coin next to an item's price. As big as the price itself is tall and no bigger: a card
@@ -223,10 +236,14 @@ private enum class ShopWindow {
  *   beside the details and the purchase controls beside both, and are sized to the room the grid
  *   turns out to have (see [shortScreenCardSpriteSize]) so that a whole row of them is read without
  *   scrolling for the bottom of a card.
- * - Bottom: one [CategoryButton] per category — the shelf's picture with its name under it — in a
- *   row that scrolls horizontally (so the row can hold any number of categories) next to the
- *   "Купить" button, the one filled button of this screen, which shows what the cart costs and is
- *   disabled while — and only while — the cart is empty. A cart the player cannot afford is still
+ * - Bottom: one [CategoryButton] per category — the shelf's picture alone — sharing the width of a
+ *   row in equal parts, so every shelf is in sight at once on any screen, and the "Купить" button,
+ *   the one filled button of this screen, which shows what the cart costs and is disabled while —
+ *   and only while — the cart is empty. The name of the shelf being shown is the title over the
+ *   grid ([CategoryTitle]); written under the pictures as well, the four names ran together into
+ *   one phrase and pushed the last shelves out of the row. "Купить" stands on a line of its own
+ *   under the row — across its whole width, or at its end on a phone held sideways — so a cart price
+ *   that grows longer never takes room from the shelves. A cart the player cannot afford is still
  *   worth pressing: it is answered with a window saying by how much, not with a dead button.
  * - Over all of it, once "Купить" is pressed: [PurchaseConfirmDialog], where the player sees what
  *   the cart holds, what it costs and whether it takes the running period past what was planned for
@@ -272,7 +289,9 @@ fun ShopScreen(
     // Which window the player opened over the shop, if any. Presentation-only: a cart that is still
     // unconfirmed is no different from any other cart to the rest of the game, and a cart the player
     // was told they cannot afford is not changed by being told.
-    var window by remember { mutableStateOf(ShopWindow.NONE) }
+    // Kept across a turn of the device and a change of theme: the activity is rebuilt then, and a
+    // window the player was reading would otherwise vanish with it while the cart behind it stayed.
+    var window by rememberSaveable { mutableStateOf(ShopWindow.NONE) }
     // Cards of one screen are cut to the same pattern, so they end up the same height: room for a
     // variant picker is kept on every card of a category where any item has variants at all. Room
     // for the rows of effects is kept the same way, but that one waits until the grid has been
@@ -418,33 +437,30 @@ fun ShopScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(BottomBarGap))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            val categoryRow: @Composable (Modifier) -> Unit = { rowModifier ->
                 Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = rowModifier,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     categories.forEach { category ->
-                        CategoryButton(
-                            category = category,
-                            selected = category == state.selectedCategory,
-                            // A caption costs a line of height, and on a short screen every line of
-                            // the bottom bar is a line the cards above it do not get: there the
-                            // underline under the sprite has to say it on its own.
-                            showLabel = !isShortScreen,
-                            onClick = { onSelectCategory(category) }
-                        )
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CategoryButton(
+                                category = category,
+                                selected = category == state.selectedCategory,
+                                onClick = { onSelectCategory(category) }
+                            )
+                        }
                     }
                 }
-                Spacer(modifier = Modifier.width(12.dp))
+            }
+            val buyButton: @Composable (Modifier) -> Unit = { buttonModifier ->
                 PillButton(
-                    text = if (state.cartPrice > 0) "Купить · ${state.cartPrice}" else "Купить",
+                    text = if (state.cartPrice > 0) "Купить$DotSeparator${state.cartPrice}" else "Купить",
                     // Pressing this opens a window and nothing else: which of the two it is, is the
                     // cart's own answer (see [GameUiState.canBuyCart]). Pressing it twice in a row asks
                     // for the same window twice, which is one window.
@@ -455,9 +471,27 @@ fun ShopScreen(
                             ShopWindow.NOT_ENOUGH_MONEY
                         }
                     },
+                    modifier = buttonModifier,
                     style = PillStyle.Primary,
-                    enabled = state.hasCart
+                    enabled = state.hasCart,
+                    compact = !isShortScreen
                 )
+                // The button is disabled, not taken away, while the cart is empty: the row of
+                // shelves above it stays where it is whatever the cart holds.
+            }
+
+            // The shelves and "Купить" never share a line: a cart price that grows longer would take
+            // its room from the shelves, and on a narrow phone it covered the last two of them.
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(BottomBarGap),
+                horizontalAlignment = Alignment.End
+            ) {
+                categoryRow(Modifier.fillMaxWidth())
+                // Across the whole width where there is height to give it a line of its own; at the
+                // end of its line on a phone held sideways, where a bar that wide would read as a
+                // banner rather than a button.
+                buyButton(if (isShortScreen) Modifier else Modifier.fillMaxWidth())
             }
         }
     }
@@ -636,7 +670,7 @@ private fun PurchaseConfirmBlock(
 
         overspends.forEach { (kind, over) ->
             Text(
-                text = "С этой покупкой ${kind.title.lowercase()} траты будут на $over больше плана",
+                text = overspendTextOf(kind = kind, over = over),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error
             )
@@ -822,54 +856,35 @@ private fun CategoryTitle(
 }
 
 /**
- * One button of the row the shop's shelves are switched with: the section's sprite with, under it,
- * the underline every selected sprite button carries and the name of the section in words.
+ * One button of the row the shop's shelves are switched with: the section's sprite and, under it,
+ * the underline every selected sprite button carries.
  *
- * Both of those are there because either alone is too quiet: an underline three pixels thick is easy
- * to miss on a row of four pictures, and the pictures themselves do not say which shelf is which to
- * a player who has not learnt them yet. The caption is coloured too, so the selected section is told
- * apart by three things at once rather than by one.
+ * The name of the section is not written under the picture: four names in a row ran together into
+ * one phrase ("Игрушки Одежда Декор") and did not fit a narrow phone at all, which pushed the last
+ * shelves out of sight behind "Купить". The shelf being shown is named by the title over the grid
+ * ([CategoryTitle]) and marked here by the underline, and every button still says its name to a
+ * screen reader.
  *
  * @param category the section this button switches to.
  * @param selected whether this is the section being shown.
- * @param showLabel whether the name is written under the sprite; false where the height for a second
- *   line is height a card would have had, see [GameDimens.isShortScreen].
  * @param onClick called when the button is pressed.
- * @param modifier modifier applied to the button's column.
+ * @param modifier modifier applied to the button.
  */
 @Composable
 private fun CategoryButton(
     category: ItemCategory,
     selected: Boolean,
-    showLabel: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        SpriteButton(
-            assetPath = Sprites.shopCategory(category.xmlName),
-            contentDescription = category.title(),
-            onClick = onClick,
-            size = CategoryButtonSize,
-            selected = selected
-        )
-        if (showLabel) {
-            Text(
-                text = category.title(),
-                style = MaterialTheme.typography.labelSmall,
-                color = if (selected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                maxLines = 1
-            )
-        }
-    }
+    SpriteButton(
+        assetPath = Sprites.shopCategory(category.xmlName),
+        contentDescription = category.title(),
+        onClick = onClick,
+        modifier = modifier.semantics { this.selected = selected },
+        size = CategoryButtonSize,
+        selected = selected
+    )
 }
 
 /**
@@ -1367,18 +1382,34 @@ private fun PurchaseControl(
             // cream card reads as a broken button rather than as an answer. A tick and a word in the
             // colour good news is written in say the same thing and take nothing away from the
             // cards around it that still have something to offer.
-            ShopItemMode.PURCHASED -> Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                CheckMark(color = GameColors.success)
-                Text(
-                    text = "Куплено",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = GameColors.success,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+            ShopItemMode.PURCHASED -> {
+                val purchasedStyle = MaterialTheme.typography.labelMedium
+                val (purchasedMinSize, purchasedMaxSize) = pillButtonAutoSizeRange(
+                    minLabelSize = PillButtonMinLabelSize,
+                    styleFontSize = purchasedStyle.fontSize,
+                    density = LocalDensity.current
                 )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    CheckMark(color = GameColors.success, textStyle = purchasedStyle)
+                    // The word takes what the tick leaves and shrinks into it whole: on the
+                    // narrowest card with the system text turned up, the tick at the size of the
+                    // word and the word itself come to a few dp more than the card has.
+                    Text(
+                        text = "Куплено",
+                        modifier = Modifier.weight(1f, fill = false),
+                        style = purchasedStyle,
+                        color = GameColors.success,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        autoSize = TextAutoSize.StepBased(
+                            minFontSize = purchasedMinSize,
+                            maxFontSize = purchasedMaxSize
+                        )
+                    )
+                }
             }
         }
     }
@@ -1388,15 +1419,24 @@ private fun PurchaseControl(
  * A tick, drawn rather than typed: the game's pixel font has no glyph for one, and a character
  * borrowed from a fallback font would stand out of the pixel line it sits in.
  *
+ * As big as the word it stands before: [CheckMarkSize] enlarged for a tablet, or the size of
+ * [textStyle]'s font when that comes out larger — a system font of 1.3 grows the word and would
+ * otherwise leave a tick smaller than the letters beside it.
+ *
  * @param color color of the stroke.
+ * @param textStyle style of the word the tick stands before.
  * @param modifier modifier applied to the drawing.
  */
 @Composable
 private fun CheckMark(
     color: Color,
+    textStyle: TextStyle,
     modifier: Modifier = Modifier
 ) {
-    Canvas(modifier = modifier.size(CheckMarkSize)) {
+    val fontSize = with(LocalDensity.current) { textStyle.fontSize.toDp() }
+    val side = maxOf(GameDimens.buttonSize(CheckMarkSize), fontSize)
+
+    Canvas(modifier = modifier.size(side)) {
         val tick = Path().apply {
             moveTo(size.width * 0.1f, size.height * 0.55f)
             lineTo(size.width * 0.4f, size.height * 0.85f)
