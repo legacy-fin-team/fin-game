@@ -1,6 +1,7 @@
 package com.legacy.fingame.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -33,6 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.legacy.fingame.game.GameUiState
+import com.legacy.fingame.game.economy.Budget
 import com.legacy.fingame.game.economy.BudgetDraft
 import com.legacy.fingame.game.economy.BudgetResult
 import com.legacy.fingame.game.economy.BudgetState
@@ -171,6 +173,16 @@ fun BudgetScreen(
 
         if (showBonus) {
             DailyBonusCard(onClaimDailyBonus = onClaimDailyBonus)
+        } else if (showPlanning) {
+            PlanningCard(
+                total = state.totalToPlan,
+                draft = state.planningDraft,
+                // Вклад бывает только один одновременно: пока открыт этот, нового поля нет вовсе,
+                // чтобы игрок не набирал сумму, которой всё равно некуда лечь.
+                depositAllowed = state.deposit == null,
+                onDraftChange = onDraftChange,
+                onConfirm = { window = BudgetWindow.CONFIRM_BUDGET }
+            )
         }
 
         state.budget?.let { budget ->
@@ -212,8 +224,15 @@ fun BudgetScreen(
     when (shownWindow) {
         BudgetWindow.NONE -> Unit
 
-        // Окно подтверждения бюджета появляется вместе с раскладкой, в следующей задаче.
-        BudgetWindow.CONFIRM_BUDGET -> Unit
+        BudgetWindow.CONFIRM_BUDGET -> ConfirmBudgetDialog(
+            draft = state.planningDraft,
+            total = state.totalToPlan,
+            onConfirm = {
+                onConfirmBudget()
+                window = BudgetWindow.NONE
+            },
+            onDismiss = { window = BudgetWindow.NONE }
+        )
 
         BudgetWindow.TRANSFER_TO_SAVINGS -> TransferDialog(
             // Перевод — дело игрока, а не плана: модель сама решает, хватает ли денег, и
@@ -293,6 +312,166 @@ private fun DailyBonusCard(onClaimDailyBonus: () -> Unit, modifier: Modifier = M
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         PillButton(text = "Бонус дня +${Economy.DAILY_BONUS}", onClick = onClaimDailyBonus)
+    }
+}
+
+/**
+ * Блок раскладки: игрок делит всё, что у него есть, между тратами, сбережениями и вкладом.
+ *
+ * Текущие деньги — не поле, а остаток: что не забрали сбережения и вклад, то и остаётся на траты.
+ * Поэтому раскладка, в которой суммы не сходятся, не набирается в принципе, и экрану не нужно
+ * ругаться на игрока.
+ *
+ * @param total сколько всего раскладывается: текущие плюс сбережения.
+ * @param draft раскладка, которую игрок уже набрал.
+ * @param depositAllowed можно ли открыть новый вклад — вклад бывает только один одновременно.
+ * @param onDraftChange вызывается с изменённой раскладкой при каждой правке.
+ * @param onConfirm вызывается, когда игрок нажал «Подтвердить бюджет» (экран после этого
+ *   показывает окно подтверждения).
+ * @param modifier модификатор карточки.
+ */
+@Composable
+private fun PlanningCard(
+    total: Int,
+    draft: BudgetDraft,
+    depositAllowed: Boolean,
+    onDraftChange: (BudgetDraft) -> Unit,
+    onConfirm: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BudgetCard(title = "Распределите $total", modifier = modifier) {
+        AmountField(
+            label = "Сбережения",
+            value = draft.savings,
+            onValueChange = { onDraftChange(draft.copy(savings = it)) }
+        )
+        if (depositAllowed) {
+            AmountField(
+                label = "Новый вклад",
+                value = draft.depositAmount,
+                onValueChange = { onDraftChange(draft.copy(depositAmount = it)) }
+            )
+            if (draft.depositAmount > 0) {
+                TermPicker(
+                    selected = draft.depositTermDays,
+                    onSelect = { onDraftChange(draft.copy(depositTermDays = it)) }
+                )
+                val rate = Deposit.rateOf(draft.depositTermDays)
+                AmountRow(
+                    label = "Ставка $rate%",
+                    value = "вернётся ${draft.depositAmount + Deposit.interestOf(draft.depositAmount, rate)}"
+                )
+            }
+        } else {
+            Text(
+                text = "Вклад уже открыт",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        AmountRow(label = "Текущие", value = Budget.currentOf(draft, total).toString())
+        PillButton(text = "Подтвердить бюджет", onClick = onConfirm)
+    }
+}
+
+/**
+ * Поле ввода суммы: только цифры, пустое поле читается как ноль.
+ *
+ * @param label подпись поля.
+ * @param value сумма, которая в нём сейчас.
+ * @param onValueChange вызывается с новой суммой.
+ * @param modifier модификатор поля.
+ */
+@Composable
+private fun AmountField(
+    label: String,
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    OutlinedTextField(
+        value = value.toString(),
+        onValueChange = { typed ->
+            onValueChange(typed.filter { it.isDigit() }.take(AmountMaxDigits).toIntOrNull() ?: 0)
+        },
+        modifier = modifier.fillMaxWidth(),
+        label = { Text(text = label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+    )
+}
+
+/**
+ * Выбор срока вклада: по кнопке на каждый предлагаемый срок, выбранный выделен.
+ *
+ * Ряд прокручивается вбок, чтобы шесть кнопок помещались и на самом узком экране при крупном
+ * системном шрифте.
+ *
+ * @param selected выбранный срок в днях.
+ * @param onSelect вызывается с выбранным сроком.
+ * @param modifier модификатор ряда.
+ */
+@Composable
+private fun TermPicker(
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Deposit.TERM_DAYS.forEach { term ->
+            PillButton(
+                text = "$term дн",
+                onClick = { onSelect(term) },
+                enabled = term != selected,
+                compact = true
+            )
+        }
+    }
+}
+
+/**
+ * Окно подтверждения бюджета: что куда ляжет, одним списком, и предупреждение о том, что после
+ * подтверждения план уже не переписать.
+ *
+ * @param draft раскладка, которую игрок набрал.
+ * @param total сколько всего раскладывается.
+ * @param onConfirm вызывается, когда игрок подтвердил бюджет.
+ * @param onDismiss вызывается, когда подтверждение отменено.
+ */
+@Composable
+private fun ConfirmBudgetDialog(
+    draft: BudgetDraft,
+    total: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    GameDialog(onDismiss = onDismiss) {
+        GameDialogBlock(
+            title = "Бюджет",
+            closeDescription = "Отменить подтверждение",
+            onDismiss = onDismiss
+        ) {
+            AmountRow(label = "Текущие", value = Budget.currentOf(draft, total).toString())
+            AmountRow(label = "Сбережения", value = draft.savings.toString())
+            if (draft.depositAmount > 0) {
+                AmountRow(
+                    label = "Вклад на ${draft.depositTermDays} дн",
+                    value = draft.depositAmount.toString()
+                )
+            }
+            Text(
+                text = "После подтверждения бюджет не изменить.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            PillButton(text = "Подтвердить", onClick = onConfirm)
+        }
     }
 }
 
@@ -599,4 +778,101 @@ private fun BudgetScreenTabletPreview() {
 @Composable
 private fun BudgetScreenBonusPreview() {
     FinGameTheme(darkTheme = false) { BudgetScreenPreview(PreviewBonusState) }
+}
+
+/** Раскладка, которую показывают превью планирования: часть денег отложена, часть — на вклад. */
+private val PreviewPlanningDraft = BudgetDraft(savings = 120, depositAmount = 100, depositTermDays = 5)
+
+/** Состояние игрока, который забрал бонус и раскладывает деньги на новый период. */
+private val PreviewPlanningState = GameUiState(
+    balance = 260,
+    savings = 100,
+    previousBudgetResult = BudgetResult(
+        planned = 260,
+        plannedSavings = 80,
+        plannedDeposit = 0,
+        actual = 215
+    ),
+    budgetDraft = PreviewPlanningDraft,
+    planningOpen = true,
+    moneyLog = PreviewLog
+)
+
+/** Превью раскладки в светлой теме. */
+@Preview(name = "BudgetScreen — Planning", showBackground = true, widthDp = 411, heightDp = 891)
+@Composable
+private fun BudgetScreenPlanningPreview() {
+    FinGameTheme(darkTheme = false) { BudgetScreenPreview(PreviewPlanningState) }
+}
+
+/** Превью раскладки на узком экране с крупным системным шрифтом: ряд сроков прокручивается. */
+@Preview(
+    name = "BudgetScreen — Planning, narrow phone, large text",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 800,
+    fontScale = 1.3f
+)
+@Composable
+private fun BudgetScreenPlanningLargeTextPreview() {
+    FinGameTheme(darkTheme = false) { BudgetScreenPreview(PreviewPlanningState) }
+}
+
+/** Превью раскладки в альбомной ориентации. */
+@Preview(
+    name = "BudgetScreen — Planning, landscape",
+    showBackground = true,
+    widthDp = 800,
+    heightDp = 360
+)
+@Composable
+private fun BudgetScreenPlanningLandscapePreview() {
+    FinGameTheme(darkTheme = false) { BudgetScreenPreview(PreviewPlanningState) }
+}
+
+/** Превью раскладки игрока, у которого вклад уже открыт: поля нового вклада нет. */
+@Preview(
+    name = "BudgetScreen — Planning with deposit",
+    showBackground = true,
+    widthDp = 411,
+    heightDp = 891
+)
+@Composable
+private fun BudgetScreenPlanningWithDepositPreview() {
+    FinGameTheme(darkTheme = false) {
+        BudgetScreenPreview(
+            PreviewPlanningState.copy(
+                deposit = Deposit(amount = 200, termDays = 5, ratePercent = 10, openedDay = 19_002L),
+                budgetDraft = PreviewPlanningDraft.copy(depositAmount = 0)
+            )
+        )
+    }
+}
+
+/** Превью окна подтверждения бюджета. */
+@Preview(name = "BudgetScreen — Confirm window", showBackground = true)
+@Composable
+private fun ConfirmBudgetDialogPreview() {
+    FinGameTheme(darkTheme = false) {
+        ConfirmBudgetDialog(
+            draft = PreviewPlanningDraft,
+            total = PreviewPlanningState.totalToPlan,
+            onConfirm = {},
+            onDismiss = {}
+        )
+    }
+}
+
+/** Превью окна, предупреждающего, что перевод не входит в бюджет. */
+@Preview(name = "BudgetScreen — Transfer window", showBackground = true)
+@Composable
+private fun TransferDialogPreview() {
+    FinGameTheme(darkTheme = false) { TransferDialog(onConfirm = {}, onDismiss = {}) }
+}
+
+/** Превью окна досрочного закрытия вклада. */
+@Preview(name = "BudgetScreen — Close deposit window", showBackground = true)
+@Composable
+private fun CloseDepositDialogPreview() {
+    FinGameTheme(darkTheme = false) { CloseDepositDialog(amount = 200, onConfirm = {}, onDismiss = {}) }
 }
