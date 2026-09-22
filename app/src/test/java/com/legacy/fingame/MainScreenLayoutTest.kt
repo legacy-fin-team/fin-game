@@ -125,18 +125,18 @@ class MainScreenLayoutTest {
             width = 328,
             height = 716,
             topStart = playerCorner(),
-            topEnd = CornerBlock(width = 188, height = 204),
-            bottomStart = CornerBlock(width = 103, height = 52),
-            bottomEnd = CornerBlock(width = 173, height = 64),
+            topEnd = CornerBlock(width = 167, height = 218),
+            bottomStart = moneyCorner,
+            bottomEnd = actionCorner,
             gap = 12
         )
 
-        assertEquals(216, band.top)
-        assertEquals(640, band.bottom)
+        assertEquals(230, band.top)
+        assertEquals(644, band.bottom)
         assertEquals(0, band.left)
         assertEquals(328, band.right)
         assertEquals(328, band.width)
-        assertEquals(424, band.height)
+        assertEquals(414, band.height)
     }
 
     @Test
@@ -147,18 +147,19 @@ class MainScreenLayoutTest {
                 height = 716,
                 topStart = playerCorner(),
                 topEnd = topEnd,
-                bottomStart = CornerBlock(width = 103, height = 52),
-                bottomEnd = CornerBlock(width = 173, height = 64),
+                bottomStart = moneyCorner,
+                bottomEnd = actionCorner,
                 gap = 12
             )
         }
 
-        val demo = corners(CornerBlock(width = 188, height = 204))
+        val demo = corners(CornerBlock(width = 167, height = 218))
         val released = corners(controlsCorner)
 
-        // Without the button the corner is the two stacked sprite buttons and nothing else, and
-        // the band starts right under them.
-        assertEquals(controlsCorner.height + 12, released.top)
+        // Without the button the corner is the settings sprite and nothing else — shorter than
+        // the player's things opposite, which is what the band then starts under.
+        assertEquals(playerCorner().height + 12, released.top)
+        assertTrue(playerCorner().height > controlsCorner.height)
         assertEquals(demo.bottom, released.bottom)
         assertTrue(released.height > demo.height)
     }
@@ -170,33 +171,54 @@ class MainScreenLayoutTest {
         val band = stageBandOf(
             width = 768,
             height = 280,
-            topStart = CornerBlock(width = 208, height = 142),
-            topEnd = CornerBlock(width = 274, height = 64),
-            bottomStart = CornerBlock(width = 136, height = 64),
-            bottomEnd = CornerBlock(width = 256, height = 80),
+            topStart = playerCorner(),
+            topEnd = CornerBlock(width = 243, height = 64),
+            bottomStart = moneyCorner,
+            bottomEnd = actionCorner,
             gap = 12
         )
 
-        assertEquals(220, band.left)
-        assertEquals(482, band.right)
+        assertEquals(235, band.left)
+        assertEquals(513, band.right)
         assertEquals(0, band.top)
         assertEquals(280, band.bottom)
-        assertEquals(262, band.width)
+        assertEquals(278, band.width)
         assertEquals(280, band.height)
     }
 
     /**
+     * The two buttons of the bottom start corner on a 360dp phone, where the row keeps 0.745 of its
+     * full size: two sprites of 60 with a gap of 6 between them, and no room kept under either for
+     * an underline neither can carry.
+     */
+    private val moneyCorner = CornerBlock(width = 125, height = 60)
+
+    /** The three buttons of the bottom end corner on the same phone, measured the same way. */
+    private val actionCorner = CornerBlock(width = 191, height = 60)
+
+    /**
      * The block with the player's things, as an upright phone measures it.
      *
-     * @param large whether the system text is turned up, which is what makes the chips and the card
-     *   taller.
+     * The width is set by the strip of three compact stat chips, which is the widest line of the
+     * block and the line the goal card under it is cut to: a chip is an icon of 16, a gap of 4,
+     * three glyphs of `labelSmall` and 8 of padding on either side, and three of them stand 8
+     * apart. The height is the balance chip, that strip and the goal card, with a gap between each.
+     *
+     * @param large whether the system text is turned up, which is what makes every one of them
+     *   wider and taller.
      * @return Size of the block, in dp.
      */
-    private fun playerCorner(large: Boolean = false): CornerBlock =
-        CornerBlock(width = 208, height = if (large) 180 else 142)
+    private fun playerCorner(large: Boolean = false): CornerBlock = CornerBlock(
+        width = if (large) 253 else 223,
+        height = if (large) 176 else 158
+    )
 
-    /** The two stacked sprite buttons of the top end corner, as an upright phone measures them. */
-    private val controlsCorner = CornerBlock(width = 64, height = 152)
+    /**
+     * The settings button of the top end corner, as an upright phone measures it: the sprite and
+     * nothing else, since a button belonging to no group of tabs keeps no room under itself for the
+     * underline that would mark one.
+     */
+    private val controlsCorner = CornerBlock(width = 64, height = 64)
 
     /**
      * @param screenWidth width of the screen, in dp.
@@ -205,18 +227,21 @@ class MainScreenLayoutTest {
      */
     private fun timeButtonTopOn(screenWidth: Float, large: Boolean = false): Int = timeButtonTopOf(
         width = (screenWidth - 16f * 2).toInt(),
-        timeButtonWidth = if (large) 230 else 188,
+        // Eleven glyphs of `bodyMedium` and 12 of padding on either side: the button is a compact
+        // one now, and narrower than it was when it carried the screen's largest label.
+        timeButtonWidth = if (large) 210 else 167,
         topStart = playerCorner(large),
         topEnd = controlsCorner,
         gap = 12
     )
 
     @Test
-    fun `the time button hangs under the locations button, at the end of the screen`() {
-        // 411dp and 360dp, with the system text as it comes: the button starts right under the two
-        // stacked above it, which is already below the player's things opposite.
-        assertEquals(controlsCorner.height + 12, timeButtonTopOn(screenWidth = 411f))
-        assertEquals(controlsCorner.height + 12, timeButtonTopOn(screenWidth = 360f))
+    fun `on a phone the time button hangs below the player's things, at the end of the screen`() {
+        // 411dp and 360dp, with the system text as it comes: the player's things now take the
+        // width of a strip of three stat chips, and the button no longer has room to stand beside
+        // them, so it steps down past them instead of following the settings button above it.
+        assertEquals(playerCorner().height + 12, timeButtonTopOn(screenWidth = 411f))
+        assertEquals(playerCorner().height + 12, timeButtonTopOn(screenWidth = 360f))
     }
 
     @Test
@@ -258,15 +283,15 @@ class MainScreenLayoutTest {
 
     @Test
     fun `a screen the corners alone fill leaves a band of no size rather than an upside-down one`() {
-        // A 320x380dp window with the text turned up: the corners want 234 of the 300 there are,
-        // the bottom row the last 76 of them, and the pet is left with nothing between them.
+        // A 320x380dp window with the text turned up: the corners want more of the 300 there are
+        // than the screen has, and the pet is left with nothing between them.
         val band = stageBandOf(
             width = 288,
             height = 300,
-            topStart = CornerBlock(width = 208, height = 180),
-            topEnd = CornerBlock(width = 130, height = 222),
-            bottomStart = CornerBlock(width = 103, height = 52),
-            bottomEnd = CornerBlock(width = 173, height = 64),
+            topStart = playerCorner(large = true),
+            topEnd = CornerBlock(width = 210, height = 236),
+            bottomStart = moneyCorner,
+            bottomEnd = actionCorner,
             gap = 12
         )
 

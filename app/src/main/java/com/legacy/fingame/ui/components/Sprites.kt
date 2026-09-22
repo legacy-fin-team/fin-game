@@ -54,16 +54,10 @@ object Sprites {
     /** Path to the coin icon sprite, used by [BalanceChip]. */
     const val COIN = "ui/coin.webp"
 
-    /**
-     * Path to the budget icon sprite. The file does not exist yet — until the art team delivers
-     * it, [SpriteButton] draws its `label` fallback instead of falling back to `error.webp`.
-     */
+    /** Path to the budget icon sprite. */
     const val BUDGET = "ui/budget.webp"
 
-    /**
-     * Path to the log icon sprite. The file does not exist yet — until the art team delivers it,
-     * [SpriteButton] draws its `label` fallback instead of falling back to `error.webp`.
-     */
+    /** Path to the log icon sprite. */
     const val LOG = "ui/log.webp"
 
     /**

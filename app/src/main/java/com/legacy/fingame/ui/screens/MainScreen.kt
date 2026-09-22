@@ -67,6 +67,7 @@ import com.legacy.fingame.ui.DemoContent
 import com.legacy.fingame.ui.components.BalanceChip
 import com.legacy.fingame.ui.components.GoalCard
 import com.legacy.fingame.ui.components.PillButton
+import com.legacy.fingame.ui.components.PillStyle
 import com.legacy.fingame.ui.components.Sprite
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
@@ -80,7 +81,6 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 private val ScreenPadding = 16.dp
-private val GoalCardWidth = 208.dp
 
 /**
  * Sizes of the action buttons on a phone; [com.legacy.fingame.ui.components.SpriteButton] enlarges
@@ -92,8 +92,11 @@ private val SecondaryActionSize = 64.dp
 /** Gap between two buttons standing next to each other. */
 private val ActionGap = 8.dp
 
-/** Gap between the chips and the goal card stacked in the corner with the player's things. */
-private val ChipGap = 10.dp
+/**
+ * Gap between the chips and the goal card stacked in the corner with the player's things. One step
+ * of the screen's grid, like every other gap on it, so the corner lines up with the rest.
+ */
+private val ChipGap = 8.dp
 
 /** Gap between the settings and time buttons. */
 private val ControlGap = 12.dp
@@ -196,13 +199,28 @@ internal val SceneOffsetSaver: Saver<SceneOffset, Any> = listSaver(
 private const val DemoGoalProgress = 0.4f
 
 /**
+ * Title the goal card carries until the goal itself is part of the game state.
+ * TODO: replace with the player's own goal once app logic exposes one.
+ */
+private const val DemoGoalTitle = "Текущая цель"
+
+/**
  * Stats shown beside the balance, in the order they are laid out: every stat the pet has, health
  * first, since that is the one the player looks for.
  */
 private val PlayerStats: List<StatKind> = StatKind.entries.sortedBy { it != StatKind.HEALTH }
 
-/** How many chips of the top start corner stand on one line while there is width for them. */
-private const val ChipsPerRow = 2
+/**
+ * How many stat chips stand on one line while there is width for them: all of them, so the pet's
+ * state reads as one strip instead of a ragged two-and-one block.
+ *
+ * A compact chip is `79.dp` on the narrowest screen the game is laid out for with the system text
+ * turned up as far as it goes (360 dp, font scale 1.3): a 16 dp icon, a 4 dp gap, three glyphs of
+ * `labelSmall` at 11 sp and 8 dp of padding on either side. Three of them with the [ActionGap]
+ * between come to 253 dp of the 328 the screen leaves — room to spare. A screen with less than that
+ * wraps the last chip onto a line of its own rather than squeezing them.
+ */
+private const val ChipsPerRow = 3
 
 /** Separator between the pet's name and the sub-location it is in, in the badge above the pet. */
 private const val StageTitleSeparator = " · "
@@ -377,10 +395,10 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
  * [MainScreenStage] from the sizes the blocks actually come out at rather than from guesses about
  * them — a screen that has to say more, because the text is set larger or the pet has a long name,
  * hands the pet less room instead of running one thing over another.
- * - Top-start: the balance chip and the pet's stats ([PlayerStats]), two chips to a line and
- *   wrapping onto a line of their own when the corner is too narrow for the pair, and the goal
- *   progress card under them. Every stat is a [StatChip] — an icon and a percentage — so the
- *   stats take a corner instead of half the screen.
+ * - Top-start: the balance chip, the pet's stats ([PlayerStats]) in one strip under it and the goal
+ *   progress card under them, the card exactly as wide as the chips above it ([PlayerCorner]).
+ *   Every stat is a compact [StatChip] — an icon and a percentage — so the stats take a corner
+ *   instead of half the screen.
  * - Top-end: the button for opening settings, and under it — in a demo build only — the button
  *   that skips [DemoMode.FAST_FORWARD_HOURS] hours of the pet's life. The two are stacked wherever
  *   there is height to stack them and laid along the top of a screen that has none, i.e. of a
@@ -462,10 +480,7 @@ fun MainScreen(
             // laid along the top, it has taken the button in beside the others already.
             timeButton = {
                 if (!controlsInRow && onFastForward != null) {
-                    PillButton(
-                        text = "Вперёд ${DemoMode.FAST_FORWARD_HOURS} ч",
-                        onClick = onFastForward
-                    )
+                    FastForwardButton(onClick = onFastForward)
                 }
             },
             bottomStart = {
@@ -611,6 +626,8 @@ private fun MainScreenStage(
             topStartPlaced.place(x = 0, y = 0)
             topEndPlaced.place(x = width - topEndPlaced.width, y = 0)
             if (timeButtonPlaced != null && timeButtonTop != null) {
+                // Pinned to the same end of the screen the settings button above it is, so however
+                // much wider the button comes out, the two share one edge down their right side.
                 timeButtonPlaced.place(x = width - timeButtonPlaced.width, y = timeButtonTop)
             }
             bottomStartPlaced.place(x = 0, y = height - bottomStartPlaced.height)
@@ -630,42 +647,63 @@ private fun MainScreenStage(
 private val Placeable.block: CornerBlock get() = CornerBlock(width = width, height = height)
 
 /**
- * The corner with what the player has: the money with the pet's health beside it, the rest of the
- * stats under them and the goal the player is saving towards.
+ * The corner with what the player has: the money, the pet's stats in one strip under it and the
+ * goal the player is saving towards.
+ *
+ * The money keeps a line to itself and the stats share the one below it ([ChipsPerRow]): the
+ * balance chip carries the money and the deposit and grows with both, so standing it next to a stat
+ * would leave the stat a sliver on a narrow screen — and the three stats in a row of their own read
+ * as one thing, the state of the pet, instead of a ragged two-and-one block.
+ *
+ * The goal card is drawn exactly as wide as the chips above it rather than at some width of its own:
+ * measured here instead of being told to fill what it is given, so the right edge of the card lands
+ * on the right edge of the widest chip row and the corner comes out as one block with one edge down
+ * its side. A [Column] cannot do that — `fillMaxWidth` there would take the whole width the corner
+ * was offered, most of it empty.
  *
  * @param state game state the chips and the card are filled from.
- * @param modifier modifier applied to the column.
+ * @param modifier modifier applied to the corner.
  */
 @Composable
 private fun PlayerCorner(
     state: GameUiState,
     modifier: Modifier = Modifier
 ) {
-    Column(
-        modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(ChipGap)
-    ) {
-        // The chips stand two to a line and wrap: the balance chip carries three numbers and grows
-        // with them and with the system text size, and a line that cannot wrap hands it the whole
-        // width and squeezes the stat beside it into a sliver. Wrapping, a chip that no longer
-        // fits simply starts the next line, and the money keeps the line to itself. Two to a line
-        // rather than as many as fit, so a corner with room for them all still reads as the money
-        // with the pet's health beside it and the rest underneath, instead of one long strip.
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(ActionGap),
-            verticalArrangement = Arrangement.spacedBy(ChipGap),
-            maxItemsInEachRow = ChipsPerRow
-        ) {
+    val chips: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(ChipGap)) {
             BalanceChip(balance = state.balance, depositAmount = state.depositAmount)
-            PlayerStats.forEach { stat ->
-                StatChip(stat = stat, stats = state.stats)
+            // The stats wrap rather than being squeezed: a screen too narrow for all of them side
+            // by side starts a new line instead of shrinking the chips below what they can say.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(ActionGap),
+                verticalArrangement = Arrangement.spacedBy(ChipGap),
+                maxItemsInEachRow = ChipsPerRow
+            ) {
+                PlayerStats.forEach { stat ->
+                    StatChip(stat = stat, stats = state.stats, compact = true)
+                }
             }
         }
+    }
+    val goal: @Composable () -> Unit = {
+        GoalCard(progress = DemoGoalProgress, title = DemoGoalTitle)
+    }
 
-        GoalCard(
-            progress = DemoGoalProgress,
-            modifier = Modifier.widthIn(max = GoalCardWidth)
+    Layout(contents = listOf(chips, goal), modifier = modifier) { measurables, constraints ->
+        val chipsPlaced = measurables[0].first().measure(constraints)
+        // The card is handed the width the chips came out at, and no choice about it.
+        val goalPlaced = measurables[1].first().measure(
+            constraints.copy(minWidth = chipsPlaced.width, maxWidth = chipsPlaced.width)
         )
+        val gapPx = ChipGap.roundToPx()
+
+        layout(
+            width = max(chipsPlaced.width, goalPlaced.width),
+            height = chipsPlaced.height + gapPx + goalPlaced.height
+        ) {
+            chipsPlaced.place(x = 0, y = 0)
+            goalPlaced.place(x = 0, y = chipsPlaced.height + gapPx)
+        }
     }
 }
 
@@ -698,15 +736,13 @@ private fun ControlsCorner(
             assetPath = Sprites.SETTINGS,
             contentDescription = "Открыть настройки",
             onClick = { onOpenScreen(Screen.OPTIONS) },
-            size = SecondaryActionSize
+            size = SecondaryActionSize,
+            showIndicator = false
         )
     }
     val fastForward: @Composable () -> Unit = {
         if (onFastForward != null) {
-            PillButton(
-                text = "Вперёд ${DemoMode.FAST_FORWARD_HOURS} ч",
-                onClick = onFastForward
-            )
+            FastForwardButton(onClick = onFastForward)
         }
     }
 
@@ -732,13 +768,42 @@ private fun ControlsCorner(
 }
 
 /**
+ * The demo build's button that skips [DemoMode.FAST_FORWARD_HOURS] hours of the pet's life.
+ *
+ * Both corners that can end up carrying it — stacked under the settings button, or beside it along
+ * the top of a screen held sideways (see [ControlsCorner]) — draw it from here, so it cannot come
+ * out one way upright and another way sideways.
+ *
+ * It is a [PillStyle.Tonal] button and a `compact` one: it is there to wind the demo forward, not to
+ * be the thing the player is meant to press, and the screen keeps its one filled button for the
+ * daily bonus under the pet.
+ *
+ * @param onClick called when the button is pressed.
+ * @param modifier modifier applied to the button.
+ */
+@Composable
+private fun FastForwardButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    PillButton(
+        text = "Вперёд ${DemoMode.FAST_FORWARD_HOURS} ч",
+        onClick = onClick,
+        modifier = modifier,
+        style = PillStyle.Tonal,
+        compact = true
+    )
+}
+
+/**
  * The corner with the buttons that lead to the money screens: the budget plan and the log.
  *
  * Same [Row] geometry as [PrimaryActions] — same gap, same button size — so the two bottom corners
  * read as one panel rather than two different kinds of controls: the five buttons come out the same
- * size and, both corners being pinned to the bottom of the screen, stand on one line. Neither sprite is in assets/ yet
- * ([Sprites.BUDGET], [Sprites.LOG]), so both buttons currently draw [SpriteButton]'s `label`
- * fallback instead of an icon; once the art is added, they become icons with no change here.
+ * size and, both corners being pinned to the bottom of the screen, stand on one line. All five are
+ * bare icons with no caption under them: [Sprites.BUDGET] and [Sprites.LOG] are in `assets/` now, so
+ * these two need no `label` fallback either and stopped being the odd pair of captioned plates in a
+ * row of pictures.
  *
  * @param size size of one button — the same [PrimaryActionSize] the action buttons take, so the
  *   five of them come out one size and stand on one line; shrunk together with everything else
@@ -764,20 +829,24 @@ private fun MoneyActions(
             contentDescription = "Открыть бюджет",
             onClick = { onOpenScreen(Screen.BUDGET) },
             size = size,
-            label = "Бюджет"
+            showIndicator = false
         )
         SpriteButton(
             assetPath = Sprites.LOG,
             contentDescription = "Открыть журнал",
             onClick = { onOpenScreen(Screen.LOG) },
             size = size,
-            label = "Журнал"
+            showIndicator = false
         )
     }
 }
 
 /**
  * The corner with the buttons that open the quests, the inventory and the shop.
+ *
+ * None of them belongs to a group one item of which is selected, so none keeps room under itself
+ * for the underline that would mark it — a button lifted off the row by room for a mark it can never
+ * carry stands out for a reason the player cannot see (see [SpriteButton]).
  *
  * @param size size of one button; shrunk together with everything else along the bottom of the
  *   screen by [bottomRowFit].
@@ -801,19 +870,22 @@ private fun PrimaryActions(
             assetPath = Sprites.QUESTS,
             contentDescription = "Открыть квесты",
             onClick = { onOpenScreen(Screen.QUESTS) },
-            size = size
+            size = size,
+            showIndicator = false
         )
         SpriteButton(
             assetPath = Sprites.INVENTORY,
             contentDescription = "Открыть инвентарь",
             onClick = { onOpenScreen(Screen.INVENTORY) },
-            size = size
+            size = size,
+            showIndicator = false
         )
         SpriteButton(
             assetPath = Sprites.SHOP,
             contentDescription = "Открыть магазин",
             onClick = { onOpenScreen(Screen.SHOP) },
-            size = size
+            size = size,
+            showIndicator = false
         )
     }
 }
@@ -862,9 +934,12 @@ private fun PetColumn(
 
         if (dailyBonusAvailable) {
             Spacer(modifier = Modifier.height(StageGap))
+            // The one filled button of the screen: taking the bonus is the thing the player is
+            // meant to press here, and everything else on the screen is quieter than it.
             PillButton(
                 text = "Бонус дня +${Economy.DAILY_BONUS}",
-                onClick = onClaimDailyBonus
+                onClick = onClaimDailyBonus,
+                style = PillStyle.Primary
             )
         }
     }
@@ -1130,7 +1205,7 @@ private fun StageBadge(
     ) {
         Text(
             text = title,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
