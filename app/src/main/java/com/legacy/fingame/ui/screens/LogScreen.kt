@@ -99,6 +99,11 @@ fun LogScreen(
 /**
  * Одна строка журнала: причина слева, изменение и время справа.
  *
+ * Изменение и время стоят друг над другом, а не в ряд с причиной: вместе они занимают столько же
+ * ширины, сколько самое длинное из них, а не сумму обоих, и причина получает всё остальное —
+ * достаточно, чтобы уместиться в две строки вместо того, чтобы обрываться многоточием («Вклад
+ * закрыт дос…») тем раньше, чем длиннее рядом сумма.
+ *
  * @param entry запись журнала.
  * @param oldestGameDay день самой старой хранимой записи, от которого считается номер дня.
  * @param modifier модификатор строки.
@@ -124,22 +129,24 @@ private fun MoneyLogRow(
             maxLines = ReasonMaxLines,
             overflow = TextOverflow.Ellipsis
         )
-        Text(
-            text = signedAmountText(entry.delta),
-            style = MaterialTheme.typography.labelLarge,
-            color = if (entry.delta < 0) {
-                MaterialTheme.colorScheme.error
-            } else {
-                GameColors.success
-            },
-            maxLines = 1
-        )
-        Text(
-            text = "Д${dayNumberOf(entry.gameDay, oldestGameDay)} · ${timeTextOf(entry.timestampMillis)}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1
-        )
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                text = signedAmountText(entry.delta),
+                style = MaterialTheme.typography.labelLarge,
+                color = if (entry.delta < 0) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    GameColors.success
+                },
+                maxLines = 1
+            )
+            Text(
+                text = "Д${dayNumberOf(entry.gameDay, oldestGameDay)} · ${timeTextOf(entry.timestampMillis)}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
     }
 }
 

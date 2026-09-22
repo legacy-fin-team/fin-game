@@ -3,12 +3,17 @@ package com.legacy.fingame.ui.screens
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /** Разделитель трёх балансов в шапке: одна иконка монеты и три числа через него. */
 private const val BalanceSeparator = " | "
 
-/** Как пишется время записи журнала: часы и минуты, без секунд и без даты. */
-private val TimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+/**
+ * Как пишется время записи журнала: часы и минуты, без секунд и без даты. Язык записан явно, а не
+ * взят у устройства: в самом времени слов нет, зато цифры в некоторых локалях пишутся не
+ * арабскими, и час записи оказался бы написан иначе, чем все остальные числа игры.
+ */
+private val TimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
 
 /**
  * Три счёта игрока одной строкой.
