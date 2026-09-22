@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
@@ -229,9 +230,13 @@ fun spriteButtonHeight(size: Dp, showIndicator: Boolean = true): Dp =
  *   exactly as tall as its sprite, since room kept under it for a mark it can never carry lifts it
  *   off the row it stands in for no reason anyone can see. Whatever this is, [spriteButtonHeight]
  *   has to be told the same thing.
- * @param label short caption to draw instead of the sprite while [assetPath] does not resolve to a
- *   real file yet — a button whose icon is still missing from `assets/` would otherwise render
+ * @param label emergency caption, drawn instead of the sprite while [assetPath] does not resolve to
+ *   a real file yet — a button whose icon is still missing from `assets/` would otherwise render
  *   [SpriteLoader]'s `error.webp` placeholder, which reads as a bug rather than as unfinished art.
+ *   It is a way of surviving missing art, never a kind of button: a captioned plate standing in a
+ *   row of bare icons reads as a different control altogether, which is exactly what the row of
+ *   money and action buttons on the main screen looked like until their icons were drawn. A button
+ *   whose sprite is in `assets/` is given no caption at all.
  *   The fallback keeps the same size, press feedback and underline as the sprite it stands in for,
  *   so once the file is added the button becomes an icon with no change at the call site. A caption
  *   too wide for the plate at its normal size is drawn smaller instead of being cropped by it, down
@@ -462,14 +467,14 @@ fun BalanceChip(
  *   are clamped before being used.
  * @param modifier modifier applied to the outer [Surface].
  * @param title label displayed above the progress bar, truncated with an ellipsis if it does not
- *   fit on one line.
+ *   fit on one line. Stated by the caller rather than defaulted here: a card that names the goal
+ *   out of its own pocket says the same thing whatever the player is actually saving for.
  */
 @Composable
 fun GoalCard(
     progress: Float,
     modifier: Modifier = Modifier,
-    // TODO: replace this placeholder with the player's real current goal title from app logic.
-    title: String = "текущая цель"
+    title: String
 ) {
     val clampedProgress = progress.coerceIn(0f, 1f)
     val percentText = "${(clampedProgress * 100).roundToInt()}%"
@@ -492,13 +497,21 @@ fun GoalCard(
                 )
                 Spacer(modifier = Modifier.padding(top = 8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Stripped down to a plain bar: the round cap, the gap before it and the dot
+                    // Material puts at the end are the one thing on this screen drawn in a
+                    // different language from the pixel art standing next to it.
                     LinearProgressIndicator(
                         progress = { clampedProgress },
                         modifier = Modifier
                             .weight(1f)
-                            .padding(vertical = 0.dp),
+                            .height(GoalProgressHeight),
                         color = GameColors.goalProgress,
-                        trackColor = GameColors.goalProgressTrack
+                        trackColor = GameColors.goalProgressTrack,
+                        strokeCap = StrokeCap.Butt,
+                        gapSize = 0.dp,
+                        // Material takes a drawing of the stop indicator, not a way of
+                        // saying there is none; drawing nothing is how it is left out.
+                        drawStopIndicator = {}
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
@@ -511,6 +524,12 @@ fun GoalCard(
         }
     }
 }
+
+/**
+ * How thick the goal card's progress bar is drawn. Material's own four points are a hairline next
+ * to the pixel art around them; eight read as a bar the child can see filling up.
+ */
+private val GoalProgressHeight = 8.dp
 
 /** Padding around the label of a [PillButton] on a phone; enlarged on tablets. */
 private val PillHorizontalPadding = 20.dp
@@ -1154,13 +1173,15 @@ private fun PreviewContent() {
                 onClick = {},
                 showIndicator = false
             )
-            // Sprites.BUDGET has no file in assets/ yet, so this shows SpriteButton's label fallback.
+            // What a button whose art is still missing looks like: no such file is in assets/, so
+            // this one draws the caption fallback instead of a picture. Every icon the game itself
+            // asks for is drawn by now, so the fallback has to be shown by a path made up for it.
             SpriteButton(
-                assetPath = Sprites.BUDGET,
-                contentDescription = "Открыть бюджет",
+                assetPath = "ui/not-drawn-yet.webp",
+                contentDescription = "Кнопка без картинки",
                 onClick = {},
                 showIndicator = false,
-                label = "Бюджет"
+                label = "Нет арта"
             )
         }
         GoalCard(title = "Велосипед", progress = 0.64f)
