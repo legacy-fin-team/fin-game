@@ -37,10 +37,4 @@ class LocalizationRegistry(context: Context, defaultLanguage: String = "ru-RU") 
         }
     }
 
-    /**
-     * Возвращает словарь со всеми загруженными строками.
-     */
-    fun getAllStrings(): Map<String, String> {
-        return translations
-    }
 }
