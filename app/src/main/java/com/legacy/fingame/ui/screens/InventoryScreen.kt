@@ -60,8 +60,8 @@ import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
 
-private val CloseButtonSize = 64.dp
-private val ItemCellMinSize = 140.dp
+private val CloseButtonSize = 40.dp
+private val InventoryCellMinSize = 140.dp
 private val PopupMaxWidth = 260.dp
 private val PopupCloseButtonSize = 44.dp
 
@@ -126,7 +126,7 @@ fun InventoryScreen(
         ) {
             Text(
                 text = "Инвентарь",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -136,7 +136,8 @@ fun InventoryScreen(
                 assetPath = Sprites.CLOSE,
                 contentDescription = "Закрыть инвентарь",
                 onClick = onClose,
-                size = CloseButtonSize
+                size = CloseButtonSize,
+                showIndicator = false
             )
         }
 
@@ -164,7 +165,7 @@ fun InventoryScreen(
                 )
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Adaptive(minSize = ItemCellMinSize),
+                    columns = GridCells.Adaptive(minSize = InventoryCellMinSize),
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -240,8 +241,10 @@ private fun InventoryCell(
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
+        // Надетое отличается цветом рамки, а не её толщиной: разницу между 1 и 2 dp на глаз не
+        // видно, а карточки от неё стоят на волосок по-разному.
         border = BorderStroke(
-            width = if (entry.worn) 2.dp else 1.dp,
+            width = 1.dp,
             color = if (entry.worn) MaterialTheme.colorScheme.primary else GameColors.cardStroke
         ),
         shadowElevation = 2.dp
@@ -303,14 +306,15 @@ private fun CountBadge(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(50),
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        border = BorderStroke(1.dp, GameColors.cardStroke)
+        // Без рамки: бордюр внутри бордюра карточки читается как лишняя линия, а заливки
+        // secondaryContainer поверх спрайта и так хватает, чтобы число отделилось от картинки.
+        color = MaterialTheme.colorScheme.secondaryContainer
     ) {
         Text(
             text = "×$count",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
 }
@@ -396,8 +400,9 @@ private fun ItemActionBlock(
                 .widthIn(max = PopupMaxWidth),
             shape = RoundedCornerShape(28.dp),
             color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, GameColors.cardStroke),
-            shadowElevation = 6.dp
+            // Окно всплывает над затемнением и отделено тенью; рамка поверх этого была бы третьим
+            // обведённым скруглением подряд — карточка, окно и кнопка в нём.
+            shadowElevation = 4.dp
         ) {
             Column(
                 modifier = Modifier.padding(20.dp),
@@ -431,6 +436,7 @@ private fun ItemActionBlock(
             contentDescription = "Закрыть окно предмета",
             onClick = onDismiss,
             size = PopupCloseButtonSize,
+            showIndicator = false,
             modifier = Modifier.align(Alignment.TopEnd)
         )
     }
@@ -578,6 +584,32 @@ private fun InventoryScreenEmptyPreview() {
 @Preview(name = "Inventory — Narrow 360dp", showBackground = true, widthDp = 360, heightDp = 640)
 @Composable
 private fun InventoryScreenNarrowPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            InventoryScreen(
+                entries = PreviewEntries,
+                stats = PreviewStats,
+                onUseItem = {},
+                onToggleWorn = {},
+                onClose = {}
+            )
+        }
+    }
+}
+
+/**
+ * Preview of the same narrow phone with the system text turned up as far as the game is laid out
+ * for: the screen title, the stats row and the item names all have to stay on their own lines.
+ */
+@Preview(
+    name = "Inventory — Narrow 360dp, large text",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 640,
+    fontScale = 1.3f
+)
+@Composable
+private fun InventoryScreenLargeTextPreview() {
     FinGameTheme(darkTheme = false) {
         Surface(color = MaterialTheme.colorScheme.background) {
             InventoryScreen(

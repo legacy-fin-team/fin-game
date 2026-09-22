@@ -170,7 +170,7 @@ private fun SpeciesStep(
     ) {
         Text(
             text = if (previousPetMissingFromData) "Выбери питомца заново" else "Выбери питомца",
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
         )
@@ -245,7 +245,7 @@ private fun VariantStep(
     ) {
         Text(
             text = animal.name,
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
         )
@@ -349,7 +349,7 @@ private fun NoAnimalsMessage(modifier: Modifier = Modifier) {
     ) {
         Text(
             text = "Выбирать не из кого",
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
             textAlign = TextAlign.Center
         )
