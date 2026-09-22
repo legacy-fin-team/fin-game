@@ -656,11 +656,7 @@ private fun PlayerCorner(
             verticalArrangement = Arrangement.spacedBy(ChipGap),
             maxItemsInEachRow = ChipsPerRow
         ) {
-            BalanceChip(
-                balance = state.balance,
-                savings = state.savings,
-                depositAmount = state.depositAmount
-            )
+            BalanceChip(balance = state.balance, depositAmount = state.depositAmount)
             PlayerStats.forEach { stat ->
                 StatChip(stat = stat, stats = state.stats)
             }

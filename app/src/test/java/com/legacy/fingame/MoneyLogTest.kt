@@ -56,7 +56,7 @@ class MoneyLogTest {
     @Test
     fun `adding a record leaves the log it was added to alone`() {
         val before = MoneyLog.EMPTY.plus(entry(MoneyLog.REASON_DAILY_BONUS, 50))
-        val after = before.plus(entry(MoneyLog.REASON_TO_SAVINGS, -100))
+        val after = before.plus(entry(MoneyLog.REASON_DEPOSIT_OPENED, -100))
 
         assertEquals(1, before.entries.size)
         assertEquals(2, after.entries.size)

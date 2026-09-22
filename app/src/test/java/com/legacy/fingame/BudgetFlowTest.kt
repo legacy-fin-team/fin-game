@@ -60,11 +60,14 @@ class BudgetFlowTest {
         val clock = FakeGameClock()
         val store = FakePlayerStateStore(
             PlayerState(
+                balance = 70,
                 budget = BudgetState(
-                    planned = 300,
+                    plannedMust = 200,
+                    plannedWant = 100,
                     plannedSavings = 100,
                     plannedDeposit = 0,
-                    spent = 180,
+                    spentMust = 230,
+                    spentWant = 40,
                     startDay = FakeGameClock.DEFAULT_DAY - 1
                 )
             )
@@ -75,9 +78,18 @@ class BudgetFlowTest {
 
         val state = vm.state.value
         assertNull(state.budget)
-        assertEquals(300, state.previousBudgetResult?.planned)
-        assertEquals(180, state.previousBudgetResult?.actual)
-        assertEquals(120, state.previousBudgetResult?.diff)
+        val result = state.previousBudgetResult
+        assertEquals(200, result?.plannedMust)
+        assertEquals(230, result?.actualMust)
+        assertEquals(100, result?.plannedWant)
+        assertEquals(40, result?.actualWant)
+        assertEquals(100, result?.plannedSavings)
+        // Остаток счёта на момент закрытия периода, до начисления бонуса.
+        assertEquals(70, result?.actualSavings)
+        // Обязательного потрачено сверх плана, необязательного — меньше плана.
+        assertEquals(-30, result?.mustDiff)
+        assertEquals(60, result?.wantDiff)
+        assertEquals(-30, result?.savingsDiff)
         assertTrue(state.planningOpen)
     }
 
@@ -130,10 +142,13 @@ class BudgetFlowTest {
         // и показывать на экране, кроме раскладки, нечего.
         val afterPeriod = fresh.copy(
             previousBudgetResult = BudgetResult(
-                planned = 100,
+                plannedMust = 100,
+                actualMust = 80,
+                plannedWant = 0,
+                actualWant = 0,
                 plannedSavings = 0,
-                plannedDeposit = 0,
-                actual = 80
+                actualSavings = 20,
+                plannedDeposit = 0
             )
         )
 
@@ -141,10 +156,12 @@ class BudgetFlowTest {
 
         val confirmed = fresh.copy(
             budget = BudgetState(
-                planned = 100,
+                plannedMust = 100,
+                plannedWant = 0,
                 plannedSavings = 0,
                 plannedDeposit = 0,
-                spent = 0,
+                spentMust = 0,
+                spentWant = 0,
                 startDay = FakeGameClock.DEFAULT_DAY
             ),
             planningOpen = false
@@ -160,8 +177,7 @@ class BudgetFlowTest {
         // никогда не открывалось и бюджет не подтверждался.
         val store = FakePlayerStateStore(
             PlayerState(
-                balance = 100,
-                savings = 40,
+                balance = 140,
                 planningOpen = false,
                 lastDailyBonusDay = clock.day
             )
@@ -171,15 +187,18 @@ class BudgetFlowTest {
         assertFalse(vm.state.value.dailyBonusAvailable)
         assertTrue(vm.state.value.canPlanBudget)
 
-        vm.updateBudgetDraft(BudgetDraft(savings = 90, depositAmount = 0, depositTermDays = 3))
+        vm.updateBudgetDraft(
+            BudgetDraft(mustSpend = 90, wantSpend = 0, depositAmount = 0, depositTermDays = 3)
+        )
 
-        assertEquals(90, vm.state.value.planningDraft.savings)
+        assertEquals(90, vm.state.value.planningDraft.mustSpend)
         assertTrue(vm.confirmBudget())
 
         val state = vm.state.value
-        assertEquals(90, state.savings)
-        assertEquals(50, state.balance)
-        assertEquals(50, state.budget?.planned)
+        // Планы трат денег не двигают: на счёте всё, что было.
+        assertEquals(140, state.balance)
+        assertEquals(90, state.budget?.plannedMust)
+        assertEquals(50, state.budget?.plannedSavings)
         assertFalse(state.planningOpen)
     }
 
@@ -192,12 +211,18 @@ class BudgetFlowTest {
         val total = vm.state.value.totalToPlan
 
         vm.updateBudgetDraft(
-            BudgetDraft(savings = total + 1_000, depositAmount = 50, depositTermDays = 99)
+            BudgetDraft(
+                mustSpend = total + 1_000,
+                wantSpend = 30,
+                depositAmount = 50,
+                depositTermDays = 99
+            )
         )
 
         val draft = vm.state.value.planningDraft
-        assertEquals(total, draft.savings)
-        assertEquals(0, draft.depositAmount)
+        assertEquals(50, draft.depositAmount)
+        assertEquals(total - 50, draft.mustSpend)
+        assertEquals(0, draft.wantSpend)
         assertEquals(Deposit.MAX_TERM_DAYS, draft.depositTermDays)
         // Закрыли экран, вернулись — раскладка на месте, в том числе после перезапуска.
         vm.closeScreen()
@@ -211,35 +236,33 @@ class BudgetFlowTest {
         val vm = testGameViewModel(store = store, clock = clock)
         vm.claimDailyBonus()
 
+        val total = vm.state.value.totalToPlan
         vm.updateBudgetDraft(
-            BudgetDraft(savings = 300, depositAmount = 400, depositTermDays = 5)
+            BudgetDraft(mustSpend = 300, wantSpend = 100, depositAmount = 400, depositTermDays = 5)
         )
         assertTrue(vm.confirmBudget())
 
         val state = vm.state.value
-        assertEquals(1_000 + Economy.DAILY_BONUS - 300 - 400, state.balance)
-        assertEquals(300, state.savings)
+        // Со счёта уехал ровно вклад: планы трат — это планы, а не переводы.
+        assertEquals(1_000 + Economy.DAILY_BONUS - 400, state.balance)
         assertEquals(400, state.deposit?.amount)
         assertEquals(5, state.deposit?.termDays)
         assertEquals(10, state.deposit?.ratePercent)
         assertEquals(FakeGameClock.DEFAULT_DAY, state.deposit?.openedDay)
-        assertEquals(state.balance, state.budget?.planned)
-        assertEquals(300, state.budget?.plannedSavings)
+        assertEquals(300, state.budget?.plannedMust)
+        assertEquals(100, state.budget?.plannedWant)
+        assertEquals(total - 300 - 100 - 400, state.budget?.plannedSavings)
         assertEquals(400, state.budget?.plannedDeposit)
         assertEquals(0, state.budget?.spent)
         assertFalse(state.planningOpen)
         assertNull(state.budgetDraft)
 
-        // Журнал: сначала перевод в сбережения, потом открытие вклада, новейшее первым.
+        // Журнал: открытие вклада поверх бонуса дня, новейшее первым.
         assertEquals(
-            listOf(
-                MoneyLog.REASON_DEPOSIT_OPENED,
-                MoneyLog.REASON_TO_SAVINGS,
-                MoneyLog.REASON_DAILY_BONUS
-            ),
+            listOf(MoneyLog.REASON_DEPOSIT_OPENED, MoneyLog.REASON_DAILY_BONUS),
             state.moneyLog.entries.map { it.reason }
         )
-        assertEquals(listOf(-400, -300, Economy.DAILY_BONUS), state.moneyLog.entries.map { it.delta })
+        assertEquals(listOf(-400, Economy.DAILY_BONUS), state.moneyLog.entries.map { it.delta })
     }
 
     @Test
@@ -248,9 +271,9 @@ class BudgetFlowTest {
         vm.claimDailyBonus()
         assertTrue(vm.confirmBudget())
 
-        val planned = vm.state.value.budget?.planned
+        val budget = vm.state.value.budget
         assertFalse(vm.confirmBudget())
-        assertEquals(planned, vm.state.value.budget?.planned)
+        assertEquals(budget, vm.state.value.budget)
     }
 
     @Test
@@ -264,7 +287,9 @@ class BudgetFlowTest {
         val vm = testGameViewModel(store = store)
         vm.claimDailyBonus()
 
-        vm.updateBudgetDraft(BudgetDraft(savings = 0, depositAmount = 300, depositTermDays = 3))
+        vm.updateBudgetDraft(
+            BudgetDraft(mustSpend = 0, wantSpend = 0, depositAmount = 300, depositTermDays = 3)
+        )
         assertTrue(vm.confirmBudget())
 
         assertEquals(200, vm.state.value.deposit?.amount)
@@ -277,20 +302,22 @@ class BudgetFlowTest {
         val vm = testGameViewModel()
         vm.claimDailyBonus()
         assertTrue(vm.confirmBudget())
-        val savings = vm.state.value.savings
+        val budget = vm.state.value.budget
 
-        vm.updateBudgetDraft(BudgetDraft(savings = 999, depositAmount = 0, depositTermDays = 2))
+        vm.updateBudgetDraft(
+            BudgetDraft(mustSpend = 999, wantSpend = 999, depositAmount = 0, depositTermDays = 2)
+        )
 
         assertNull(vm.state.value.budgetDraft)
-        assertEquals(savings, vm.state.value.savings)
+        assertEquals(budget, vm.state.value.budget)
     }
 
     @Test
-    fun `a purchase is written into the log and counted as spending`() {
+    fun `a purchase is written into the log and counted against its own category`() {
         val vm = testGameViewModel()
         vm.claimDailyBonus()
+        val balance = vm.state.value.balance
         assertTrue(vm.confirmBudget())
-        val planned = vm.state.value.budget?.planned ?: 0
 
         vm.increaseQty(TestItems.APPLE.id)
         vm.increaseQty(TestItems.APPLE.id)
@@ -298,8 +325,9 @@ class BudgetFlowTest {
 
         val state = vm.state.value
         val spent = TestItems.APPLE.price * 2
-        assertEquals(spent, state.budget?.spent)
-        assertEquals(planned - spent, state.balance)
+        assertEquals(spent, state.budget?.spentMust)
+        assertEquals(0, state.budget?.spentWant)
+        assertEquals(balance - spent, state.balance)
         assertEquals(
             MoneyLog.purchaseReason(TestItems.APPLE.name, 2),
             state.moneyLog.entries.first().reason
@@ -308,41 +336,67 @@ class BudgetFlowTest {
     }
 
     @Test
-    fun `moving money after the budget was confirmed leaves the plan alone`() {
+    fun `a decoration is counted as spending the pet could have done without`() {
         val store = FakePlayerStateStore(PlayerState(balance = 500))
         val vm = testGameViewModel(store = store)
         vm.claimDailyBonus()
-        vm.updateBudgetDraft(BudgetDraft(savings = 200, depositAmount = 0, depositTermDays = 2))
         assertTrue(vm.confirmBudget())
-        val planned = vm.state.value.budget?.planned ?: 0
 
-        assertTrue(vm.transferToSavings(100))
-        assertEquals(300, vm.state.value.savings)
-        assertEquals(planned - 100, vm.state.value.balance)
-        assertEquals(planned, vm.state.value.budget?.planned)
-        assertEquals(0, vm.state.value.budget?.spent)
-        assertEquals(MoneyLog.REASON_TO_SAVINGS, vm.state.value.moneyLog.entries.first().reason)
+        vm.increaseQty(TestItems.LAMP.id)
+        assertTrue(vm.buyCart())
 
-        assertTrue(vm.transferFromSavings(250))
-        assertEquals(50, vm.state.value.savings)
-        assertEquals(planned + 150, vm.state.value.balance)
-        assertEquals(MoneyLog.REASON_FROM_SAVINGS, vm.state.value.moneyLog.entries.first().reason)
+        assertEquals(0, vm.state.value.budget?.spentMust)
+        assertEquals(TestItems.LAMP.price, vm.state.value.budget?.spentWant)
     }
 
     @Test
-    fun `a transfer of nothing, or of more than there is, moves nothing`() {
-        val vm = testGameViewModel()
+    fun `a mixed cart lands in both categories at once`() {
+        val store = FakePlayerStateStore(PlayerState(balance = 500))
+        val vm = testGameViewModel(store = store)
         vm.claimDailyBonus()
         assertTrue(vm.confirmBudget())
-        val balance = vm.state.value.balance
 
-        assertFalse(vm.transferToSavings(0))
-        assertFalse(vm.transferToSavings(-10))
-        assertFalse(vm.transferToSavings(balance + 1))
-        assertFalse(vm.transferFromSavings(1))
+        vm.increaseQty(TestItems.APPLE.id)
+        vm.increaseQty(TestItems.BALL.id)
+        vm.increaseQty(TestItems.HAT.id)
+        assertTrue(vm.buyCart())
 
-        assertEquals(balance, vm.state.value.balance)
-        assertEquals(0, vm.state.value.savings)
+        val budget = vm.state.value.budget
+        assertEquals(TestItems.APPLE.price + TestItems.BALL.price, budget?.spentMust)
+        assertEquals(TestItems.HAT.price, budget?.spentWant)
+        assertEquals(
+            TestItems.APPLE.price + TestItems.BALL.price + TestItems.HAT.price,
+            budget?.spent
+        )
+    }
+
+    @Test
+    fun `a deposit closed early during the planning can be opened again right away`() {
+        val store = FakePlayerStateStore(
+            PlayerState(
+                balance = 100,
+                deposit = Deposit.openedOn(
+                    amount = 300,
+                    termDays = 7,
+                    day = FakeGameClock.DEFAULT_DAY
+                )
+            )
+        )
+        val vm = testGameViewModel(store = store)
+        vm.claimDailyBonus()
+        assertTrue(vm.state.value.planningOpen)
+
+        assertTrue(vm.closeDepositEarly())
+
+        assertNull(vm.state.value.deposit)
+        assertTrue(vm.state.value.planningOpen)
+        assertEquals(100 + Economy.DAILY_BONUS + 300, vm.state.value.totalToPlan)
+
+        vm.updateBudgetDraft(
+            BudgetDraft(mustSpend = 0, wantSpend = 0, depositAmount = 250, depositTermDays = 4)
+        )
+
+        assertEquals(250, vm.state.value.planningDraft.depositAmount)
     }
 
     @Test
@@ -515,5 +569,30 @@ class BudgetFlowTest {
         val loggedSpent = -state.moneyLog.entries.take(2).sumOf { it.delta }
         assertEquals(balanceBefore - state.balance, loggedSpent)
         assertEquals(loggedSpent, state.budget?.spent)
+    }
+
+    @Test
+    fun `an overspent category comes out of the report with a minus`() {
+        val store = FakePlayerStateStore(PlayerState(balance = 500))
+        val clock = FakeGameClock()
+        val vm = testGameViewModel(store = store, clock = clock)
+        vm.claimDailyBonus()
+        vm.updateBudgetDraft(
+            BudgetDraft(mustSpend = 10, wantSpend = 200, depositAmount = 0, depositTermDays = 2)
+        )
+        assertTrue(vm.confirmBudget())
+
+        vm.increaseQty(TestItems.BALL.id)
+        assertTrue(vm.buyCart())
+
+        clock.day += 1
+        assertTrue(vm.claimDailyBonus())
+
+        val result = vm.state.value.previousBudgetResult
+        assertEquals(10, result?.plannedMust)
+        assertEquals(TestItems.BALL.price, result?.actualMust)
+        assertEquals(10 - TestItems.BALL.price, result?.mustDiff)
+        assertEquals(200, result?.plannedWant)
+        assertEquals(0, result?.actualWant)
     }
 }

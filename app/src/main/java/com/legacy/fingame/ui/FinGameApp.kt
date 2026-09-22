@@ -182,8 +182,6 @@ fun FinGameApp(
                         state = state,
                         onDraftChange = vm::updateBudgetDraft,
                         onConfirmBudget = { vm.confirmBudget() },
-                        onTransferToSavings = { amount -> vm.transferToSavings(amount) },
-                        onTransferFromSavings = { amount -> vm.transferFromSavings(amount) },
                         onCloseDepositEarly = { vm.closeDepositEarly() },
                         onClaimDailyBonus = { vm.claimDailyBonus() },
                         onOpenLog = { vm.openScreen(Screen.LOG) },

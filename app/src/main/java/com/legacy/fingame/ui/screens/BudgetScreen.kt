@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -25,11 +26,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -45,6 +44,7 @@ import com.legacy.fingame.game.economy.Deposit
 import com.legacy.fingame.game.economy.Economy
 import com.legacy.fingame.game.economy.MoneyEntry
 import com.legacy.fingame.game.economy.MoneyLog
+import com.legacy.fingame.game.economy.SpendKind
 import com.legacy.fingame.ui.components.BalanceChip
 import com.legacy.fingame.ui.components.GameDialog
 import com.legacy.fingame.ui.components.GameDialogBlock
@@ -63,7 +63,7 @@ private val ShortScreenCloseButtonSize = 44.dp
 private const val AmountMaxDigits = 9
 
 /** Окно, открытое поверх экрана бюджета. Чисто экранное: игре до него дела нет. */
-private enum class BudgetWindow { NONE, CONFIRM_BUDGET, TRANSFER_TO_SAVINGS, TRANSFER_FROM_SAVINGS, CLOSE_DEPOSIT }
+private enum class BudgetWindow { NONE, CONFIRM_BUDGET, CLOSE_DEPOSIT }
 
 /**
  * Экран бюджета: всё, что игрок делает со своими деньгами между покупками.
@@ -71,7 +71,7 @@ private enum class BudgetWindow { NONE, CONFIRM_BUDGET, TRANSFER_TO_SAVINGS, TRA
  * Сверху — итог прошлого периода, чтобы игрок увидел, чем кончился его прошлый план, и только
  * потом решал, как жить дальше. Ниже — ровно один блок про «сейчас»: пока бонус дня не получен,
  * это кнопка бонуса (бонус и открывает новый период, так что планировать до него нечего); после
- * бонуса — раскладка денег; после подтверждения — текущий период с переводами между счетами.
+ * бонуса — раскладка денег; после подтверждения — как идёт текущий период.
  * Действующий вклад показывается своей карточкой в любом из этих состояний: он живёт по своему
  * сроку и от периода не зависит.
  *
@@ -81,8 +81,6 @@ private enum class BudgetWindow { NONE, CONFIRM_BUDGET, TRANSFER_TO_SAVINGS, TRA
  * @param state состояние игры: счета, бюджет, вклад и раскладка, которую игрок набирает.
  * @param onDraftChange вызывается с изменённой раскладкой при каждой правке полей.
  * @param onConfirmBudget вызывается, когда игрок подтвердил бюджет в окне подтверждения.
- * @param onTransferToSavings вызывается с суммой, которую игрок перекладывает в сбережения.
- * @param onTransferFromSavings вызывается с суммой, которую игрок забирает из сбережений.
  * @param onCloseDepositEarly вызывается, когда игрок подтвердил досрочное закрытие вклада.
  * @param onClaimDailyBonus вызывается по кнопке бонуса дня.
  * @param onOpenLog вызывается, когда игрок открывает журнал.
@@ -94,34 +92,16 @@ fun BudgetScreen(
     state: GameUiState,
     onDraftChange: (BudgetDraft) -> Unit,
     onConfirmBudget: () -> Unit,
-    onTransferToSavings: (Int) -> Unit,
-    onTransferFromSavings: (Int) -> Unit,
     onCloseDepositEarly: () -> Unit,
     onClaimDailyBonus: () -> Unit,
     onOpenLog: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Какое окно игрок открыл поверх экрана. Чисто экранное состояние: набранная, но не
-    // подтверждённая сумма перевода игре ничего не говорит, пока её не подтвердили.
+    // Какое окно игрок открыл поверх экрана. Чисто экранное состояние: игре до него дела нет,
+    // пока игрок не подтвердил то, о чём окно спрашивает.
     var window by remember { mutableStateOf(BudgetWindow.NONE) }
-    // Набранная сумма перевода переживает поворот экрана: перенабирать её из-за того, что телефон
-    // повернули, игрок не должен.
-    var transferText by rememberSaveable { mutableStateOf("") }
-    val transferAmount = transferText.toIntOrNull() ?: 0
-    // Переложить можно только то, что есть на счёте, с которого берут: кнопка, которая ничего не
-    // сделает, гаснет, а не отвечает молча закрывшимся окном.
-    val canTransferToSavings = transferAmount in 1..state.balance
-    val canTransferFromSavings = transferAmount in 1..state.savings
     val isShortScreen = GameDimens.isShortScreen
-    val focusManager = LocalFocusManager.current
-    // Переведённая сумма из поля убирается, иначе она стоит там как приглашение перевести столько
-    // же ещё раз. Вместе с ней снимается и фокус: поле, оставшееся сфокусированным, поднимает
-    // клавиатуру заново, едва окно перевода закрылось.
-    val clearTransfer = {
-        transferText = ""
-        focusManager.clearFocus()
-    }
 
     // Бонус дня открывает новый период, поэтому, пока он не получен, раскладывать нечего: экран
     // показывает кнопку бонуса вместо раскладки, а не оба блока сразу.
@@ -148,11 +128,7 @@ fun BudgetScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                BalanceChip(
-                    balance = state.balance,
-                    savings = state.savings,
-                    depositAmount = state.depositAmount
-                )
+                BalanceChip(balance = state.balance, depositAmount = state.depositAmount)
                 Text(
                     text = "Бюджет",
                     modifier = Modifier.weight(1f),
@@ -172,11 +148,7 @@ fun BudgetScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Top
             ) {
-                BalanceChip(
-                    balance = state.balance,
-                    savings = state.savings,
-                    depositAmount = state.depositAmount
-                )
+                BalanceChip(balance = state.balance, depositAmount = state.depositAmount)
                 Spacer(modifier = Modifier.weight(1f))
                 SpriteButton(
                     assetPath = Sprites.CLOSE,
@@ -207,15 +179,8 @@ fun BudgetScreen(
         state.budget?.let { budget ->
             RunningBudgetCard(
                 budget = budget,
-                left = state.budgetLeft,
-                transferText = transferText,
-                canTransferToSavings = canTransferToSavings,
-                canTransferFromSavings = canTransferFromSavings,
-                onTransferTextChange = { typed ->
-                    transferText = typed.filter { it.isDigit() }.take(AmountMaxDigits)
-                },
-                onTransferToSavings = { window = BudgetWindow.TRANSFER_TO_SAVINGS },
-                onTransferFromSavings = { window = BudgetWindow.TRANSFER_FROM_SAVINGS }
+                balance = state.balance,
+                depositAmount = state.depositAmount
             )
         }
 
@@ -233,18 +198,15 @@ fun BudgetScreen(
     }
 
     // Окно, у которого пропала причина, закрывается само, а не стоит и молчит: закрывать нечего,
-    // когда вклада уже нет, подтверждать нечего, когда раскладка уже подтверждена, и перекладывать
-    // нечего, когда набранной суммы на счёте больше нет.
+    // когда вклада уже нет, и подтверждать нечего, когда раскладка уже подтверждена.
     val shownWindow = when (window) {
         BudgetWindow.NONE -> BudgetWindow.NONE
         BudgetWindow.CONFIRM_BUDGET -> window.takeIf { showPlanning } ?: BudgetWindow.NONE
-        BudgetWindow.TRANSFER_TO_SAVINGS -> window.takeIf { canTransferToSavings } ?: BudgetWindow.NONE
-        BudgetWindow.TRANSFER_FROM_SAVINGS -> window.takeIf { canTransferFromSavings } ?: BudgetWindow.NONE
         BudgetWindow.CLOSE_DEPOSIT -> window.takeIf { state.deposit != null } ?: BudgetWindow.NONE
     }
 
-    // Схлопнувшееся окно и забывается: иначе оно вернулось бы само, стоило причине появиться снова
-    // — например, стоило бы игроку снова набрать ту же сумму.
+    // Схлопнувшееся окно и забывается: иначе оно вернулось бы само, стоило причине появиться
+    // снова.
     LaunchedEffect(shownWindow) {
         if (window != shownWindow) window = shownWindow
     }
@@ -257,26 +219,6 @@ fun BudgetScreen(
             total = state.totalToPlan,
             onConfirm = {
                 onConfirmBudget()
-                window = BudgetWindow.NONE
-            },
-            onDismiss = { window = BudgetWindow.NONE }
-        )
-
-        BudgetWindow.TRANSFER_TO_SAVINGS -> TransferDialog(
-            question = "Переложить $transferAmount в сбережения?",
-            onConfirm = {
-                onTransferToSavings(transferAmount)
-                clearTransfer()
-                window = BudgetWindow.NONE
-            },
-            onDismiss = { window = BudgetWindow.NONE }
-        )
-
-        BudgetWindow.TRANSFER_FROM_SAVINGS -> TransferDialog(
-            question = "Вернуть $transferAmount из сбережений?",
-            onConfirm = {
-                onTransferFromSavings(transferAmount)
-                clearTransfer()
                 window = BudgetWindow.NONE
             },
             onDismiss = { window = BudgetWindow.NONE }
@@ -302,25 +244,64 @@ fun BudgetScreen(
 @Composable
 private fun PreviousBudgetCard(result: BudgetResult, modifier: Modifier = Modifier) {
     BudgetCard(title = "Прошлый период", modifier = modifier) {
-        AmountRow(label = "План", value = result.planned.toString())
-        AmountRow(label = "Отложено", value = result.plannedSavings.toString())
-        if (result.plannedDeposit > 0) {
-            AmountRow(label = "На вклад", value = result.plannedDeposit.toString())
-        }
-        AmountRow(label = "Факт", value = result.actual.toString())
-        AmountRow(
-            label = "Разница",
-            value = signedAmountText(result.diff),
-            valueColor = when {
-                result.diff > 0 -> GameColors.success
-                result.diff < 0 -> MaterialTheme.colorScheme.error
-                else -> MaterialTheme.colorScheme.onSurface
-            }
+        ResultRow(
+            title = SpendKind.MUST.title,
+            planned = result.plannedMust,
+            actual = result.actualMust,
+            diff = result.mustDiff
         )
+        ResultRow(
+            title = SpendKind.WANT.title,
+            planned = result.plannedWant,
+            actual = result.actualWant,
+            diff = result.wantDiff
+        )
+        ResultRow(
+            title = "Сохранить",
+            planned = result.plannedSavings,
+            actual = result.actualSavings,
+            diff = result.savingsDiff
+        )
+        if (result.plannedDeposit > 0) {
+            AmountRow(label = "На вкладе", value = result.plannedDeposit.toString())
+        }
         Text(
-            text = "Плюс — не потратили всё, минус — вышли за бюджет",
+            text = "Плюс — не потратили всё, минус — вышли за план",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+/**
+ * Строка отчёта: заголовок категории и под ним план, факт и разница.
+ *
+ * @param title как называется категория.
+ * @param planned сколько игрок собирался на неё потратить — или сохранить.
+ * @param actual сколько вышло на самом деле.
+ * @param diff разница со знаком: плюс — в пользу игрока.
+ * @param modifier модификатор строки.
+ */
+@Composable
+private fun ResultRow(
+    title: String,
+    planned: Int,
+    actual: Int,
+    diff: Int,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(text = title, style = MaterialTheme.typography.titleSmall)
+        AmountRow(label = "План", value = planned.toString())
+        AmountRow(label = "Факт", value = actual.toString())
+        AmountRow(
+            label = "Разница",
+            value = signedAmountText(diff),
+            valueColor = when {
+                diff > 0 -> GameColors.success
+                diff < 0 -> MaterialTheme.colorScheme.error
+                else -> MaterialTheme.colorScheme.onSurface
+            }
         )
     }
 }
@@ -345,13 +326,14 @@ private fun DailyBonusCard(onClaimDailyBonus: () -> Unit, modifier: Modifier = M
 }
 
 /**
- * Блок раскладки: игрок делит всё, что у него есть, между тратами, сбережениями и вкладом.
+ * Блок раскладки: игрок делит всё, что у него есть, между обязательными тратами, необязательными
+ * и вкладом.
  *
- * Текущие деньги — не поле, а остаток: что не забрали сбережения и вклад, то и остаётся на траты.
- * Поэтому раскладка, в которой суммы не сходятся, не набирается в принципе, и экрану не нужно
- * ругаться на игрока.
+ * План сбережений — не поле, а остаток: что не забрали планы трат и вклад, то игрок и собирается
+ * сохранить. Поэтому раскладка, в которой суммы не сходятся, не набирается в принципе, и экрану
+ * не нужно ругаться на игрока.
  *
- * @param total сколько всего раскладывается: текущие плюс сбережения.
+ * @param total сколько всего раскладывается: всё, что на текущем счёте.
  * @param draft раскладка, которую игрок уже набрал.
  * @param depositAllowed можно ли открыть новый вклад — вклад бывает только один одновременно.
  * @param onDraftChange вызывается с изменённой раскладкой при каждой правке.
@@ -369,14 +351,9 @@ private fun PlanningCard(
     modifier: Modifier = Modifier
 ) {
     BudgetCard(title = "Распределите $total", modifier = modifier) {
-        AmountField(
-            label = "Сбережения",
-            value = draft.savings,
-            onValueChange = { onDraftChange(draft.copy(savings = it)) }
-        )
         if (depositAllowed) {
             AmountField(
-                label = "Новый вклад",
+                label = "На вклад",
                 value = draft.depositAmount,
                 onValueChange = { onDraftChange(draft.copy(depositAmount = it)) }
             )
@@ -387,8 +364,10 @@ private fun PlanningCard(
                 )
                 val rate = Deposit.rateOf(draft.depositTermDays)
                 AmountRow(
-                    label = "Ставка $rate%",
-                    value = "вернётся ${draft.depositAmount + Deposit.interestOf(draft.depositAmount, rate)}"
+                    label = "Ставка",
+                    value = "$rate% · вернётся ${
+                        draft.depositAmount + Deposit.interestOf(draft.depositAmount, rate)
+                    }"
                 )
             }
         } else {
@@ -398,7 +377,17 @@ private fun PlanningCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        AmountRow(label = "Текущие", value = Budget.currentOf(draft, total).toString())
+        AmountField(
+            label = SpendKind.MUST.title,
+            value = draft.mustSpend,
+            onValueChange = { onDraftChange(draft.copy(mustSpend = it)) }
+        )
+        AmountField(
+            label = SpendKind.WANT.title,
+            value = draft.wantSpend,
+            onValueChange = { onDraftChange(draft.copy(wantSpend = it)) }
+        )
+        AmountRow(label = "Останется", value = Budget.savingsOf(draft, total).toString())
         PillButton(text = "Подтвердить бюджет", onClick = onConfirm)
     }
 }
@@ -490,14 +479,15 @@ private fun ConfirmBudgetDialog(
             closeDescription = "Отменить подтверждение",
             onDismiss = onDismiss
         ) {
-            AmountRow(label = "Текущие", value = Budget.currentOf(draft, total).toString())
-            AmountRow(label = "Сбережения", value = draft.savings.toString())
+            AmountRow(label = SpendKind.MUST.title, value = draft.mustSpend.toString())
+            AmountRow(label = SpendKind.WANT.title, value = draft.wantSpend.toString())
             if (draft.depositAmount > 0) {
                 AmountRow(
-                    label = "Вклад на ${draft.depositTermDays} дн",
+                    label = "На вклад ${draft.depositTermDays} дн",
                     value = draft.depositAmount.toString()
                 )
             }
+            AmountRow(label = "Останется", value = Budget.savingsOf(draft, total).toString())
             Text(
                 text = "После подтверждения бюджет не изменить.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -510,68 +500,49 @@ private fun ConfirmBudgetDialog(
 }
 
 /**
- * Карточка текущего периода: подтверждённый план, потраченное и остаток, а под ними — переводы
- * между текущим счётом и сбережениями.
- *
- * Переводы плана не меняют: подтверждённый бюджет не переписывается, игрок просто распоряжается
- * своими деньгами иначе — о чём его и предупреждает окно перед переводом.
+ * Карточка текущего периода: сколько из плана по каждой категории уже потрачено и что при этом
+ * лежит на счетах.
  *
  * @param budget подтверждённый бюджет периода.
- * @param left сколько из запланированного ещё не потрачено.
- * @param transferText сумма перевода так, как её набрал игрок.
- * @param canTransferToSavings хватает ли текущих денег на набранную сумму.
- * @param canTransferFromSavings хватает ли сбережений на набранную сумму.
- * @param onTransferTextChange вызывается с тем, что игрок набрал в поле.
- * @param onTransferToSavings вызывается по кнопке «В сбережения».
- * @param onTransferFromSavings вызывается по кнопке «Из сбережений».
+ * @param balance текущие деньги игрока.
+ * @param depositAmount тело открытого вклада; ноль, когда вклада нет.
  * @param modifier модификатор карточки.
  */
 @Composable
 private fun RunningBudgetCard(
     budget: BudgetState,
-    left: Int,
-    transferText: String,
-    canTransferToSavings: Boolean,
-    canTransferFromSavings: Boolean,
-    onTransferTextChange: (String) -> Unit,
-    onTransferToSavings: () -> Unit,
-    onTransferFromSavings: () -> Unit,
+    balance: Int,
+    depositAmount: Int,
     modifier: Modifier = Modifier
 ) {
     BudgetCard(title = "Текущий период", modifier = modifier) {
-        AmountRow(label = "План", value = budget.planned.toString())
-        AmountRow(label = "Потрачено", value = budget.spent.toString())
         AmountRow(
-            label = "Осталось",
-            value = left.toString(),
-            valueColor = if (left < 0) MaterialTheme.colorScheme.error else GameColors.success
+            label = SpendKind.MUST.title,
+            value = "${budget.spentMust} из ${budget.plannedMust}",
+            valueColor = if (budget.mustLeft < 0) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            }
         )
-        OutlinedTextField(
-            value = transferText,
-            onValueChange = onTransferTextChange,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(text = "Переложить") },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+        AmountRow(
+            label = SpendKind.WANT.title,
+            value = "${budget.spentWant} из ${budget.plannedWant}",
+            valueColor = if (budget.wantLeft < 0) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            }
         )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            PillButton(
-                text = "В сбережения",
-                onClick = onTransferToSavings,
-                modifier = Modifier.weight(1f),
-                enabled = canTransferToSavings,
-                compact = true
-            )
-            PillButton(
-                text = "Из сбережений",
-                onClick = onTransferFromSavings,
-                modifier = Modifier.weight(1f),
-                enabled = canTransferFromSavings,
-                compact = true
-            )
+        AmountRow(
+            label = "Осталось потратить",
+            value = (budget.plannedSpend - budget.spent).toString()
+        )
+        AmountRow(label = "Планировали сохранить", value = budget.plannedSavings.toString())
+        HorizontalDivider(color = GameColors.cardStroke)
+        AmountRow(label = "Сейчас на счету", value = balance.toString())
+        if (depositAmount > 0) {
+            AmountRow(label = "Во вкладе", value = depositAmount.toString())
         }
     }
 }
@@ -606,34 +577,6 @@ private fun DepositCard(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         PillButton(text = "Закрыть досрочно", onClick = onCloseEarly)
-    }
-}
-
-/**
- * Окно перед переводом между счетами: план периода от перевода не меняется, и игрок должен это
- * знать до того, как деньги уедут, а не после.
- *
- * @param question что именно и куда перекладывается, вопросом: сумма и направление, чтобы окно
- *   спрашивало про конкретный перевод, а не про переводы вообще.
- * @param onConfirm вызывается, когда игрок всё равно решил переложить.
- * @param onDismiss вызывается, когда перевод отменён.
- */
-@Composable
-private fun TransferDialog(question: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    GameDialog(onDismiss = onDismiss) {
-        GameDialogBlock(
-            title = "Это не по бюджету",
-            closeDescription = "Отменить перевод",
-            onDismiss = onDismiss
-        ) {
-            Text(
-                text = "$question Это не соответствует бюджету, план не изменится.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-            PillButton(text = "Всё равно перевести", onClick = onConfirm)
-        }
     }
 }
 
@@ -721,31 +664,37 @@ private val PreviewLog = MoneyLog(
     )
 )
 
+/** Отчёт, в котором обязательного потрачено сверх плана, а необязательного — меньше плана. */
+private val PreviewResult = BudgetResult(
+    plannedMust = 160,
+    actualMust = 195,
+    plannedWant = 60,
+    actualWant = 20,
+    plannedSavings = 40,
+    actualSavings = 45,
+    plannedDeposit = 0
+)
+
 /** Состояние с итогом прошлого периода, подтверждённым бюджетом и действующим вкладом. */
 private val PreviewRunningState = GameUiState(
     balance = 180,
-    savings = 120,
     deposit = Deposit(amount = 200, termDays = 5, ratePercent = 10, openedDay = 19_002L),
     budget = BudgetState(
-        planned = 220,
-        plannedSavings = 120,
+        plannedMust = 140,
+        plannedWant = 80,
+        plannedSavings = 60,
         plannedDeposit = 200,
-        spent = 40,
+        spentMust = 90,
+        spentWant = 30,
         startDay = 19_002L
     ),
-    previousBudgetResult = BudgetResult(
-        planned = 260,
-        plannedSavings = 80,
-        plannedDeposit = 0,
-        actual = 215
-    ),
+    previousBudgetResult = PreviewResult,
     moneyLog = PreviewLog
 )
 
 /** Состояние игрока, который ещё не забрал бонус дня: планировать ему пока нечего. */
 private val PreviewBonusState = GameUiState(
     balance = 90,
-    savings = 40,
     dailyBonusAvailable = true,
     moneyLog = PreviewLog
 )
@@ -761,8 +710,6 @@ private fun BudgetScreenPreview(state: GameUiState) {
         state = state,
         onDraftChange = {},
         onConfirmBudget = {},
-        onTransferToSavings = {},
-        onTransferFromSavings = {},
         onCloseDepositEarly = {},
         onClaimDailyBonus = {},
         onOpenLog = {},
@@ -819,18 +766,13 @@ private fun BudgetScreenBonusPreview() {
 }
 
 /** Раскладка, которую показывают превью планирования: часть денег отложена, часть — на вклад. */
-private val PreviewPlanningDraft = BudgetDraft(savings = 120, depositAmount = 100, depositTermDays = 5)
+private val PreviewPlanningDraft =
+    BudgetDraft(mustSpend = 120, wantSpend = 40, depositAmount = 100, depositTermDays = 5)
 
 /** Состояние игрока, который забрал бонус и раскладывает деньги на новый период. */
 private val PreviewPlanningState = GameUiState(
-    balance = 260,
-    savings = 100,
-    previousBudgetResult = BudgetResult(
-        planned = 260,
-        plannedSavings = 80,
-        plannedDeposit = 0,
-        actual = 215
-    ),
+    balance = 360,
+    previousBudgetResult = PreviewResult,
     budgetDraft = PreviewPlanningDraft,
     planningOpen = true,
     moneyLog = PreviewLog
@@ -895,19 +837,6 @@ private fun ConfirmBudgetDialogPreview() {
         ConfirmBudgetDialog(
             draft = PreviewPlanningDraft,
             total = PreviewPlanningState.totalToPlan,
-            onConfirm = {},
-            onDismiss = {}
-        )
-    }
-}
-
-/** Превью окна, предупреждающего, что перевод не входит в бюджет. */
-@Preview(name = "BudgetScreen — Transfer window", showBackground = true)
-@Composable
-private fun TransferDialogPreview() {
-    FinGameTheme(darkTheme = false) {
-        TransferDialog(
-            question = "Переложить 50 в сбережения?",
             onConfirm = {},
             onDismiss = {}
         )

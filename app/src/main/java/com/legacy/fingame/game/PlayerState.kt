@@ -51,9 +51,6 @@ import com.legacy.fingame.game.stats.PetStats
  * [com.legacy.fingame.game.economy.FastForwardClock.fastForwardTo]), so neither the time a demo
  * build skipped nor a device clock moved back since can take the pet's age, its bars or its daily
  * bonus back to where they were before.
- * @property savings деньги, которые игрок отложил: тратить их напрямую нельзя, но переложить
- * обратно на текущий счёт можно в любой момент. У игрока, который никогда не планировал бюджет,
- * их нет.
  * @property deposit вклад, открытый в банке, или null, когда вклада нет. Вклад бывает только
  * один одновременно, и его тело недоступно, пока он не погашен.
  * @property budget подтверждённый бюджет текущего периода, или null, когда период ещё не
@@ -71,7 +68,6 @@ data class PlayerState(
     val petName: String = "",
     val subLocationIndex: Int = 0,
     val balance: Int = Economy.STARTING_BALANCE,
-    val savings: Int = 0,
     val deposit: Deposit? = null,
     val budget: BudgetState? = null,
     val previousBudgetResult: BudgetResult? = null,

@@ -42,28 +42,52 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         private const val KEY_STATS_UPDATED_AT = "stats_updated_at"
         private const val KEY_PET_BORN_AT = "pet_born_at"
         private const val KEY_GAME_NOW = "game_now"
-        private const val KEY_SAVINGS = "savings"
         private const val KEY_DEPOSIT_AMOUNT = "deposit_amount"
         private const val KEY_DEPOSIT_TERM_DAYS = "deposit_term_days"
         private const val KEY_DEPOSIT_RATE_PERCENT = "deposit_rate_percent"
         private const val KEY_DEPOSIT_OPENED_DAY = "deposit_opened_day"
         private const val KEY_BUDGET_PRESENT = "budget_present"
-        private const val KEY_BUDGET_PLANNED = "budget_planned"
-        private const val KEY_BUDGET_PLANNED_SAVINGS = "budget_planned_savings"
+        private const val KEY_BUDGET_PLANNED_MUST = "budget_planned_must"
+        private const val KEY_BUDGET_PLANNED_WANT = "budget_planned_want"
+        private const val KEY_BUDGET_PLANNED_SAVINGS_LEFT = "budget_planned_savings_left"
         private const val KEY_BUDGET_PLANNED_DEPOSIT = "budget_planned_deposit"
-        private const val KEY_BUDGET_SPENT = "budget_spent"
+        private const val KEY_BUDGET_SPENT_MUST = "budget_spent_must"
+        private const val KEY_BUDGET_SPENT_WANT = "budget_spent_want"
         private const val KEY_BUDGET_START_DAY = "budget_start_day"
         private const val KEY_PREVIOUS_BUDGET_PRESENT = "previous_budget_present"
-        private const val KEY_PREVIOUS_BUDGET_PLANNED = "previous_budget_planned"
+        private const val KEY_PREVIOUS_BUDGET_PLANNED_MUST = "previous_budget_planned_must"
+        private const val KEY_PREVIOUS_BUDGET_ACTUAL_MUST = "previous_budget_actual_must"
+        private const val KEY_PREVIOUS_BUDGET_PLANNED_WANT = "previous_budget_planned_want"
+        private const val KEY_PREVIOUS_BUDGET_ACTUAL_WANT = "previous_budget_actual_want"
         private const val KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS = "previous_budget_planned_savings"
+        private const val KEY_PREVIOUS_BUDGET_ACTUAL_SAVINGS = "previous_budget_actual_savings"
         private const val KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT = "previous_budget_planned_deposit"
-        private const val KEY_PREVIOUS_BUDGET_ACTUAL = "previous_budget_actual"
         private const val KEY_BUDGET_DRAFT_PRESENT = "budget_draft_present"
-        private const val KEY_BUDGET_DRAFT_SAVINGS = "budget_draft_savings"
+        private const val KEY_BUDGET_DRAFT_MUST = "budget_draft_must"
+        private const val KEY_BUDGET_DRAFT_WANT = "budget_draft_want"
         private const val KEY_BUDGET_DRAFT_DEPOSIT_AMOUNT = "budget_draft_deposit_amount"
         private const val KEY_BUDGET_DRAFT_DEPOSIT_TERM_DAYS = "budget_draft_deposit_term_days"
         private const val KEY_PLANNING_OPEN = "planning_open"
         private const val KEY_MONEY_LOG = "money_log"
+
+        /**
+         * Keys earlier versions wrote and this one no longer reads: the savings account, and the
+         * confirmed budget and its result in the shape they had before the plan was split into
+         * categories. They are dropped on every save so the file stops carrying them around.
+         */
+        private val RETIRED_KEYS = listOf(
+            "savings",
+            "budget_planned",
+            "budget_planned_savings",
+            "budget_spent",
+            "budget_draft_savings",
+            "previous_budget_planned",
+            "previous_budget_planned_savings",
+            "previous_budget_actual"
+        )
+
+        /** Key the savings account was stored under, read once more to hand the money back. */
+        private const val KEY_RETIRED_SAVINGS = "savings"
 
         /** Prefix of the key one stat bar is stored under, completed by [StatKind.xmlName]. */
         private const val KEY_STAT_PREFIX = "stat_"
@@ -99,8 +123,10 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             selection = selection,
             petName = preferences.getString(KEY_PET_NAME, null) ?: defaults.petName,
             subLocationIndex = preferences.getInt(KEY_SUB_LOCATION_INDEX, defaults.subLocationIndex),
-            balance = preferences.getInt(KEY_BALANCE, defaults.balance),
-            savings = preferences.getInt(KEY_SAVINGS, defaults.savings),
+            // Счёта сбережений больше нет, деньги игрока не должны пропасть: то, что лежало на
+            // нём в сохранении прошлой версии, становится текущими деньгами.
+            balance = preferences.getInt(KEY_BALANCE, defaults.balance) +
+                preferences.getInt(KEY_RETIRED_SAVINGS, 0),
             deposit = readDeposit(),
             budget = readBudget(),
             previousBudgetResult = readPreviousBudgetResult(),
@@ -141,30 +167,38 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             .putLong(KEY_STATS_UPDATED_AT, state.statsUpdatedAtMillis)
             .putLong(KEY_PET_BORN_AT, state.petBornAtMillis)
             .putLong(KEY_GAME_NOW, state.gameNowMillis)
-            .putInt(KEY_SAVINGS, state.savings)
             .putInt(KEY_DEPOSIT_AMOUNT, state.deposit?.amount ?: 0)
             .putInt(KEY_DEPOSIT_TERM_DAYS, state.deposit?.termDays ?: 0)
             .putInt(KEY_DEPOSIT_RATE_PERCENT, state.deposit?.ratePercent ?: 0)
             .putLong(KEY_DEPOSIT_OPENED_DAY, state.deposit?.openedDay ?: 0L)
             .putBoolean(KEY_BUDGET_PRESENT, state.budget != null)
-            .putInt(KEY_BUDGET_PLANNED, state.budget?.planned ?: 0)
-            .putInt(KEY_BUDGET_PLANNED_SAVINGS, state.budget?.plannedSavings ?: 0)
+            .putInt(KEY_BUDGET_PLANNED_MUST, state.budget?.plannedMust ?: 0)
+            .putInt(KEY_BUDGET_PLANNED_WANT, state.budget?.plannedWant ?: 0)
+            .putInt(KEY_BUDGET_PLANNED_SAVINGS_LEFT, state.budget?.plannedSavings ?: 0)
             .putInt(KEY_BUDGET_PLANNED_DEPOSIT, state.budget?.plannedDeposit ?: 0)
-            .putInt(KEY_BUDGET_SPENT, state.budget?.spent ?: 0)
+            .putInt(KEY_BUDGET_SPENT_MUST, state.budget?.spentMust ?: 0)
+            .putInt(KEY_BUDGET_SPENT_WANT, state.budget?.spentWant ?: 0)
             .putLong(KEY_BUDGET_START_DAY, state.budget?.startDay ?: 0L)
             .putBoolean(KEY_PREVIOUS_BUDGET_PRESENT, state.previousBudgetResult != null)
-            .putInt(KEY_PREVIOUS_BUDGET_PLANNED, state.previousBudgetResult?.planned ?: 0)
+            .putInt(KEY_PREVIOUS_BUDGET_PLANNED_MUST, state.previousBudgetResult?.plannedMust ?: 0)
+            .putInt(KEY_PREVIOUS_BUDGET_ACTUAL_MUST, state.previousBudgetResult?.actualMust ?: 0)
+            .putInt(KEY_PREVIOUS_BUDGET_PLANNED_WANT, state.previousBudgetResult?.plannedWant ?: 0)
+            .putInt(KEY_PREVIOUS_BUDGET_ACTUAL_WANT, state.previousBudgetResult?.actualWant ?: 0)
             .putInt(
                 KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS,
                 state.previousBudgetResult?.plannedSavings ?: 0
             )
             .putInt(
+                KEY_PREVIOUS_BUDGET_ACTUAL_SAVINGS,
+                state.previousBudgetResult?.actualSavings ?: 0
+            )
+            .putInt(
                 KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT,
                 state.previousBudgetResult?.plannedDeposit ?: 0
             )
-            .putInt(KEY_PREVIOUS_BUDGET_ACTUAL, state.previousBudgetResult?.actual ?: 0)
             .putBoolean(KEY_BUDGET_DRAFT_PRESENT, state.budgetDraft != null)
-            .putInt(KEY_BUDGET_DRAFT_SAVINGS, state.budgetDraft?.savings ?: 0)
+            .putInt(KEY_BUDGET_DRAFT_MUST, state.budgetDraft?.mustSpend ?: 0)
+            .putInt(KEY_BUDGET_DRAFT_WANT, state.budgetDraft?.wantSpend ?: 0)
             .putInt(KEY_BUDGET_DRAFT_DEPOSIT_AMOUNT, state.budgetDraft?.depositAmount ?: 0)
             .putInt(
                 KEY_BUDGET_DRAFT_DEPOSIT_TERM_DAYS,
@@ -176,6 +210,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         StatKind.entries.forEach { stat ->
             editor.putInt(KEY_STAT_PREFIX + stat.xmlName, state.stats[stat])
         }
+        RETIRED_KEYS.forEach(editor::remove)
 
         editor.apply()
     }
@@ -273,16 +308,24 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
     /**
      * Reads back what [save] wrote for [PlayerState.budget].
      *
+     * A budget confirmed before the plan was split into categories is not carried over: it has no
+     * per-category figures, and inventing them would only put a lie into the next report. The
+     * period then counts as unplanned and the player lays the money out again; the money itself is
+     * untouched.
+     *
      * @return The confirmed budget of the current period, or null when there is none.
      */
     private fun readBudget(): BudgetState? {
         if (!preferences.getBoolean(KEY_BUDGET_PRESENT, false)) return null
+        if (!preferences.contains(KEY_BUDGET_PLANNED_MUST)) return null
 
         return BudgetState(
-            planned = preferences.getInt(KEY_BUDGET_PLANNED, 0),
-            plannedSavings = preferences.getInt(KEY_BUDGET_PLANNED_SAVINGS, 0),
+            plannedMust = preferences.getInt(KEY_BUDGET_PLANNED_MUST, 0),
+            plannedWant = preferences.getInt(KEY_BUDGET_PLANNED_WANT, 0),
+            plannedSavings = preferences.getInt(KEY_BUDGET_PLANNED_SAVINGS_LEFT, 0),
             plannedDeposit = preferences.getInt(KEY_BUDGET_PLANNED_DEPOSIT, 0),
-            spent = preferences.getInt(KEY_BUDGET_SPENT, 0),
+            spentMust = preferences.getInt(KEY_BUDGET_SPENT_MUST, 0),
+            spentWant = preferences.getInt(KEY_BUDGET_SPENT_WANT, 0),
             startDay = preferences.getLong(KEY_BUDGET_START_DAY, 0L)
         )
     }
@@ -290,16 +333,23 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
     /**
      * Reads back what [save] wrote for [PlayerState.previousBudgetResult].
      *
+     * A result written before the report was split into categories is dropped for the same reason
+     * [readBudget] drops the budget: a card of zeroes says less than no card at all.
+     *
      * @return The outcome of the last period, or null when none has closed yet.
      */
     private fun readPreviousBudgetResult(): BudgetResult? {
         if (!preferences.getBoolean(KEY_PREVIOUS_BUDGET_PRESENT, false)) return null
+        if (!preferences.contains(KEY_PREVIOUS_BUDGET_PLANNED_MUST)) return null
 
         return BudgetResult(
-            planned = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED, 0),
+            plannedMust = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_MUST, 0),
+            actualMust = preferences.getInt(KEY_PREVIOUS_BUDGET_ACTUAL_MUST, 0),
+            plannedWant = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_WANT, 0),
+            actualWant = preferences.getInt(KEY_PREVIOUS_BUDGET_ACTUAL_WANT, 0),
             plannedSavings = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS, 0),
-            plannedDeposit = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT, 0),
-            actual = preferences.getInt(KEY_PREVIOUS_BUDGET_ACTUAL, 0)
+            actualSavings = preferences.getInt(KEY_PREVIOUS_BUDGET_ACTUAL_SAVINGS, 0),
+            plannedDeposit = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT, 0)
         )
     }
 
@@ -312,7 +362,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         if (!preferences.getBoolean(KEY_BUDGET_DRAFT_PRESENT, false)) return null
 
         return BudgetDraft(
-            savings = preferences.getInt(KEY_BUDGET_DRAFT_SAVINGS, 0),
+            mustSpend = preferences.getInt(KEY_BUDGET_DRAFT_MUST, 0),
+            wantSpend = preferences.getInt(KEY_BUDGET_DRAFT_WANT, 0),
             depositAmount = preferences.getInt(KEY_BUDGET_DRAFT_DEPOSIT_AMOUNT, 0),
             depositTermDays = preferences.getInt(
                 KEY_BUDGET_DRAFT_DEPOSIT_TERM_DAYS,

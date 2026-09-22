@@ -17,6 +17,7 @@ import com.legacy.fingame.game.economy.FastForwardClock
 import com.legacy.fingame.game.economy.GameClock
 import com.legacy.fingame.game.economy.MoneyEntry
 import com.legacy.fingame.game.economy.MoneyLog
+import com.legacy.fingame.game.economy.SpendKind
 import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.items.ItemCategory
@@ -64,8 +65,6 @@ enum class Screen {
  * @property petName name the player gave the pet, restored from [PlayerState.petName], or an empty
  * string when the pet goes unnamed; the main screen then only names the sub-location above it.
  * @property balance coins the player can spend right now, restored from [PlayerState.balance].
- * @property savings coins the player set aside, restored from [PlayerState.savings]; spendable
- * again only by moving it back to [balance].
  * @property deposit the deposit currently open, or null when there isn't one, restored from
  * [PlayerState.deposit].
  * @property budget the confirmed budget of the running period, or null when no period has started
@@ -115,7 +114,6 @@ data class GameUiState(
     val selection: AnimalSelection? = null,
     val petName: String = "",
     val balance: Int = Economy.STARTING_BALANCE,
-    val savings: Int = 0,
     val deposit: Deposit? = null,
     val budget: BudgetState? = null,
     val previousBudgetResult: BudgetResult? = null,
@@ -155,17 +153,17 @@ data class GameUiState(
     /** Whether the cart holds something the player can actually pay for. */
     val canBuyCart: Boolean get() = hasCart && canAffordCart
 
-    /** Сколько денег игрок может разложить: текущие плюс сбережения. Тело вклада сюда не входит. */
-    val totalToPlan: Int get() = balance + savings
+    /** Сколько денег игрок может разложить: всё, что на текущем счёте. Тело вклада сюда не входит. */
+    val totalToPlan: Int get() = balance
 
     /** Тело открытого вклада, без процентов; ноль, когда вклада нет. */
     val depositAmount: Int get() = deposit?.amount ?: 0
 
     /** Раскладка, которую показывает экран планирования: начатая игроком или начальная. */
-    val planningDraft: BudgetDraft get() = budgetDraft ?: Budget.startingDraft(savings)
+    val planningDraft: BudgetDraft get() = budgetDraft ?: Budget.startingDraft()
 
     /** Сколько из запланированного на период ещё не потрачено; ноль, когда периода нет. */
-    val budgetLeft: Int get() = budget?.let { it.planned - it.spent } ?: 0
+    val spendLeft: Int get() = budget?.let { it.plannedSpend - it.spent } ?: 0
 
     /**
      * Планирование доступно после получения бонуса дня, а также всегда, когда подтверждённого
@@ -542,14 +540,18 @@ class GameViewModel(
 
         val owned = current.owned.toMutableMap()
         var logged = current
-        var spent = 0
+        var spentMust = 0
+        var spentWant = 0
         current.quantities.forEach { (itemId, quantity) ->
             if (quantity <= 0) return@forEach
             val item = catalog.findItemById(itemId) ?: return@forEach
             val key = ItemSelection(itemId, current.pickedVariantOf(item))
             owned[key] = (owned[key] ?: 0) + quantity
             val cost = item.price * quantity
-            spent += cost
+            when (item.category.spendKind) {
+                SpendKind.MUST -> spentMust += cost
+                SpendKind.WANT -> spentWant += cost
+            }
             logged = logged.logged(
                 reason = MoneyLog.purchaseReason(item.name, quantity),
                 delta = -cost
@@ -557,53 +559,16 @@ class GameViewModel(
         }
 
         _state.value = stateForNavigatingTo(Screen.MAIN).copy(
-            balance = current.balance - spent,
+            balance = current.balance - (spentMust + spentWant),
             owned = owned.toMap(),
             quantities = emptyMap(),
             pickedVariants = emptyMap(),
             cartPrice = 0,
             moneyLog = logged.moneyLog,
-            budget = current.budget?.let { it.copy(spent = it.spent + spent) }
+            budget = current.budget?.let {
+                it.copy(spentMust = it.spentMust + spentMust, spentWant = it.spentWant + spentWant)
+            }
         )
-        persist()
-        return true
-    }
-
-    /**
-     * Перекладывает деньги с текущего счёта в сбережения. План периода при этом не меняется:
-     * подтверждённый бюджет не переписывается, игрок просто распорядился своими деньгами иначе.
-     *
-     * @param amount сколько переложить; ноль, отрицательное число и сумма больше текущего счёта
-     * не перекладывают ничего.
-     * @return True, когда деньги переложены.
-     */
-    fun transferToSavings(amount: Int): Boolean {
-        val current = _state.value
-        if (amount <= 0 || amount > current.balance) return false
-
-        _state.value = current.copy(
-            balance = current.balance - amount,
-            savings = current.savings + amount
-        ).logged(MoneyLog.REASON_TO_SAVINGS, -amount)
-        persist()
-        return true
-    }
-
-    /**
-     * Берёт деньги из сбережений обратно на текущий счёт. План периода не меняется.
-     *
-     * @param amount сколько взять; ноль, отрицательное число и сумма больше сбережений не берут
-     * ничего.
-     * @return True, когда деньги взяты.
-     */
-    fun transferFromSavings(amount: Int): Boolean {
-        val current = _state.value
-        if (amount <= 0 || amount > current.savings) return false
-
-        _state.value = current.copy(
-            balance = current.balance + amount,
-            savings = current.savings - amount
-        ).logged(MoneyLog.REASON_FROM_SAVINGS, amount)
         persist()
         return true
     }
@@ -716,10 +681,15 @@ class GameViewModel(
             budget = null,
             previousBudgetResult = running?.let {
                 BudgetResult(
-                    planned = it.planned,
+                    plannedMust = it.plannedMust,
+                    actualMust = it.spentMust,
+                    plannedWant = it.plannedWant,
+                    actualWant = it.spentWant,
                     plannedSavings = it.plannedSavings,
-                    plannedDeposit = it.plannedDeposit,
-                    actual = it.spent
+                    // Сколько реально осталось на счёте: считается до начисления бонуса, иначе
+                    // деньги нового периода оказались бы сохранёнными в прошлом.
+                    actualSavings = current.balance,
+                    plannedDeposit = it.plannedDeposit
                 )
             } ?: current.previousBudgetResult,
             budgetDraft = null,
@@ -761,8 +731,8 @@ class GameViewModel(
     }
 
     /**
-     * Подтверждает бюджет: деньги раскладываются по счетам, вклад — если игрок его выбрал —
-     * открывается, и начинается период, в котором план уже не меняется.
+     * Подтверждает бюджет: со счёта уезжает вклад — если игрок его выбрал, — и начинается период,
+     * в котором план уже не меняется. Планы трат денег не двигают: это планы, а не счета.
      *
      * Вклад, доживший до срока, сперва гасится [settleMaturedDeposit], как и в
      * [closeDepositEarly]: его тело и проценты раскладываются вместе со всем остальным, а не
@@ -783,15 +753,8 @@ class GameViewModel(
             total = total,
             depositAllowed = current.deposit == null
         )
-        val currentMoney = Budget.currentOf(draft, total)
-        val savingsDelta = draft.savings - current.savings
 
-        var next = current.copy(balance = currentMoney, savings = draft.savings)
-        if (savingsDelta > 0) {
-            next = next.logged(MoneyLog.REASON_TO_SAVINGS, -savingsDelta)
-        } else if (savingsDelta < 0) {
-            next = next.logged(MoneyLog.REASON_FROM_SAVINGS, -savingsDelta)
-        }
+        var next = current.copy(balance = total - draft.depositAmount)
         if (draft.depositAmount > 0) {
             next = next.copy(
                 deposit = Deposit.openedOn(
@@ -804,10 +767,12 @@ class GameViewModel(
 
         _state.value = next.copy(
             budget = BudgetState(
-                planned = currentMoney,
-                plannedSavings = draft.savings,
+                plannedMust = draft.mustSpend,
+                plannedWant = draft.wantSpend,
+                plannedSavings = Budget.savingsOf(draft, total),
                 plannedDeposit = draft.depositAmount,
-                spent = 0,
+                spentMust = 0,
+                spentWant = 0,
                 startDay = clock.today()
             ),
             planningOpen = false,
@@ -903,7 +868,6 @@ class GameViewModel(
             selection = saved.selection,
             petName = saved.petName,
             balance = saved.balance,
-            savings = saved.savings,
             deposit = saved.deposit,
             budget = saved.budget,
             previousBudgetResult = saved.previousBudgetResult,
@@ -966,7 +930,6 @@ class GameViewModel(
                 petName = current.petName,
                 subLocationIndex = current.subLocationIndex,
                 balance = current.balance,
-                savings = current.savings,
                 deposit = current.deposit,
                 budget = current.budget,
                 previousBudgetResult = current.previousBudgetResult,

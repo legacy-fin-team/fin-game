@@ -254,11 +254,7 @@ fun ShopScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                BalanceChip(
-                    balance = state.balance,
-                    savings = state.savings,
-                    depositAmount = state.depositAmount
-                )
+                BalanceChip(balance = state.balance, depositAmount = state.depositAmount)
                 CategoryTitle(
                     category = state.selectedCategory,
                     modifier = Modifier.weight(1f)
@@ -275,11 +271,7 @@ fun ShopScreen(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.Top
             ) {
-                BalanceChip(
-                    balance = state.balance,
-                    savings = state.savings,
-                    depositAmount = state.depositAmount
-                )
+                BalanceChip(balance = state.balance, depositAmount = state.depositAmount)
                 Spacer(modifier = Modifier.weight(1f))
                 SpriteButton(
                     assetPath = Sprites.CLOSE,

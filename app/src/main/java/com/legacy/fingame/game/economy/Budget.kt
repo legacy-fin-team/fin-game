@@ -1,101 +1,135 @@
 package com.legacy.fingame.game.economy
 
 /**
- * Подтверждённый бюджет текущего периода: сколько игрок решил оставить себе на траты, куда убрал
- * остальное и сколько уже потратил.
+ * Что это за трата с точки зрения плана периода.
  *
- * Подтверждённый бюджет не меняется до конца периода: переложить деньги между счетами игрок
- * может, а переписать план — нет.
- *
- * @property planned сколько денег осталось на текущем счёте сразу после подтверждения, то есть
- * сколько игрок собирался потратить за период.
- * @property plannedSavings сколько он отложил в сбережения.
- * @property plannedDeposit сколько он положил на вклад; ноль, если вклад не открывался.
- * @property spent сумма покупок с момента подтверждения. Переводы между счетами и операции по
- * вкладу сюда не попадают: тратой считается только покупка.
- * @property startDay день подтверждения, как его называет [GameClock.today].
+ * @property title как категория называется игроку.
  */
-data class BudgetState(
-    val planned: Int,
-    val plannedSavings: Int,
-    val plannedDeposit: Int,
-    val spent: Int,
-    val startDay: Long
-)
+enum class SpendKind(val title: String) {
+    /** Обязательные траты: то, без чего питомцу не прожить, — еда и игрушки. */
+    MUST("Обязательные"),
 
-/**
- * Итог закрытого периода — то, что показывается игроку, когда он садится планировать следующий.
- *
- * @property planned сколько он собирался потратить.
- * @property plannedSavings сколько откладывал в сбережения.
- * @property plannedDeposit сколько клал на вклад.
- * @property actual сколько потратил на самом деле.
- */
-data class BudgetResult(
-    val planned: Int,
-    val plannedSavings: Int,
-    val plannedDeposit: Int,
-    val actual: Int
-) {
-
-    /**
-     * Насколько игрок разошёлся с планом: плюс — не потратил всё, что мог, минус — вышел за
-     * бюджет, то есть достал деньги со сбережений или со вклада и потратил их.
-     */
-    val diff: Int get() = planned - actual
+    /** Необязательные: то, что покупают для красоты, — декор и одежда. */
+    WANT("Необязательные")
 }
 
 /**
- * Несохранённая раскладка: то, что игрок набрал на экране планирования, но ещё не подтвердил.
+ * Несохранённая раскладка периода: сколько игрок собирается потратить на обязательное и на
+ * необязательное и сколько кладёт на вклад. План сбережений здесь не хранится — это всегда
+ * остаток (см. [Budget.savingsOf]), поэтому раскладка, в которой суммы не сходятся, невозможна.
  *
- * Текущие деньги здесь не хранятся — они всегда остаток (см. [Budget.currentOf]), поэтому
- * раскладка, в которой суммы не сходятся, невозможна в принципе.
- *
- * @property savings сколько уйдёт в сбережения.
+ * @property mustSpend план обязательных трат: еда и игрушки.
+ * @property wantSpend план необязательных трат: декор и одежда.
  * @property depositAmount сколько уйдёт на новый вклад; ноль — вклад не открывается.
  * @property depositTermDays срок нового вклада; всегда в [Deposit.TERM_DAYS].
  */
 data class BudgetDraft(
-    val savings: Int,
+    val mustSpend: Int,
+    val wantSpend: Int,
     val depositAmount: Int,
     val depositTermDays: Int
 )
+
+/**
+ * Подтверждённый бюджет периода: что игрок запланировал и что уже потратил, по категориям.
+ * После подтверждения план не меняется.
+ *
+ * @property plannedMust план обязательных трат.
+ * @property plannedWant план необязательных трат.
+ * @property plannedSavings сколько игрок собирался сохранить: остаток, которого не забрали планы
+ * трат и вклад.
+ * @property plannedDeposit сколько он положил на вклад; ноль, если вклад не открывался.
+ * @property spentMust сколько обязательного куплено с момента подтверждения.
+ * @property spentWant сколько необязательного куплено с момента подтверждения.
+ * @property startDay день подтверждения, как его называет [GameClock.today].
+ */
+data class BudgetState(
+    val plannedMust: Int,
+    val plannedWant: Int,
+    val plannedSavings: Int,
+    val plannedDeposit: Int,
+    val spentMust: Int,
+    val spentWant: Int,
+    val startDay: Long
+) {
+    /** Сколько игрок собирался потратить всего: обязательное плюс необязательное. */
+    val plannedSpend: Int get() = plannedMust + plannedWant
+
+    /** Сколько потрачено всего. */
+    val spent: Int get() = spentMust + spentWant
+
+    /** Сколько обязательного плана ещё не потрачено; минус — перерасход. */
+    val mustLeft: Int get() = plannedMust - spentMust
+
+    /** Сколько необязательного плана ещё не потрачено; минус — перерасход. */
+    val wantLeft: Int get() = plannedWant - spentWant
+}
+
+/**
+ * Итог закрытого периода: план и факт по каждой категории и по сбережениям.
+ *
+ * @property plannedMust сколько игрок собирался потратить на обязательное.
+ * @property actualMust сколько потратил на самом деле.
+ * @property plannedWant сколько собирался потратить на необязательное.
+ * @property actualWant сколько потратил на самом деле.
+ * @property plannedSavings сколько собирался сохранить.
+ * @property actualSavings сколько денег реально осталось на текущем счёте к концу периода.
+ * @property plannedDeposit сколько ушло на вклад при подтверждении.
+ */
+data class BudgetResult(
+    val plannedMust: Int,
+    val actualMust: Int,
+    val plannedWant: Int,
+    val actualWant: Int,
+    val plannedSavings: Int,
+    val actualSavings: Int,
+    val plannedDeposit: Int
+) {
+    /** Плюс — не дотратил, минус — перерасход. */
+    val mustDiff: Int get() = plannedMust - actualMust
+
+    /** Плюс — не дотратил, минус — перерасход. */
+    val wantDiff: Int get() = plannedWant - actualWant
+
+    /** Плюс — сохранил больше, чем собирался. */
+    val savingsDiff: Int get() = actualSavings - plannedSavings
+}
 
 /** Правила раскладки денег на период. */
 object Budget {
 
     /**
-     * @param savings сбережения игрока на сейчас.
-     * @return Раскладка, с которой открывается пустой экран планирования: сбережения остаются на
-     * месте, вклад не открывается, срок — самый короткий из предлагаемых.
+     * @return Раскладка, с которой открывается пустой экран: ничего не запланировано, вклада нет.
      */
-    fun startingDraft(savings: Int): BudgetDraft = BudgetDraft(
-        savings = savings,
+    fun startingDraft(): BudgetDraft = BudgetDraft(
+        mustSpend = 0,
+        wantSpend = 0,
         depositAmount = 0,
         depositTermDays = Deposit.MIN_TERM_DAYS
     )
 
     /**
-     * Приводит раскладку в допустимый вид — единственное место, где это делается, так что ни
-     * экран, ни хранилище не могут подсунуть игре раскладку, которая не сходится.
+     * Приводит раскладку в допустимый вид. Вклад зажимается первым: это реальные деньги,
+     * которые уедут со счёта, а планы трат — всего лишь планы, и считать их можно только от
+     * того, что на счёте останется.
      *
      * @param draft что набрал игрок.
-     * @param total сколько денег вообще можно разложить: текущие плюс сбережения. Тело уже
-     * открытого вклада сюда не входит — им распоряжаться нельзя.
+     * @param total сколько денег вообще можно разложить. Тело уже открытого вклада сюда не
+     * входит — им распоряжаться нельзя.
      * @param depositAllowed можно ли открыть новый вклад, то есть свободен ли банк: вклад бывает
      * только один одновременно.
-     * @return Раскладка, в которой сбережения и вклад неотрицательны, вместе не превышают [total],
-     * а срок вклада — один из предлагаемых.
+     * @return Раскладка, в которой все суммы неотрицательны, вместе не превышают [total], а срок
+     * вклада — один из предлагаемых.
      */
     fun normalize(draft: BudgetDraft, total: Int, depositAllowed: Boolean): BudgetDraft {
-        val savings = draft.savings.coerceIn(0, total.coerceAtLeast(0))
-        val deposit = if (depositAllowed) {
-            draft.depositAmount.coerceIn(0, (total - savings).coerceAtLeast(0))
-        } else {
-            0
-        }
+        val money = total.coerceAtLeast(0)
+        val deposit = if (depositAllowed) draft.depositAmount.coerceIn(0, money) else 0
+        val left = money - deposit
+        val must = draft.mustSpend.coerceIn(0, left)
+        val want = draft.wantSpend.coerceIn(0, left - must)
         return BudgetDraft(
-            savings = savings,
+            mustSpend = must,
+            wantSpend = want,
             depositAmount = deposit,
             depositTermDays = draft.depositTermDays.coerceIn(Deposit.TERM_DAYS)
         )
@@ -104,8 +138,8 @@ object Budget {
     /**
      * @param draft раскладка, приведённая [normalize].
      * @param total сколько денег раскладывается.
-     * @return Сколько останется на текущем счёте, то есть что не забрали сбережения и вклад.
+     * @return Сколько игрок собирается сохранить: всё, чего не забрали планы трат и вклад.
      */
-    fun currentOf(draft: BudgetDraft, total: Int): Int =
-        total - draft.savings - draft.depositAmount
+    fun savingsOf(draft: BudgetDraft, total: Int): Int =
+        total - draft.mustSpend - draft.wantSpend - draft.depositAmount
 }

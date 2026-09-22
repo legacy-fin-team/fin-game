@@ -5,7 +5,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** Разделитель трёх балансов в шапке: одна иконка монеты и три числа через него. */
+/** Разделитель балансов в шапке: одна иконка монеты и два числа через него. */
 private const val BalanceSeparator = " | "
 
 /**
@@ -16,27 +16,25 @@ private const val BalanceSeparator = " | "
 private val TimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
 
 /**
- * Три счёта игрока одной строкой.
+ * Оба счёта игрока одной строкой.
  *
  * @param balance текущие деньги — то, что можно потратить прямо сейчас.
- * @param savings сбережения.
  * @param depositAmount тело вклада, без процентов: проценты ещё не начислены, показывать их как
  * деньги игрока было бы обещанием.
- * @return Строка вида `100 | 200 | 510`.
+ * @return Строка вида `100 | 510`.
  */
-fun balancesTextOf(balance: Int, savings: Int, depositAmount: Int): String =
-    listOf(balance, savings, depositAmount).joinToString(BalanceSeparator)
+fun balancesTextOf(balance: Int, depositAmount: Int): String =
+    listOf(balance, depositAmount).joinToString(BalanceSeparator)
 
 /**
- * То же самое словами, для тех, кто слушает экран: три числа через чёрточку вслух не читаются.
+ * То же самое словами, для тех, кто слушает экран: числа через чёрточку вслух не читаются.
  *
  * @param balance текущие деньги.
- * @param savings сбережения.
  * @param depositAmount тело вклада.
- * @return Описание всех трёх счётов.
+ * @return Описание обоих счётов.
  */
-fun balancesDescriptionOf(balance: Int, savings: Int, depositAmount: Int): String =
-    "Текущие $balance, сбережения $savings, на вкладе $depositAmount"
+fun balancesDescriptionOf(balance: Int, depositAmount: Int): String =
+    "Текущие $balance, на вкладе $depositAmount"
 
 /**
  * @param amount сумма со знаком.

@@ -13,17 +13,14 @@ import org.junit.Test
 class MoneyFormatTest {
 
     @Test
-    fun `three balances are written through a bar`() {
-        assertEquals("100 | 200 | 510", balancesTextOf(100, 200, 510))
-        assertEquals("0 | 0 | 0", balancesTextOf(0, 0, 0))
+    fun `both balances are written through a bar`() {
+        assertEquals("100 | 510", balancesTextOf(100, 510))
+        assertEquals("0 | 0", balancesTextOf(0, 0))
     }
 
     @Test
     fun `a screen reader is told which number is which`() {
-        assertEquals(
-            "Текущие 100, сбережения 200, на вкладе 510",
-            balancesDescriptionOf(100, 200, 510)
-        )
+        assertEquals("Текущие 100, на вкладе 510", balancesDescriptionOf(100, 510))
     }
 
     @Test

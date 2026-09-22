@@ -178,10 +178,10 @@ fun SpriteButton(
 }
 
 /**
- * Пилюля со счетами игрока: иконка монеты и три числа через чёрточку — текущие деньги, сбережения
- * и тело вклада (`100 | 200 | 510`).
+ * Пилюля со счетами игрока: иконка монеты и два числа через чёрточку — текущие деньги и тело
+ * вклада (`100 | 510`).
  *
- * Иконка одна на все три: три иконки в углу экрана не помещаются, а чёрточка читается как «и ещё»
+ * Иконка одна на оба: две иконки в углу экрана не помещаются, а чёрточка читается как «и ещё»
  * не хуже. Проценты по вкладу здесь не показываются — они ещё не начислены, и показывать их как
  * деньги игрока значило бы обещать.
  *
@@ -193,19 +193,17 @@ fun SpriteButton(
  * как есть.
  *
  * @param balance текущие деньги, из [com.legacy.fingame.game.GameUiState.balance].
- * @param savings сбережения, из [com.legacy.fingame.game.GameUiState.savings].
  * @param depositAmount тело вклада, из [com.legacy.fingame.game.GameUiState.depositAmount].
  * @param modifier модификатор внешнего [Surface].
  */
 @Composable
 fun BalanceChip(
     balance: Int,
-    savings: Int,
     depositAmount: Int,
     modifier: Modifier = Modifier
 ) {
-    val text = balancesTextOf(balance, savings, depositAmount)
-    val description = balancesDescriptionOf(balance, savings, depositAmount)
+    val text = balancesTextOf(balance, depositAmount)
+    val description = balancesDescriptionOf(balance, depositAmount)
     val textStyle = MaterialTheme.typography.labelLarge
     val (minFontSize, maxFontSize) = pillButtonAutoSizeRange(
         minLabelSize = PillButtonMinLabelSize,
@@ -676,7 +674,7 @@ private fun PreviewContent() {
                 onClick = {},
                 selected = true
             )
-            BalanceChip(balance = 12400, savings = 3200, depositAmount = 500)
+            BalanceChip(balance = 12400, depositAmount = 500)
         }
         GoalCard(title = "Велосипед", progress = 0.64f)
         val stats = PetStats(
