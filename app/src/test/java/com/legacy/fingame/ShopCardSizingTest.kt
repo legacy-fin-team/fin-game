@@ -203,21 +203,18 @@ class ShopCardSizingTest {
     }
 
     @Test
-    fun `the counter fits the narrowest card whole, buttons, gaps and number`() {
-        val forTheNumber = counterValueWidth(
-            contentWidth = narrowCardContentWidth,
-            buttonSize = CounterButtonSize,
-            gap = CounterGap
-        )
+    fun `the counter row fits the narrowest card with the widest quantity the cart holds`() {
+        // Two buttons, the gaps beside the number and the number itself at the floor a shrinking
+        // digit stops at — the width the row asks for however big the font is set. It must not be
+        // wider than the card: the old row, 48.dp buttons around a number boxed into 28.dp, asked
+        // for 140.dp against these 134.dp and pushed the "+" past the card's edge.
+        val digits = GameViewModel.MAX_ITEM_QUANTITY.toString().length
+        val row = CounterButtonSize * 2 + CounterGap * 2 + PillButtonMinLabelSize * digits
 
-        // Nothing is left over and nothing is missing: the row is the two buttons, the two gaps and
-        // everything else. A number given a width of its own instead is a number that wraps.
-        assertEquals(
-            narrowCardContentWidth.value,
-            (CounterButtonSize * 2 + CounterGap * 2 + forTheNumber).value,
-            0.01f
+        assertTrue(
+            "the counter row asks for $row, the card has $narrowCardContentWidth",
+            row <= narrowCardContentWidth
         )
-        assertTrue("the number was left $forTheNumber, i.e. nothing at all", forTheNumber > 0.dp)
     }
 
     @Test

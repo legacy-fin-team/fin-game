@@ -228,6 +228,15 @@ class BudgetTest {
     }
 
     @Test
+    fun `a kind planned at nothing is overspent by the whole cart`() {
+        // Игрок решил ничего не тратить на необязательное — любая такая покупка целиком сверх плана.
+        val nothingForWants = runningBudget.copy(plannedWant = 0, spentWant = 0)
+
+        assertEquals(40, Budget.overspendOf(nothingForWants, SpendKind.WANT, cartSpend = 40))
+        assertEquals(0, Budget.overspendOf(nothingForWants, SpendKind.WANT, cartSpend = 0))
+    }
+
+    @Test
     fun `nothing is said about a plan that was never made`() {
         assertEquals(
             emptyList<Pair<SpendKind, Int>>(),

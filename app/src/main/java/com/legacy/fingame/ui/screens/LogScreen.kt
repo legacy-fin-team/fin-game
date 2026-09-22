@@ -35,22 +35,12 @@ import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
+import com.legacy.fingame.ui.theme.GameDimens
 
 /** Поля экрана и шаг сетки, по которой расставлено всё остальное. */
 private val ScreenPadding = 16.dp
 private val HeaderGap = 8.dp
 private val ListGap = 12.dp
-
-/**
- * Насколько широк экран в самом широком случае.
- *
- * На планшете и в альбомной ориентации строка «причина — сумма» иначе растягивается через всю
- * ширину, и глазу приходится проделывать путь от названия до числа через пустоту.
- *
- * TODO: то же число живёт в [BudgetScreen]; вынести в `GameDimens` одной правкой, когда оба экрана
- * перестанут переписывать параллельно.
- */
-private val ContentMaxWidth = 560.dp
 
 /** Размер крестика: такой же, как на остальных экранах, и всё ещё удобный для пальца. */
 private val CloseButtonSize = 40.dp
@@ -115,7 +105,7 @@ fun LogScreen(
             .padding(ScreenPadding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(modifier = Modifier.widthIn(max = ContentMaxWidth).fillMaxWidth()) {
+        Column(modifier = Modifier.widthIn(max = GameDimens.ContentMaxWidth).fillMaxWidth()) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(HeaderGap),
@@ -169,7 +159,7 @@ fun LogScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.widthIn(max = ContentMaxWidth).fillMaxSize(),
+                modifier = Modifier.widthIn(max = GameDimens.ContentMaxWidth).fillMaxSize(),
                 // Отступ задаёт сама строка: два механизма плотности разом развели бы разделители
                 // и текст на разные расстояния.
                 verticalArrangement = Arrangement.spacedBy(0.dp)

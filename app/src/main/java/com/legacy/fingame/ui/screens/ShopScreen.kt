@@ -1,6 +1,7 @@
 package com.legacy.fingame.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +41,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -95,6 +100,17 @@ private val VariantButtonSize = 36.dp
  */
 internal val CounterButtonSize = 40.dp
 internal val CounterGap = 8.dp
+
+/**
+ * Height of the slot a card's purchase control stands in, whichever of the three it is: the 48.dp a
+ * [PillButton] is measured at as a touch target (its Surface keeps any clickable at least that
+ * tall), which is also taller than the [CounterButtonSize] counter and the "Куплено" line. One height
+ * for all three is what keeps the cards of a shelf ending level, whatever each of them has to offer.
+ */
+internal val PurchaseSlotHeight = 48.dp
+
+/** Side of the tick drawn before "Куплено": the height of the word beside it. */
+private val CheckMarkSize = 12.dp
 
 /**
  * Size of the coin next to an item's price. As big as the price itself is tall and no bigger: a card
@@ -268,9 +284,11 @@ fun ShopScreen(
     val cellMinSize = if (isShortScreen) ShortScreenItemCellMinSize else ItemCellMinSize
     val fontScale = LocalDensity.current.fontScale
 
-    // The content is kept to a width one glance reads and centred in whatever is left, the same way
-    // the budget's is: on a tablet, or on a phone held sideways, a grid spread over the whole width
-    // stops being a shelf and becomes a wall.
+    // On a tablet the content is kept to a width one glance reads and centred in whatever is left,
+    // the same way the budget's and the log's are: a grid spread over a tablet's whole width stops
+    // being a shelf and becomes a wall. A phone held sideways is not bounded — its width is what
+    // gives a sideways card the room for two cards to a row (see [shortScreenCardSpriteSize]), and
+    // capping it would fold the grid into a single column.
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -280,7 +298,9 @@ fun ShopScreen(
         Column(
             modifier = Modifier
                 .fillMaxHeight()
-                .widthIn(max = GameDimens.ContentMaxWidth)
+                .widthIn(
+                    max = if (GameDimens.isTabletScreen) GameDimens.ContentMaxWidth else Dp.Unspecified
+                )
                 .padding(16.dp)
         ) {
             // On a screen with height to spare the header is read top to bottom: the balance and the way
@@ -435,6 +455,7 @@ fun ShopScreen(
                             ShopWindow.NOT_ENOUGH_MONEY
                         }
                     },
+                    style = PillStyle.Primary,
                     enabled = state.hasCart
                 )
             }
@@ -560,8 +581,8 @@ private fun PurchaseConfirmBlock(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Counted outside the composition and only when the cart or the plan changes: what the warning
-    // says is arithmetic on the period's plan, not a question about the window.
+    // The arithmetic itself lives in Budget and Cart, where it is tested; here it is only re-run when
+    // the cart or the plan changes, not on every recomposition of the window.
     val overspends = remember(budget, lines) {
         Budget.overspendsOf(budget = budget, cartSpend = Cart.spendByKindOf(lines))
     }
@@ -615,7 +636,7 @@ private fun PurchaseConfirmBlock(
 
         overspends.forEach { (kind, over) ->
             Text(
-                text = "Это на $over больше, чем в плане на ${kind.title.lowercase()}",
+                text = "С этой покупкой ${kind.title.lowercase()} траты будут на $over больше плана",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error
             )
@@ -1272,9 +1293,7 @@ private fun PurchaseControl(
     modifier: Modifier = Modifier
 ) {
     Box(
-        modifier = modifier.heightIn(
-            min = spriteButtonHeight(CounterButtonSize, showIndicator = false)
-        ),
+        modifier = modifier.heightIn(min = GameDimens.buttonSize(PurchaseSlotHeight)),
         contentAlignment = Alignment.Center
     ) {
         when (mode) {
@@ -1345,18 +1364,49 @@ private fun PurchaseControl(
             )
 
             // Not a button at all: there is nothing left to press here, and a disabled pill on a
-            // cream card reads as a broken button rather than as an answer. A word in the colour
-            // good news is written in says the same thing and takes nothing away from the cards
-            // around it that still have something to offer.
-            ShopItemMode.PURCHASED -> Text(
-                text = "Куплено",
-                style = MaterialTheme.typography.labelMedium,
-                color = GameColors.success,
-                textAlign = TextAlign.Center,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            // cream card reads as a broken button rather than as an answer. A tick and a word in the
+            // colour good news is written in say the same thing and take nothing away from the
+            // cards around it that still have something to offer.
+            ShopItemMode.PURCHASED -> Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                CheckMark(color = GameColors.success)
+                Text(
+                    text = "Куплено",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = GameColors.success,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
+    }
+}
+
+/**
+ * A tick, drawn rather than typed: the game's pixel font has no glyph for one, and a character
+ * borrowed from a fallback font would stand out of the pixel line it sits in.
+ *
+ * @param color color of the stroke.
+ * @param modifier modifier applied to the drawing.
+ */
+@Composable
+private fun CheckMark(
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier.size(CheckMarkSize)) {
+        val tick = Path().apply {
+            moveTo(size.width * 0.1f, size.height * 0.55f)
+            lineTo(size.width * 0.4f, size.height * 0.85f)
+            lineTo(size.width * 0.9f, size.height * 0.2f)
+        }
+        drawPath(
+            path = tick,
+            color = color,
+            style = Stroke(width = size.width * 0.18f, cap = StrokeCap.Square, join = StrokeJoin.Miter)
+        )
     }
 }
 
