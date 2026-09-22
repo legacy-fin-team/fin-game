@@ -59,7 +59,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         private const val KEY_PREVIOUS_BUDGET_ACTUAL_MUST = "previous_budget_actual_must"
         private const val KEY_PREVIOUS_BUDGET_PLANNED_WANT = "previous_budget_planned_want"
         private const val KEY_PREVIOUS_BUDGET_ACTUAL_WANT = "previous_budget_actual_want"
-        private const val KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS = "previous_budget_planned_savings"
+        private const val KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS_LEFT =
+            "previous_budget_planned_savings_left"
         private const val KEY_PREVIOUS_BUDGET_ACTUAL_SAVINGS = "previous_budget_actual_savings"
         private const val KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT = "previous_budget_planned_deposit"
         private const val KEY_BUDGET_DRAFT_PRESENT = "budget_draft_present"
@@ -70,13 +71,20 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         private const val KEY_PLANNING_OPEN = "planning_open"
         private const val KEY_MONEY_LOG = "money_log"
 
+        /** Key the savings account was stored under, read once more to hand the money back. */
+        private const val KEY_RETIRED_SAVINGS = "savings"
+
         /**
          * Keys earlier versions wrote and this one no longer reads: the savings account, and the
          * confirmed budget and its result in the shape they had before the plan was split into
          * categories. They are dropped on every save so the file stops carrying them around.
+         *
+         * No key may be in both this list and [LIVE_KEYS]: [save] drops these after writing those,
+         * so a key in both would be written and dropped in the very same transaction and would
+         * never survive a single launch.
          */
-        private val RETIRED_KEYS = listOf(
-            "savings",
+        internal val RETIRED_KEYS: List<String> = listOf(
+            KEY_RETIRED_SAVINGS,
             "budget_planned",
             "budget_planned_savings",
             "budget_spent",
@@ -86,11 +94,54 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             "previous_budget_actual"
         )
 
-        /** Key the savings account was stored under, read once more to hand the money back. */
-        private const val KEY_RETIRED_SAVINGS = "savings"
+        /**
+         * Every key this version writes, in one place. [save] writes exactly these, plus one per
+         * stat bar (see [KEY_STAT_PREFIX]), and [load] reads them back. The list stands next to
+         * [RETIRED_KEYS] so the two can be held against each other.
+         */
+        internal val LIVE_KEYS: List<String> = listOf(
+            KEY_ANIMAL_ID,
+            KEY_ANIMAL_VARIANT_ID,
+            KEY_PET_NAME,
+            KEY_SUB_LOCATION_INDEX,
+            KEY_BALANCE,
+            KEY_LAST_DAILY_BONUS_DAY,
+            KEY_OWNED_ITEMS,
+            KEY_WORN_ITEMS,
+            KEY_STATS_UPDATED_AT,
+            KEY_PET_BORN_AT,
+            KEY_GAME_NOW,
+            KEY_DEPOSIT_AMOUNT,
+            KEY_DEPOSIT_TERM_DAYS,
+            KEY_DEPOSIT_RATE_PERCENT,
+            KEY_DEPOSIT_OPENED_DAY,
+            KEY_BUDGET_PRESENT,
+            KEY_BUDGET_PLANNED_MUST,
+            KEY_BUDGET_PLANNED_WANT,
+            KEY_BUDGET_PLANNED_SAVINGS_LEFT,
+            KEY_BUDGET_PLANNED_DEPOSIT,
+            KEY_BUDGET_SPENT_MUST,
+            KEY_BUDGET_SPENT_WANT,
+            KEY_BUDGET_START_DAY,
+            KEY_PREVIOUS_BUDGET_PRESENT,
+            KEY_PREVIOUS_BUDGET_PLANNED_MUST,
+            KEY_PREVIOUS_BUDGET_ACTUAL_MUST,
+            KEY_PREVIOUS_BUDGET_PLANNED_WANT,
+            KEY_PREVIOUS_BUDGET_ACTUAL_WANT,
+            KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS_LEFT,
+            KEY_PREVIOUS_BUDGET_ACTUAL_SAVINGS,
+            KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT,
+            KEY_BUDGET_DRAFT_PRESENT,
+            KEY_BUDGET_DRAFT_MUST,
+            KEY_BUDGET_DRAFT_WANT,
+            KEY_BUDGET_DRAFT_DEPOSIT_AMOUNT,
+            KEY_BUDGET_DRAFT_DEPOSIT_TERM_DAYS,
+            KEY_PLANNING_OPEN,
+            KEY_MONEY_LOG
+        )
 
         /** Prefix of the key one stat bar is stored under, completed by [StatKind.xmlName]. */
-        private const val KEY_STAT_PREFIX = "stat_"
+        internal const val KEY_STAT_PREFIX = "stat_"
 
         /**
          * Separators of one owned-item record, stored as `itemId:variantId=count`: item and variant
@@ -185,7 +236,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             .putInt(KEY_PREVIOUS_BUDGET_PLANNED_WANT, state.previousBudgetResult?.plannedWant ?: 0)
             .putInt(KEY_PREVIOUS_BUDGET_ACTUAL_WANT, state.previousBudgetResult?.actualWant ?: 0)
             .putInt(
-                KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS,
+                KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS_LEFT,
                 state.previousBudgetResult?.plannedSavings ?: 0
             )
             .putInt(
@@ -347,7 +398,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             actualMust = preferences.getInt(KEY_PREVIOUS_BUDGET_ACTUAL_MUST, 0),
             plannedWant = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_WANT, 0),
             actualWant = preferences.getInt(KEY_PREVIOUS_BUDGET_ACTUAL_WANT, 0),
-            plannedSavings = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS, 0),
+            plannedSavings = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS_LEFT, 0),
             actualSavings = preferences.getInt(KEY_PREVIOUS_BUDGET_ACTUAL_SAVINGS, 0),
             plannedDeposit = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT, 0)
         )

@@ -663,9 +663,15 @@ class GameViewModel(
      * [GameUiState.previousBudgetResult], открывается планирование и игрок оказывается на экране
      * бюджета, откуда бы он ни нажал кнопку.
      *
+     * Вклад, доживший до срока, сперва гасится [settleMaturedDeposit], как и в [confirmBudget]:
+     * его тело и проценты должны лечь на счёт до того, как с этого счёта снимут «сколько
+     * сохранено», — иначе игрок, дождавшийся срока, выглядел бы в отчёте так, будто всё потратил.
+     *
      * @return True, когда бонус выдан, false, когда этот день уже платил.
      */
     fun claimDailyBonus(): Boolean {
+        settleMaturedDeposit()
+
         val current = _state.value
         val today = clock.today()
         if (!Economy.isDailyBonusAvailable(current.lastDailyBonusDay, today)) return false

@@ -397,6 +397,44 @@ class BudgetFlowTest {
         )
 
         assertEquals(250, vm.state.value.planningDraft.depositAmount)
+        assertTrue(vm.confirmBudget())
+
+        val state = vm.state.value
+        assertEquals(250, state.deposit?.amount)
+        assertEquals(4, state.deposit?.termDays)
+        assertEquals(250, state.budget?.plannedDeposit)
+    }
+
+    @Test
+    fun `a deposit that matured by the day of the bonus counts as money the player saved`() {
+        val clock = FakeGameClock()
+        val store = FakePlayerStateStore(
+            PlayerState(
+                balance = 40,
+                deposit = Deposit.openedOn(
+                    amount = 500,
+                    termDays = 7,
+                    day = FakeGameClock.DEFAULT_DAY - 7
+                ),
+                budget = BudgetState(
+                    plannedMust = 100,
+                    plannedWant = 0,
+                    plannedSavings = 60,
+                    plannedDeposit = 500,
+                    spentMust = 100,
+                    spentWant = 0,
+                    startDay = FakeGameClock.DEFAULT_DAY - 7
+                )
+            )
+        )
+        val vm = testGameViewModel(store = store, clock = clock)
+
+        assertTrue(vm.claimDailyBonus())
+
+        // Тело и проценты вернулись на счёт до того, как с него сняли «сколько сохранено».
+        assertEquals(40 + 500 + 75, vm.state.value.previousBudgetResult?.actualSavings)
+        assertEquals(60, vm.state.value.previousBudgetResult?.plannedSavings)
+        assertEquals(40 + 500 + 75 + Economy.DAILY_BONUS, vm.state.value.balance)
     }
 
     @Test
