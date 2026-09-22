@@ -5,6 +5,7 @@ import com.legacy.fingame.game.economy.BudgetDraft
 import com.legacy.fingame.game.economy.BudgetResult
 import com.legacy.fingame.game.economy.BudgetState
 import com.legacy.fingame.game.economy.Deposit
+import com.legacy.fingame.game.economy.SpendKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -205,4 +206,69 @@ class BudgetTest {
         assertEquals(60, result.savingsDiff)
         assertEquals(-40, result.copy(actualSavings = 60).savingsDiff)
     }
+
+    @Test
+    fun `a purchase the plan has room for is no overspend at all`() {
+        assertEquals(0, Budget.overspendOf(runningBudget, SpendKind.MUST, cartSpend = 50))
+
+        // И ровно в край — тоже: план выдержан, пока потраченное его не превысило.
+        assertEquals(0, Budget.overspendOf(runningBudget, SpendKind.MUST, cartSpend = 90))
+    }
+
+    @Test
+    fun `an overspend is counted from the plan, not from the cart`() {
+        // 60 уже потрачено, план 150, в корзине 120: за план уйдут 30 из них, а не все 120.
+        assertEquals(30, Budget.overspendOf(runningBudget, SpendKind.MUST, cartSpend = 120))
+    }
+
+    @Test
+    fun `a plan already broken counts the whole cart on top of what broke it`() {
+        // По необязательному перерасход 30 был и до корзины; корзина добавляет к нему свои 20.
+        assertEquals(50, Budget.overspendOf(runningBudget, SpendKind.WANT, cartSpend = 20))
+    }
+
+    @Test
+    fun `nothing is said about a plan that was never made`() {
+        assertEquals(
+            emptyList<Pair<SpendKind, Int>>(),
+            Budget.overspendsOf(budget = null, cartSpend = mapOf(SpendKind.MUST to 10_000))
+        )
+    }
+
+    @Test
+    fun `a cart can break both plans at once, and then both are named`() {
+        val overspends = Budget.overspendsOf(
+            budget = runningBudget,
+            cartSpend = mapOf(SpendKind.WANT to 20, SpendKind.MUST to 120)
+        )
+
+        // Порядок — как в самом перечислении, а не как в корзине: окно читается одинаково всегда.
+        assertEquals(listOf(SpendKind.MUST to 30, SpendKind.WANT to 50), overspends)
+    }
+
+    @Test
+    fun `a kind the cart holds nothing of is not brought up`() {
+        // По необязательному план уже превышен, но покупка его не касается: игрок спрашивает про
+        // эту корзину, а не про прошлые.
+        val overspends = Budget.overspendsOf(
+            budget = runningBudget,
+            cartSpend = mapOf(SpendKind.MUST to 120)
+        )
+
+        assertEquals(listOf(SpendKind.MUST to 30), overspends)
+    }
+
+    /**
+     * Бюджет, с которым идут в магазин тесты перерасхода: по обязательному план ещё не выбран (90
+     * из 150 свободны), по необязательному уже перебрали на 30.
+     */
+    private val runningBudget = BudgetState(
+        plannedMust = 150,
+        plannedWant = 50,
+        plannedSavings = 100,
+        plannedDeposit = 200,
+        spentMust = 60,
+        spentWant = 80,
+        startDay = 19_000L
+    )
 }

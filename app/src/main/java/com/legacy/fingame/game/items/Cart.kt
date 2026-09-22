@@ -1,5 +1,7 @@
 package com.legacy.fingame.game.items
 
+import com.legacy.fingame.game.economy.SpendKind
+
 /**
  * One line of the shop cart: an item in the variant it was picked in, and how many of it the player
  * is about to pay for.
@@ -69,4 +71,20 @@ object Cart {
                 { it.variantId }
             )
         )
+
+    /**
+     * What the cart is about to cost the period's plan: how much of it is a necessity and how much
+     * is not.
+     *
+     * The shop section an item sits on is what decides which of the two it is (see
+     * [ItemCategory.spendKind]), so the warning the player is shown before paying and the line the
+     * period's report adds up afterwards are counted by one and the same rule.
+     *
+     * @param lines the cart lines, as [linesOf] built them.
+     * @return What each kind of spending adds up to; a kind the cart holds nothing of is not in the
+     * map at all, which is how a caller tells "nothing of this kind" from "nothing yet".
+     */
+    fun spendByKindOf(lines: List<CartLine>): Map<SpendKind, Int> = lines
+        .groupBy { line -> line.item.category.spendKind }
+        .mapValues { (_, kindLines) -> kindLines.sumOf { line -> line.price } }
 }

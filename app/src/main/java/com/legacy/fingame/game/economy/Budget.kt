@@ -142,4 +142,53 @@ object Budget {
      */
     fun savingsOf(draft: BudgetDraft, total: Int): Int =
         total - draft.mustSpend - draft.wantSpend - draft.depositAmount
+
+    /**
+     * На сколько покупка выйдет за план по одному виду трат.
+     *
+     * План — это план, а не запрет: перерасход показывается игроку, но покупку не отменяет.
+     *
+     * @param budget подтверждённый бюджет периода.
+     * @param kind вид трат, по которому считается перерасход.
+     * @param cartSpend сколько корзина добавит к уже потраченному по этому виду.
+     * @return На сколько потраченное вместе с корзиной превысит план; ноль, если план не превышен.
+     */
+    fun overspendOf(budget: BudgetState, kind: SpendKind, cartSpend: Int): Int {
+        val planned = when (kind) {
+            SpendKind.MUST -> budget.plannedMust
+            SpendKind.WANT -> budget.plannedWant
+        }
+        val spent = when (kind) {
+            SpendKind.MUST -> budget.spentMust
+            SpendKind.WANT -> budget.spentWant
+        }
+        return (spent + cartSpend - planned).coerceAtLeast(0)
+    }
+
+    /**
+     * Перерасход, который даст покупка, по всем видам трат сразу: то, о чём окно подтверждения
+     * предупреждает игрока перед оплатой.
+     *
+     * О виде трат, которого в корзине нет, окно молчит, даже если план по нему уже превышен: игрок
+     * спрашивает про эту покупку, а не про прошлые.
+     *
+     * @param budget подтверждённый бюджет периода; null — период не запланирован, и сравнивать
+     * покупку не с чем.
+     * @param cartSpend сколько корзина добавит по каждому виду трат; см.
+     * [com.legacy.fingame.game.items.Cart.spendByKindOf].
+     * @return Виды трат, по которым покупка выйдет за план, и насколько, в порядке [SpendKind];
+     * пусто, если плана нет или он выдержан.
+     */
+    fun overspendsOf(
+        budget: BudgetState?,
+        cartSpend: Map<SpendKind, Int>
+    ): List<Pair<SpendKind, Int>> {
+        if (budget == null) return emptyList()
+        return SpendKind.entries.mapNotNull { kind ->
+            val spend = cartSpend[kind] ?: 0
+            if (spend <= 0) return@mapNotNull null
+            val over = overspendOf(budget, kind, spend)
+            if (over > 0) kind to over else null
+        }
+    }
 }
