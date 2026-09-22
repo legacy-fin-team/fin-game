@@ -69,6 +69,21 @@ class MoneyLogCodecTest {
     }
 
     @Test
+    fun `a shuffled log decodes with the newest record first`() {
+        val shuffled = MoneyLog(
+            listOf(
+                entry("День 1", 1, day = 19_000L, timestamp = 1_700_000_000_000L),
+                entry("День 3", 3, day = 19_002L, timestamp = 1_700_000_200_000L),
+                entry("День 2", 2, day = 19_001L, timestamp = 1_700_000_100_000L)
+            )
+        )
+
+        val decoded = MoneyLogCodec.decode(MoneyLogCodec.encode(shuffled))
+
+        assertEquals(listOf("День 3", "День 2", "День 1"), decoded.entries.map { it.reason })
+    }
+
+    @Test
     fun `a malformed record is skipped while the rest decode`() {
         val good1 = MoneyLogCodec.encode(MoneyLog(listOf(entry(MoneyLog.REASON_DAILY_BONUS, 50))))
         val good2 = MoneyLogCodec.encode(MoneyLog(listOf(entry("Яблоко x4", -60))))

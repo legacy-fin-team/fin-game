@@ -3,6 +3,7 @@ package com.legacy.fingame
 import com.legacy.fingame.ui.screens.balancesDescriptionOf
 import com.legacy.fingame.ui.screens.balancesTextOf
 import com.legacy.fingame.ui.screens.dayNumberOf
+import com.legacy.fingame.ui.screens.dayTimeTextOf
 import com.legacy.fingame.ui.screens.signedAmountText
 import com.legacy.fingame.ui.screens.timeTextOf
 import java.time.ZoneId
@@ -44,5 +45,15 @@ class MoneyFormatTest {
         val millis = 1_700_000_000_000L
         assertEquals("22:13", timeTextOf(millis, ZoneId.of("UTC")))
         assertEquals("01:13", timeTextOf(millis, ZoneId.of("Europe/Moscow")))
+    }
+
+    @Test
+    fun `the log's time column is the day number and the time together`() {
+        // 2023-11-14T16:09:00Z
+        val millis = 1_699_978_140_000L
+        assertEquals(
+            "Д8 · 16:09",
+            dayTimeTextOf(gameDay = 19_007L, oldestGameDay = 19_000L, millis = millis, zone = ZoneId.of("UTC"))
+        )
     }
 }

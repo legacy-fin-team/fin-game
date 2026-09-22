@@ -57,7 +57,7 @@ object MoneyLogCodec {
         if (raw.isNullOrBlank()) return MoneyLog.EMPTY
 
         val entries = raw.split(ENTRY_SEPARATOR).mapNotNull { record -> decodeEntry(record) }
-        return MoneyLog(entries.take(MoneyLog.MAX_ENTRIES))
+        return MoneyLog.of(entries)
     }
 
     /**

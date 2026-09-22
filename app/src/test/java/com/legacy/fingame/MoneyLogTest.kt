@@ -61,4 +61,45 @@ class MoneyLogTest {
         assertEquals(1, before.entries.size)
         assertEquals(2, after.entries.size)
     }
+
+    @Test
+    fun `журнал раскладывает записи новейшими вперёд`() {
+        val log = MoneyLog.of(
+            listOf(
+                entry("День 1, запись а", 1, day = 19_000L),
+                entry("День 3", 3, day = 19_002L),
+                entry("День 1, запись б", 2, day = 19_000L),
+                entry("День 2", 4, day = 19_001L)
+            )
+        )
+
+        assertEquals(
+            listOf("День 3", "День 2", "День 1, запись а", "День 1, запись б"),
+            log.entries.map { it.reason }
+        )
+    }
+
+    @Test
+    fun `порядок внутри одного момента — порядок, в котором записи пришли`() {
+        val first = MoneyEntry("Первая", 1, gameDay = 19_000L, timestampMillis = 1_700_000_000_000L)
+        val second = MoneyEntry("Вторая", 2, gameDay = 19_000L, timestampMillis = 1_700_000_000_000L)
+
+        val log = MoneyLog.of(listOf(first, second))
+
+        assertEquals(listOf("Первая", "Вторая"), log.entries.map { it.reason })
+    }
+
+    @Test
+    fun `of обрезает до MAX_ENTRIES после сортировки, а не по позиции в списке`() {
+        val shuffled = (0 until MoneyLog.MAX_ENTRIES + 1)
+            .map { day -> entry("День $day", day, day = day.toLong()) }
+            .shuffled()
+
+        val log = MoneyLog.of(shuffled)
+
+        assertEquals(MoneyLog.MAX_ENTRIES, log.entries.size)
+        // Самая старая запись (день 0) выпадает, даже если в исходном списке она была не последней.
+        assertEquals(false, log.entries.any { it.reason == "День 0" })
+        assertEquals("День ${MoneyLog.MAX_ENTRIES}", log.entries.first().reason)
+    }
 }

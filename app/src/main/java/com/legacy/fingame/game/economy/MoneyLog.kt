@@ -43,6 +43,18 @@ data class MoneyLog(val entries: List<MoneyEntry> = emptyList()) {
         /** Сколько последних записей журнал хранит. */
         const val MAX_ENTRIES = 500
 
+        /**
+         * @param entries записи в любом порядке.
+         * @return Журнал, в котором новейшее стоит первым: по игровому дню, внутри дня — по
+         * моменту. Записи одного момента остаются в том порядке, в каком пришли (сортировка
+         * устойчива).
+         */
+        fun of(entries: List<MoneyEntry>): MoneyLog = MoneyLog(
+            entries.sortedWith(
+                compareByDescending<MoneyEntry> { it.gameDay }.thenByDescending { it.timestampMillis }
+            ).take(MAX_ENTRIES)
+        )
+
         /** Журнал игрока, с которым ещё ничего не происходило. */
         val EMPTY = MoneyLog()
 

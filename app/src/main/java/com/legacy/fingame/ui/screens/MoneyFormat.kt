@@ -63,3 +63,19 @@ fun dayNumberOf(gameDay: Long, oldestGameDay: Long): Int =
  */
 fun timeTextOf(millis: Long, zone: ZoneId = ZoneId.systemDefault()): String =
     TimeFormat.format(Instant.ofEpochMilli(millis).atZone(zone))
+
+/**
+ * Столбец времени в журнале: номер игрового дня и час записи.
+ *
+ * @param gameDay день записи.
+ * @param oldestGameDay день самой старой хранимой записи.
+ * @param millis момент записи, в миллисекундах.
+ * @param zone часовой пояс, в котором его читают; по умолчанию пояс устройства.
+ * @return Строка вида `Д8 · 16:09`.
+ */
+fun dayTimeTextOf(
+    gameDay: Long,
+    oldestGameDay: Long,
+    millis: Long,
+    zone: ZoneId = ZoneId.systemDefault()
+): String = "Д${dayNumberOf(gameDay, oldestGameDay)} · ${timeTextOf(millis, zone)}"

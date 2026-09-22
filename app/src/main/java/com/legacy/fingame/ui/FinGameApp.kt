@@ -188,7 +188,11 @@ fun FinGameApp(
                         onClose = vm::closeScreen
                     )
 
-                    Screen.LOG -> LogScreen(log = state.moneyLog, onClose = vm::closeScreen)
+                    Screen.LOG -> LogScreen(
+                        log = state.moneyLog,
+                        onOpenBudget = { vm.openScreen(Screen.BUDGET) },
+                        onClose = vm::closeScreen
+                    )
                     Screen.OPTIONS -> PlaceholderScreen("Опции", Sprites.SETTINGS, vm::closeScreen)
                 }
             }
