@@ -79,3 +79,53 @@ fun dayTimeTextOf(
     millis: Long,
     zone: ZoneId = ZoneId.systemDefault()
 ): String = "Д${dayNumberOf(gameDay, oldestGameDay)} · ${timeTextOf(millis, zone)}"
+
+/**
+ * День, от которого игроку считаются номера дней.
+ *
+ * Счёт ведётся от самой старой записи журнала, и один и тот же день называется одним и тем же
+ * номером везде — и в журнале, и на бюджете. Пока журнал пуст, считать не от чего, и счёт
+ * начинается с сегодня: сегодня и есть «день 1».
+ *
+ * @param oldestGameDay день самой старой хранимой записи; `null`, когда журнал пуст.
+ * @param todayDay сегодняшний игровой день.
+ * @return День, который игрок называет первым.
+ */
+fun firstDayOf(oldestGameDay: Long?, todayDay: Long): Long = oldestGameDay ?: todayDay
+
+/**
+ * Какой сегодня день, словами.
+ *
+ * Без этой строки номера дней не с чем сравнить: «закроется в день 23» ничего не говорит тому, кто
+ * не знает, какой день сейчас.
+ *
+ * @param todayDay сегодняшний игровой день.
+ * @param oldestGameDay день, от которого ведётся счёт (см. [firstDayOf]).
+ * @return Строка вида `Сегодня: день 5`.
+ */
+fun todayTextOf(todayDay: Long, oldestGameDay: Long): String =
+    "Сегодня: день ${dayNumberOf(todayDay, oldestGameDay)}"
+
+/**
+ * Когда вклад закроется, словами.
+ *
+ * Сказано двумя мерами сразу: сколько дней осталось ждать и каким днём этот срок называется в
+ * журнале. Одного номера дня мало — «закроется в день 23» не отвечает на вопрос «это когда?», —
+ * а одного счётчика мало, чтобы найти этот день в журнале потом.
+ *
+ * В день созревания и позже написано «Закроется сегодня»: вклад созревает, когда день дошёл до
+ * срока (`Deposit.isMatureOn`), и «через 0 дн» про него звучало бы сломанно.
+ *
+ * @param maturityDay день, в который вклад созревает.
+ * @param todayDay сегодняшний игровой день.
+ * @param oldestGameDay день, от которого ведётся счёт (см. [firstDayOf]).
+ * @return Строка вида `Закроется через 2 дн · день 5` либо `Закроется сегодня`.
+ */
+fun depositMaturityTextOf(maturityDay: Long, todayDay: Long, oldestGameDay: Long): String {
+    val daysLeft = (maturityDay - todayDay).coerceAtLeast(0L)
+    return if (daysLeft == 0L) {
+        "Закроется сегодня"
+    } else {
+        "Закроется через $daysLeft дн · день ${dayNumberOf(maturityDay, oldestGameDay)}"
+    }
+}

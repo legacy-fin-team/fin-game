@@ -1,11 +1,16 @@
 package com.legacy.fingame
 
+import com.legacy.fingame.game.economy.MoneyEntry
+import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.ui.screens.balancesDescriptionOf
 import com.legacy.fingame.ui.screens.dayNumberOf
 import com.legacy.fingame.ui.screens.dayTimeTextOf
+import com.legacy.fingame.ui.screens.depositMaturityTextOf
 import com.legacy.fingame.ui.screens.depositTextOf
+import com.legacy.fingame.ui.screens.firstDayOf
 import com.legacy.fingame.ui.screens.signedAmountText
 import com.legacy.fingame.ui.screens.timeTextOf
+import com.legacy.fingame.ui.screens.todayTextOf
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -66,6 +71,59 @@ class MoneyFormatTest {
         assertEquals(
             "Д8 · 16:09",
             dayTimeTextOf(gameDay = 19_007L, oldestGameDay = 19_000L, millis = millis, zone = ZoneId.of("UTC"))
+        )
+    }
+
+    @Test
+    fun `today is day one while the log is empty`() {
+        // Считать не от чего, и счёт начинается с сегодня: иначе у игрока вышло бы два разных
+        // «дня 1» — один в журнале, другой на бюджете.
+        val today = 19_042L
+        assertEquals(1, dayNumberOf(today, firstDayOf(MoneyLog.EMPTY.oldestGameDay, today)))
+        assertEquals("Сегодня: день 1", todayTextOf(today, firstDayOf(MoneyLog.EMPTY.oldestGameDay, today)))
+    }
+
+    @Test
+    fun `the day the player is told is the day the log calls it`() {
+        val log = MoneyLog(
+            listOf(
+                MoneyEntry(MoneyLog.REASON_DAILY_BONUS, 50, 19_004L, 1_700_004_000_000L),
+                MoneyEntry(MoneyLog.REASON_DAILY_BONUS, 50, 19_000L, 1_700_000_000_000L)
+            )
+        )
+        assertEquals("Сегодня: день 5", todayTextOf(19_004L, firstDayOf(log.oldestGameDay, 19_004L)))
+    }
+
+    @Test
+    fun `a deposit says how long is left and which day that is`() {
+        assertEquals(
+            "Закроется через 2 дн · день 5",
+            depositMaturityTextOf(maturityDay = 19_004L, todayDay = 19_002L, oldestGameDay = 19_000L)
+        )
+        assertEquals(
+            "Закроется через 1 дн · день 4",
+            depositMaturityTextOf(maturityDay = 19_003L, todayDay = 19_002L, oldestGameDay = 19_000L)
+        )
+        assertEquals(
+            "Закроется через 5 дн · день 8",
+            depositMaturityTextOf(maturityDay = 19_007L, todayDay = 19_002L, oldestGameDay = 19_000L)
+        )
+    }
+
+    @Test
+    fun `a deposit that is due says so in words, not in zero days`() {
+        assertEquals(
+            "Закроется сегодня",
+            depositMaturityTextOf(maturityDay = 19_002L, todayDay = 19_002L, oldestGameDay = 19_000L)
+        )
+    }
+
+    @Test
+    fun `a deposit left standing past its day is still closing today`() {
+        // Вклад созревает, когда день дошёл до срока, и позже — тоже: «через -3 дн» не бывает.
+        assertEquals(
+            "Закроется сегодня",
+            depositMaturityTextOf(maturityDay = 19_002L, todayDay = 19_005L, oldestGameDay = 19_000L)
         )
     }
 }
