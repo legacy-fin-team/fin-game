@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -62,6 +64,7 @@ import com.legacy.fingame.ui.components.PillButton
 import com.legacy.fingame.ui.components.PillStyle
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
+import com.legacy.fingame.ui.components.pillButtonAutoSizeRange
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
@@ -90,6 +93,15 @@ private val AmountRowMinHeight = 32.dp
 
 /** Наименьшая ширина значения: по ней числа выстраиваются в колонку у правого края строки. */
 private val AmountValueMinWidth = 72.dp
+
+/**
+ * Мельче этого подпись строки «подпись — значение» не ужимается.
+ *
+ * Физический размер, от системного шрифта не зависит: при нём «Необязательные» — 14 знаков
+ * моноширинного шрифта — занимают около 130 dp и ещё читаются. Строка, которой и этого мало,
+ * раскладывается в два яруса (см. [AmountRow]).
+ */
+private val AmountLabelMinSize = 9.dp
 
 /** Зазор между цифрами срока вклада — и по горизонтали, и между строками, если ряд перенесётся. */
 private val TermChipGap = 8.dp
@@ -736,8 +748,11 @@ private fun RunningBudgetCard(
     modifier: Modifier = Modifier
 ) {
     BudgetCard(title = "Текущий период", modifier = modifier) {
+        // «Потрачено / план» — самое длинное значение экрана, и рядом с ним термину не остаётся
+        // места даже на наименьшем кегле: эти две строки стоят в два яруса.
         AmountRow(
             label = SpendKind.MUST.title,
+            stacked = true,
             value = spentOfPlannedText(
                 spent = budget.spentMust,
                 planned = budget.plannedMust,
@@ -746,6 +761,7 @@ private fun RunningBudgetCard(
         )
         AmountRow(
             label = SpendKind.WANT.title,
+            stacked = true,
             value = spentOfPlannedText(
                 spent = budget.spentWant,
                 planned = budget.plannedWant,
@@ -936,18 +952,23 @@ private fun BudgetCard(
 /**
  * Строка «подпись — значение»: подпись слева, значение справа, в одну строку каждая.
  *
- * Подписи сокращены до одного-двух слов («Осталось», «Копим», «На счету»), и автосжатие им больше
- * не нужно: раньше каждая строка мерила себя сама, и в одной карточке оказывалось три разных
- * кегля, а «Необязательные» Android рвал посреди слова — «Необязательны / е». Теперь подпись
- * занимает всё, что осталось от значения, и в крайнем случае обрывается многоточием, а не мельчает.
+ * Подпись всегда в одну строку и никогда не рвётся посреди слова: раньше «Необязательные» Android
+ * рвал на «Необязательны / е». Если слово не помещается в оставшуюся от значения ширину, оно
+ * ужимается целиком — `autoSize` до [AmountLabelMinSize], — а не обрезается. Термины сокращать
+ * нельзя, поэтому ужимается кегль, а не слово.
  *
  * Значение стоит у правого края и не уже [AmountValueMinWidth]: так числа соседних строк
  * выстраиваются в колонку, и глазу есть за что зацепиться, сравнивая их.
+ *
+ * Когда значение длинное — «90 / 140» занимает половину карточки, — подписи не хватило бы и
+ * наименьшего кегля. Такая строка просит [stacked]: подпись идёт сверху на всю ширину, значение —
+ * под ней у правого края.
  *
  * @param label подпись строки.
  * @param value значение так, как его читает игрок; может быть покрашено по частям (см.
  *   [spentOfPlannedText]).
  * @param modifier модификатор строки.
+ * @param stacked разложить ли строку в два яруса: подпись сверху, значение под ней.
  * @param labelColor цвет подписи: обычно тише значения, но у итоговой строки — вровень с ним.
  * @param valueColor цвет значения: им отмечается перерасход и выгода. Части значения, у которых
  *   свой цвет, его не слушают.
@@ -957,32 +978,64 @@ private fun AmountRow(
     label: String,
     value: AnnotatedString,
     modifier: Modifier = Modifier,
+    stacked: Boolean = false,
     labelColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     valueColor: Color = MaterialTheme.colorScheme.onSurface
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .defaultMinSize(minHeight = AmountRowMinHeight),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    val labelStyle = MaterialTheme.typography.bodyMedium
+    val (labelMinFontSize, labelMaxFontSize) = pillButtonAutoSizeRange(
+        minLabelSize = AmountLabelMinSize,
+        styleFontSize = labelStyle.fontSize,
+        density = LocalDensity.current
+    )
+    // Перенос не отключается (`softWrap` остаётся включённым): только так `autoSize` меряет подпись
+    // по ширине, которая у неё есть, и узнаёт, что слово не помещается.
+    val labelText: @Composable (Modifier) -> Unit = { labelModifier ->
         Text(
             text = label,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
+            modifier = labelModifier,
+            style = labelStyle,
             color = labelColor,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            autoSize = TextAutoSize.StepBased(
+                minFontSize = labelMinFontSize,
+                maxFontSize = labelMaxFontSize
+            )
         )
+    }
+    val valueText: @Composable (Modifier) -> Unit = { valueModifier ->
         Text(
             text = value,
-            modifier = Modifier.widthIn(min = AmountValueMinWidth),
+            modifier = valueModifier,
             style = MaterialTheme.typography.labelLarge,
             color = valueColor,
             maxLines = 1,
             textAlign = TextAlign.End
         )
+    }
+
+    if (stacked) {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = AmountRowMinHeight),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            labelText(Modifier.fillMaxWidth())
+            valueText(Modifier.fillMaxWidth())
+        }
+    } else {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = AmountRowMinHeight),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            labelText(Modifier.weight(1f))
+            valueText(Modifier.widthIn(min = AmountValueMinWidth))
+        }
     }
 }
 
@@ -992,6 +1045,7 @@ private fun AmountRow(
  * @param label подпись строки.
  * @param value значение так, как его читает игрок.
  * @param modifier модификатор строки.
+ * @param stacked разложить ли строку в два яруса.
  * @param labelColor цвет подписи.
  * @param valueColor цвет значения.
  */
@@ -1000,6 +1054,7 @@ private fun AmountRow(
     label: String,
     value: String,
     modifier: Modifier = Modifier,
+    stacked: Boolean = false,
     labelColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     valueColor: Color = MaterialTheme.colorScheme.onSurface
 ) {
@@ -1007,6 +1062,7 @@ private fun AmountRow(
         label = label,
         value = AnnotatedString(value),
         modifier = modifier,
+        stacked = stacked,
         labelColor = labelColor,
         valueColor = valueColor
     )
@@ -1125,7 +1181,8 @@ private fun BudgetScreenDarkPreview() {
 
 /**
  * Превью на узком экране с крупным системным шрифтом: отчёт прошлого периода и текущий период
- * целиком. Подписи не переносятся, числа стоят колонкой, «15 / 0» красное только первым числом.
+ * целиком. Подписи не переносятся и не режутся, числа стоят колонкой, строки «потрачено / план» —
+ * в два яруса.
  */
 @Preview(
     name = "BudgetScreen — Narrow phone, large text",
@@ -1150,6 +1207,34 @@ private fun BudgetScreenLargeTextPreview() {
 @Composable
 private fun BudgetScreenLargeTextDarkPreview() {
     FinGameTheme(darkTheme = true) { BudgetScreenPreview(PreviewRunningState) }
+}
+
+/**
+ * Текущий период с перерасходом на узком экране с крупным шрифтом: самое длинное значение экрана,
+ * «195 / 160», стоит под своим термином, а не рядом с ним, и красным в нём только первое число.
+ */
+@Preview(
+    name = "BudgetScreen — Overspent, narrow phone, large text",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 800,
+    fontScale = 1.3f
+)
+@Composable
+private fun BudgetScreenOverspentLargeTextPreview() {
+    FinGameTheme(darkTheme = false) {
+        BudgetScreenPreview(
+            PreviewRunningState.copy(
+                previousBudgetResult = null,
+                budget = PreviewRunningState.budget?.copy(
+                    plannedMust = 160,
+                    spentMust = 195,
+                    plannedWant = 1_200,
+                    spentWant = 1_150
+                )
+            )
+        )
+    }
 }
 
 /** Превью в альбомной ориентации: шапка складывается в одну строку. */
@@ -1203,8 +1288,8 @@ private fun BudgetScreenPlanningDarkPreview() {
 
 /**
  * Превью раскладки на узком экране с крупным системным шрифтом — то, ради чего считались ширины:
- * шесть цифр срока стоят в одну строку, «Необязательные» не рвётся посреди слова, «Подтвердить»
- * помещается на кнопку во всю ширину.
+ * шесть цифр срока стоят в одну строку, «Необязательные» не рвётся и не режется, а целиком
+ * ужимается до ≈ 11,5 sp рядом со своей суммой, «Подтвердить» помещается на кнопку во всю ширину.
  */
 @Preview(
     name = "BudgetScreen — Planning, narrow phone, large text",
@@ -1275,7 +1360,10 @@ private fun ConfirmBudgetDialogPreview() {
     }
 }
 
-/** То же окно на узком экране с крупным шрифтом: кнопки стоят колонкой и помещаются целиком. */
+/**
+ * То же окно на узком экране с крупным шрифтом: кнопки стоят колонкой и помещаются целиком, а
+ * «Необязательные» в 280 dp окна ужимается целиком, а не режется.
+ */
 @Preview(
     name = "BudgetScreen — Confirm window, narrow phone, large text",
     showBackground = true,
