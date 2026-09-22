@@ -82,8 +82,9 @@ fun GameDialog(
  *   two do not fit beside each other: the card is 280 dp wide inside its padding, and "Подтвердить"
  *   next to "Отмена" wants 335 of them at the largest font scale the game is read at. Trying the row
  *   first and falling back would mean the same window looking like two different windows depending
- *   on the player's font setting, which is worse than a column that is always a column. Empty by
- *   default, for a window that only tells the player something.
+ *   on the player's font setting, which is worse than a column that is always a column. `null` —
+ *   the default — for a window that only tells the player something: no buttons, and no room kept
+ *   under the text for the ones that are not there.
  */
 @Composable
 fun GameDialogBlock(
@@ -91,7 +92,7 @@ fun GameDialogBlock(
     closeDescription: String,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
-    actions: @Composable ColumnScope.() -> Unit = {},
+    actions: (@Composable ColumnScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit
 ) {
     // Half of the cross hangs outside the card, so the card keeps that much room around itself.
@@ -119,12 +120,14 @@ fun GameDialogBlock(
                     textAlign = TextAlign.Center
                 )
                 content()
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(DialogActionsGap),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    content = actions
-                )
+                if (actions != null) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(DialogActionsGap),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        content = actions
+                    )
+                }
             }
         }
 

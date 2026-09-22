@@ -132,7 +132,9 @@ private const val PressFeedbackMinMillis = 120L
  */
 @Composable
 private fun pressFeedbackOf(interactionSource: InteractionSource): State<Boolean> {
-    val pressed = remember { mutableStateOf(false) }
+    // Keyed by the source, like the effect below it: handed a different source, the state starts
+    // over with it rather than carrying the previous button's highlight into the new one.
+    val pressed = remember(interactionSource) { mutableStateOf(false) }
 
     LaunchedEffect(interactionSource) {
         var release: Job? = null
@@ -222,10 +224,11 @@ fun spriteButtonHeight(size: Dp, showIndicator: Boolean = true): Dp =
  *   `false`, where there is no underline to draw.
  * @param showIndicator whether this button belongs to a group one item of which is selected — the
  *   tabs of the shop, the variants of an item — and so keeps room under the sprite for the
- *   underline that marks it. A button that belongs to no such group, which is most of them, is
- *   given `false` and comes out exactly as tall as its sprite: room kept under a button for a mark
- *   it can never carry lifts it off the row it stands in for no reason anyone can see. Whatever
- *   this is, [spriteButtonHeight] has to be told the same thing.
+ *   underline that marks it. `true` by default, which is what every such group wants and what the
+ *   button has always done; a button that belongs to no group is given `false` and comes out
+ *   exactly as tall as its sprite, since room kept under it for a mark it can never carry lifts it
+ *   off the row it stands in for no reason anyone can see. Whatever this is, [spriteButtonHeight]
+ *   has to be told the same thing.
  * @param label short caption to draw instead of the sprite while [assetPath] does not resolve to a
  *   real file yet — a button whose icon is still missing from `assets/` would otherwise render
  *   [SpriteLoader]'s `error.webp` placeholder, which reads as a bug rather than as unfinished art.
@@ -592,15 +595,21 @@ private val StatChipIconGap = 8.dp
  * The same sizes for a chip drawn `compact`, i.e. small enough for two of them to sit side by side
  * inside a shop card.
  *
- * A card's own content is `134.dp` wide at the narrowest the shop lays one out at (see
- * [com.legacy.fingame.ui.screens.ShopScreen]), and a row of it is meant to hold two chips and the
- * gap between them, i.e. some `65.dp` per chip. Everything but the value's own text is fixed here
- * and adds up to `36.dp` of that, which leaves the text `29.dp` — room for the three characters
- * ("+20", "-5") an effect is ever written in at `labelSmall`, which shrinks to fit rather than wrap.
+ * Everything but the value's own text is fixed here and adds up to `36.dp`: the icon, the gap after
+ * it and the padding on either side. The value itself is three characters at most ("+20", "-5"),
+ * and the font is monospaced, so at `labelSmall` they want `3 × 11.sp` — `33.dp` at the normal font
+ * scale and `43.dp` at the largest one the game is read at. A shop card has nowhere to take that
+ * extra room from, so the text is given `autoSize` down to [PillButtonMinLabelSize] rather than
+ * being cut to "+2…": that floor is a physical size, so three characters at it are those same
+ * `33.dp` whatever the player's font setting, and a chip never needs more than `36 + 33 = 69.dp`.
  *
- * The numbers are all multiples of four: this chip stands next to everything else on the main
- * screen, and one padded by three while its neighbours are padded by four is exactly the near-miss
- * that reads as carelessness without anyone being able to say what is wrong.
+ * The shop keeps its own copy of the `36.dp` (`CompactEffectChipFixedWidth` in
+ * [com.legacy.fingame.ui.screens.ShopScreen]'s sizing) to work out how wide a card has to be for
+ * two of these and the gap between them; the two numbers have to move together.
+ *
+ * The sizes are all multiples of four: this chip stands next to everything else on the main screen,
+ * and one padded by three while its neighbours are padded by four is exactly the near-miss that
+ * reads as carelessness without anyone being able to say what is wrong.
  */
 private val CompactStatIconSize = 16.dp
 private val CompactStatChipHorizontalPadding = 8.dp
@@ -681,6 +690,19 @@ fun StatValueChip(
     compact: Boolean = false
 ) {
     val sizeModifier = if (compact) Modifier.height(compactEffectChipHeight()) else Modifier
+    val textStyle = if (compact) {
+        MaterialTheme.typography.labelSmall
+    } else {
+        MaterialTheme.typography.labelLarge
+    }
+    // Only ever bites on a compact chip, which is handed a width worked out from the sizes above
+    // and has to fit three characters into it at any font scale; a full-sized chip wraps its own
+    // text and so is always drawn at the style's own size.
+    val (minFontSize, maxFontSize) = pillButtonAutoSizeRange(
+        minLabelSize = PillButtonMinLabelSize,
+        styleFontSize = textStyle.fontSize,
+        density = LocalDensity.current
+    )
 
     Surface(
         modifier = modifier
@@ -711,14 +733,13 @@ fun StatValueChip(
             )
             Text(
                 text = value,
-                style = if (compact) {
-                    MaterialTheme.typography.labelSmall
-                } else {
-                    MaterialTheme.typography.labelLarge
-                },
+                style = textStyle,
                 color = valueColor,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                autoSize = TextAutoSize.StepBased(
+                    minFontSize = minFontSize,
+                    maxFontSize = maxFontSize
+                )
             )
         }
     }
