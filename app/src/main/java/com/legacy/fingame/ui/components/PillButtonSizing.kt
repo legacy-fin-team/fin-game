@@ -15,8 +15,13 @@ import androidx.compose.ui.unit.dp
  * it mid-word exactly like the wrap this whole mechanism exists to prevent. Keeping the floor in
  * `dp` and converting it with [pillButtonAutoSizeRange] keeps it the same physical size — and so the
  * same worst-case label width — no matter how the font scale is set.
+ *
+ * The value is a floor of readability, not of geometry: this is a pixel font, which goes unreadable
+ * far earlier than an ordinary one does, and `11.dp` is where a child still reads a word on a phone
+ * held at arm's length. A label that does not fit even at this size is a label to be shortened, not
+ * to be shrunk further.
  */
-val PillButtonMinLabelSize: Dp = 9.dp
+val PillButtonMinLabelSize: Dp = 11.dp
 
 /**
  * The `min`/`max` pair a [PillButton] label's `autoSize` shrinks within.
@@ -29,8 +34,8 @@ val PillButtonMinLabelSize: Dp = 9.dp
  * @param density density (and font scale) the label is drawn at, needed to convert [minLabelSize]
  *   into the same unit as [styleFontSize].
  * @return [minLabelSize] converted to a font size, paired with [styleFontSize] — except at an
- *   unusually small font scale, where that conversion can come out *above* [styleFontSize] (a
- *   9.dp floor is 30.sp at a font scale of 0.3, well past a 13.sp style). The floor is capped to
+ *   unusually small font scale, where that conversion can come out *above* [styleFontSize] (an
+ *   11.dp floor is 36.sp at a font scale of 0.3, well past a 13.sp style). The floor is capped to
  *   [styleFontSize] in that case, so the pair handed to `autoSize` is never inverted.
  */
 fun pillButtonAutoSizeRange(

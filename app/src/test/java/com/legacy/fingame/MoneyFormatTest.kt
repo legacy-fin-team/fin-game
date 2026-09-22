@@ -1,27 +1,39 @@
 package com.legacy.fingame
 
 import com.legacy.fingame.ui.screens.balancesDescriptionOf
-import com.legacy.fingame.ui.screens.balancesTextOf
 import com.legacy.fingame.ui.screens.dayNumberOf
 import com.legacy.fingame.ui.screens.dayTimeTextOf
+import com.legacy.fingame.ui.screens.depositTextOf
 import com.legacy.fingame.ui.screens.signedAmountText
 import com.legacy.fingame.ui.screens.timeTextOf
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /** Как деньги и время превращаются в текст, который читает игрок. */
 class MoneyFormatTest {
 
     @Test
-    fun `both balances are written through a bar`() {
-        assertEquals("100 | 510", balancesTextOf(100, 510))
-        assertEquals("0 | 0", balancesTextOf(0, 0))
+    fun `the deposit is written out in words next to the money`() {
+        assertEquals("вклад 510", depositTextOf(510))
+    }
+
+    @Test
+    fun `no deposit, no caption about one`() {
+        // Раньше в шапке стояло «250 | 0»: ноль про вклад, которого нет, ребёнку не говорит ничего,
+        // а чёрточка перед ним читается как случайный значок.
+        assertNull(depositTextOf(0))
     }
 
     @Test
     fun `a screen reader is told which number is which`() {
         assertEquals("Текущие 100, на вкладе 510", balancesDescriptionOf(100, 510))
+    }
+
+    @Test
+    fun `a screen reader hears about the deposit only while there is one`() {
+        assertEquals("Текущие 250", balancesDescriptionOf(250, 0))
     }
 
     @Test

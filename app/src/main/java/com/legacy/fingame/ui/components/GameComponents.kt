@@ -4,10 +4,14 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -21,9 +25,11 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,7 +38,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -42,7 +47,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Devices
@@ -53,12 +57,15 @@ import coil3.compose.AsyncImage
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.game.stats.StatKind
 import com.legacy.fingame.ui.screens.balancesDescriptionOf
-import com.legacy.fingame.ui.screens.balancesTextOf
+import com.legacy.fingame.ui.screens.depositTextOf
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
 import com.legacy.fingame.utils.SpriteLoader
 import kotlin.math.roundToInt
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Draws a sprite from `assets/textures/` via [SpriteLoader] and Coil.
@@ -98,6 +105,60 @@ fun Sprite(
 /** Translucent black laid over a sprite while its button is held down. */
 private val PressedOverlayColor = Color(0x59000000)
 
+/**
+ * How long the press highlight of a [SpriteButton] is kept on screen at the very least.
+ *
+ * A quick tap would otherwise not show it at all. Both of the game's tap targets that live on the
+ * darkening alone — the "+" and the "−" of the budget and of the shop — sit inside a scrolling
+ * container, and `clickable` inside one holds a press back for `TapIndicationDelay` (150 ms) so
+ * that the start of a scroll does not light a button up. Lift the finger before that, and
+ * foundation emits the press and its release back to back in a single frame: the highlight is
+ * turned on and off between two recompositions, and the player sees the value change with no sign
+ * that the button was theirs. Holding it for this long afterwards costs nothing on a slow press
+ * and is the whole feedback on a fast one.
+ */
+private const val PressFeedbackMinMillis = 120L
+
+/**
+ * Whether a button should be drawn as pressed right now, kept on for at least
+ * [PressFeedbackMinMillis] after the finger is lifted.
+ *
+ * Reads the interactions themselves rather than
+ * [androidx.compose.foundation.interaction.collectIsPressedAsState], which follows the press
+ * exactly and so cannot be seen at all when press and release land in the same frame.
+ *
+ * @param interactionSource the source the button's `clickable` reports its presses to.
+ * @return State that is `true` while the button is held and for a short while after.
+ */
+@Composable
+private fun pressFeedbackOf(interactionSource: InteractionSource): State<Boolean> {
+    val pressed = remember { mutableStateOf(false) }
+
+    LaunchedEffect(interactionSource) {
+        var release: Job? = null
+        interactionSource.interactions.collect { interaction ->
+            when (interaction) {
+                is PressInteraction.Press -> {
+                    // A press during the tail of the previous one keeps the highlight on rather
+                    // than letting that tail switch it off under the finger.
+                    release?.cancel()
+                    pressed.value = true
+                }
+
+                is PressInteraction.Release,
+                is PressInteraction.Cancel -> {
+                    release = launch {
+                        delay(PressFeedbackMinMillis)
+                        pressed.value = false
+                    }
+                }
+            }
+        }
+    }
+
+    return pressed
+}
+
 /** How much of its own opacity a [SpriteButton] keeps while it has nothing to do. */
 private const val DisabledContentAlpha = 0.38f
 
@@ -108,7 +169,13 @@ private val SpriteButtonLabelPadding = 4.dp
 private val SpriteButtonUnderlineGap = 4.dp
 
 /** Thickness of the underline a selected [SpriteButton] is marked with. */
-private val SpriteButtonUnderlineThickness = 2.dp
+private val SpriteButtonUnderlineThickness = 3.dp
+
+/** How wide that underline is, as a fraction of the sprite it is drawn under. */
+private const val SpriteButtonUnderlineWidthFraction = 0.6f
+
+/** How round the ends of the underline are. */
+private val SpriteButtonUnderlineCorner = 2.dp
 
 /**
  * How tall a [SpriteButton] ends up being, underline included.
@@ -118,12 +185,19 @@ private val SpriteButtonUnderlineThickness = 2.dp
  * a row of variants to show.
  *
  * @param size the size the button's sprite is asked for, i.e. the phone-sized value.
+ * @param showIndicator whether the button in question draws the underline of a selected item at
+ *   all; when it does not, the row is the sprite and nothing else. Must match what the button
+ *   itself is given, or the layout keeps room the button never uses (or cuts off the room it does).
  * @return The full height of the button on the current screen.
  */
 @Composable
 @ReadOnlyComposable
-fun spriteButtonHeight(size: Dp): Dp =
-    GameDimens.buttonSize(size) + SpriteButtonUnderlineGap + SpriteButtonUnderlineThickness
+fun spriteButtonHeight(size: Dp, showIndicator: Boolean = true): Dp =
+    GameDimens.buttonSize(size) + if (showIndicator) {
+        SpriteButtonUnderlineGap + SpriteButtonUnderlineThickness
+    } else {
+        0.dp
+    }
 
 /**
  * Tappable sprite with no background, border or shadow — the artwork itself is the whole button.
@@ -143,8 +217,15 @@ fun spriteButtonHeight(size: Dp): Dp =
  *   standing in for it) is dimmed and taps are ignored, and a screen reader announces the
  *   button as disabled — which is what a button that is there but has nothing to do right now
  *   should look and sound like, instead of looking pressable and doing nothing.
- * @param selected whether this item is the currently active/selected one; when `true`, the sprite
- *   is shown at full opacity/scale and an underline is drawn beneath it to highlight it.
+ * @param selected whether this item is the currently active/selected one; when `true`, an
+ *   underline is drawn beneath the sprite to highlight it. Ignored while [showIndicator] is
+ *   `false`, where there is no underline to draw.
+ * @param showIndicator whether this button belongs to a group one item of which is selected — the
+ *   tabs of the shop, the variants of an item — and so keeps room under the sprite for the
+ *   underline that marks it. A button that belongs to no such group, which is most of them, is
+ *   given `false` and comes out exactly as tall as its sprite: room kept under a button for a mark
+ *   it can never carry lifts it off the row it stands in for no reason anyone can see. Whatever
+ *   this is, [spriteButtonHeight] has to be told the same thing.
  * @param label short caption to draw instead of the sprite while [assetPath] does not resolve to a
  *   real file yet — a button whose icon is still missing from `assets/` would otherwise render
  *   [SpriteLoader]'s `error.webp` placeholder, which reads as a bug rather than as unfinished art.
@@ -166,6 +247,7 @@ fun SpriteButton(
     size: Dp = 72.dp,
     enabled: Boolean = true,
     selected: Boolean = false,
+    showIndicator: Boolean = true,
     label: String? = null
 ) {
     val context = LocalContext.current
@@ -179,7 +261,7 @@ fun SpriteButton(
     val fallbackLabel = label.takeIf { !hasSprite }
     val spriteSize = GameDimens.buttonSize(size)
     val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
+    val pressed by pressFeedbackOf(interactionSource)
     val pressFilter = if (pressed) {
         ColorFilter.tint(PressedOverlayColor, BlendMode.SrcAtop)
     } else {
@@ -252,7 +334,6 @@ fun SpriteButton(
                     // without this, TalkBack would also read the caption as its own node.
                     modifier = Modifier.clearAndSetSemantics {},
                     style = labelTextStyle,
-                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     textAlign = TextAlign.Center,
                     // One line, and wrapping left on: `softWrap = false` lays the caption out
@@ -267,23 +348,36 @@ fun SpriteButton(
                 )
             }
         }
-        Spacer(modifier = Modifier.height(SpriteButtonUnderlineGap))
-        Box(
-            modifier = Modifier
-                .width(spriteSize * 0.4f)
-                .height(SpriteButtonUnderlineThickness)
-                .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
-        )
+        if (showIndicator) {
+            Spacer(modifier = Modifier.height(SpriteButtonUnderlineGap))
+            Box(
+                modifier = Modifier
+                    .width(spriteSize * SpriteButtonUnderlineWidthFraction)
+                    .height(SpriteButtonUnderlineThickness)
+                    .background(
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            Color.Transparent
+                        },
+                        shape = RoundedCornerShape(SpriteButtonUnderlineCorner)
+                    )
+            )
+        }
     }
 }
 
+/** Sizes a [BalanceChip] is built out of: the coin, the padding around it and the gap after it. */
+private val BalanceCoinSize = 24.dp
+private val BalanceChipVerticalPadding = 6.dp
+private val BalanceChipIconGap = 8.dp
+
 /**
- * Пилюля со счетами игрока: иконка монеты и два числа через чёрточку — текущие деньги и тело
- * вклада (`100 | 510`).
+ * Пилюля со счетами игрока: иконка монеты, текущие деньги и — мелкой подписью рядом — тело вклада.
  *
- * Иконка одна на оба: две иконки в углу экрана не помещаются, а чёрточка читается как «и ещё»
- * не хуже. Проценты по вкладу здесь не показываются — они ещё не начислены, и показывать их как
- * деньги игрока значило бы обещать.
+ * Вклад написан словом «вклад», а не отделён чёрточкой, и, пока вклада нет, подписи нет совсем:
+ * `250 | 0` читалось как два случайных числа и значок между ними. Проценты по вкладу здесь не
+ * показываются — они ещё не начислены, и показывать их как деньги игрока значило бы обещать.
  *
  * Надпись всегда в одну строку и ужимается вместе с шириной пилюли, как ужимается надпись на
  * [PillButton], поэтому при крупном системном шрифте на узком экране числа не обрезаются.
@@ -302,7 +396,8 @@ fun BalanceChip(
     depositAmount: Int,
     modifier: Modifier = Modifier
 ) {
-    val text = balancesTextOf(balance, depositAmount)
+    val text = balance.toString()
+    val depositText = depositTextOf(depositAmount)
     val description = balancesDescriptionOf(balance, depositAmount)
     val textStyle = MaterialTheme.typography.labelLarge
     val (minFontSize, maxFontSize) = pillButtonAutoSizeRange(
@@ -320,15 +415,15 @@ fun BalanceChip(
         border = BorderStroke(1.dp, GameColors.cardStroke)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 3.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = BalanceChipVerticalPadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Sprite(
                 assetPath = Sprites.COIN,
                 contentDescription = null,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(BalanceCoinSize)
             )
-            Spacer(modifier = Modifier.width(6.dp))
+            Spacer(modifier = Modifier.width(BalanceChipIconGap))
             Text(
                 text = text,
                 style = textStyle,
@@ -340,6 +435,16 @@ fun BalanceChip(
                     maxFontSize = maxFontSize
                 )
             )
+            if (depositText != null) {
+                Spacer(modifier = Modifier.width(BalanceChipIconGap))
+                Text(
+                    text = depositText,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
         }
     }
 }
@@ -405,15 +510,52 @@ fun GoalCard(
 }
 
 /** Padding around the label of a [PillButton] on a phone; enlarged on tablets. */
-private val PillHorizontalPadding = 24.dp
-private val PillVerticalPadding = 12.dp
+private val PillHorizontalPadding = 20.dp
+private val PillVerticalPadding = 10.dp
 
 /**
  * Horizontal padding a [PillButton] uses instead of [PillHorizontalPadding] when its `compact`
  * parameter is `true` — a button stretched to fill a shop card's width needs as much of that width
- * as possible handed to the label, not spent on padding around it.
+ * as possible handed to the label, not spent on padding around it. Not *no* padding, though: a word
+ * that starts where the pill starts reads as a word that has fallen out of it.
  */
-private val PillCompactHorizontalPadding = 6.dp
+private val PillCompactHorizontalPadding = 12.dp
+
+/**
+ * Smallest a [PillButton] is ever drawn, whatever its label ends up being.
+ *
+ * The padding above is written for a label at its normal size; a label shrunk by `autoSize`, or a
+ * shorter scale altogether, would otherwise take the whole button down with it, and the button
+ * would become hard to hit exactly where the screen is already tight. Same 44 dp the platform's own
+ * accessibility guidance asks for.
+ */
+private val PillMinTouchSize = 44.dp
+
+/**
+ * How loudly a [PillButton] speaks.
+ *
+ * One screen carries one [Primary] button — the thing the player came to that screen to do — and
+ * everything else on it is quieter than that. The game is played on a cream background under a
+ * pixel font, where a filled button is a solid block of color: nine of them on one screen is what
+ * made the budget screen flicker, not the color itself.
+ */
+enum class PillStyle {
+    /** The one action of the screen: filled with the brand color. */
+    Primary,
+
+    /** An action next to that one: filled, but softly. The default a button is given. */
+    Tonal,
+
+    /** An action of its own that is not the point of the screen: outline and label, no fill. */
+    Outlined,
+
+    /** Something closer to a link than to a button: the label alone. */
+    Text
+}
+
+/** Thickness and tone of the outline an [PillStyle.Outlined] — or deselected — pill is drawn with. */
+private val PillBorderWidth = 1.5.dp
+private const val PillBorderAlpha = 0.6f
 
 /**
  * Name of a pet stat as the player reads it.
@@ -443,8 +585,8 @@ private const val StatLowLevel = 0.25f
 /** Sizes a [StatValueChip] is built out of: the icon, the padding around it and the gap after it. */
 private val StatIconSize = 24.dp
 private val StatChipHorizontalPadding = 12.dp
-private val StatChipVerticalPadding = 6.dp
-private val StatChipIconGap = 6.dp
+private val StatChipVerticalPadding = 8.dp
+private val StatChipIconGap = 8.dp
 
 /**
  * The same sizes for a chip drawn `compact`, i.e. small enough for two of them to sit side by side
@@ -453,13 +595,17 @@ private val StatChipIconGap = 6.dp
  * A card's own content is `134.dp` wide at the narrowest the shop lays one out at (see
  * [com.legacy.fingame.ui.screens.ShopScreen]), and a row of it is meant to hold two chips and the
  * gap between them, i.e. some `65.dp` per chip. Everything but the value's own text is fixed here
- * and adds up to `27.dp` of that, which leaves the text `38.dp` — room for the three characters
- * ("+20", "-5") an effect is ever written in, at the font scales a player reads the game at.
+ * and adds up to `36.dp` of that, which leaves the text `29.dp` — room for the three characters
+ * ("+20", "-5") an effect is ever written in at `labelSmall`, which shrinks to fit rather than wrap.
+ *
+ * The numbers are all multiples of four: this chip stands next to everything else on the main
+ * screen, and one padded by three while its neighbours are padded by four is exactly the near-miss
+ * that reads as carelessness without anyone being able to say what is wrong.
  */
-private val CompactStatIconSize = 14.dp
-private val CompactStatChipHorizontalPadding = 5.dp
-private val CompactStatChipVerticalPadding = 3.dp
-private val CompactStatChipIconGap = 3.dp
+private val CompactStatIconSize = 16.dp
+private val CompactStatChipHorizontalPadding = 8.dp
+private val CompactStatChipVerticalPadding = 4.dp
+private val CompactStatChipIconGap = 4.dp
 
 /**
  * How tall a `compact` [StatValueChip] — and so a [EffectChip] in a shop card — comes out on the
@@ -488,12 +634,15 @@ fun compactEffectChipHeight(): Dp {
  * @param stat the stat to show.
  * @param stats the pet's stats to read [stat] from.
  * @param modifier modifier applied to the outer [Surface].
+ * @param compact whether to draw the chip at the smaller size several of them fit a narrow screen
+ *   in; see [StatValueChip].
  */
 @Composable
 fun StatChip(
     stat: StatKind,
     stats: PetStats,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
 ) {
     val fraction = stats.fractionOf(stat)
 
@@ -501,7 +650,8 @@ fun StatChip(
         stat = stat,
         value = "${(fraction * 100).roundToInt()}%",
         valueColor = statValueColor(fraction),
-        modifier = modifier
+        modifier = modifier,
+        compact = compact
     )
 }
 
@@ -607,28 +757,26 @@ fun EffectChip(
 }
 
 /**
- * Pill-shaped button with a muted appearance when [enabled] is `false`.
+ * The button of the game: a label in a pill, in one of the four voices of [PillStyle].
  *
- * The pill takes its size from its label plus [PillHorizontalPadding]/[PillVerticalPadding], both
- * of which grow on tablets via [GameDimens.buttonSize]; the label follows with a larger text style
- * so the button does not end up as a big pill around small text.
+ * The pill takes its size from its label plus [PillHorizontalPadding]/[PillVerticalPadding], both of
+ * which grow on tablets via [GameDimens.buttonSize], and is never smaller than [PillMinTouchSize].
+ * The label itself does not grow with the screen: it is `bodyMedium`, the very size the text around
+ * the button is written in, everywhere. A button whose label is larger than the sentence it answers
+ * is a button that shouts, and a row of them is what the owner of this game saw when he said the
+ * words in the frames look much bigger than plain text.
  *
  * @param text label displayed inside the pill.
  * @param onClick called when the button is tapped; not invoked while [enabled] is `false`.
  * @param modifier modifier applied to the outer [Surface]; a button given `Modifier.fillMaxWidth()`
  *   stretches into all the width it is handed instead of wrapping its label, which the label then
  *   has all of to grow or shrink into (see `compact` below and [PillButtonMinLabelSize]).
+ * @param style how loud the button is; see [PillStyle]. [PillStyle.Tonal] by default on purpose —
+ *   a button that says nothing about its own importance is not the most important one on the screen.
+ *   Ignored while [selected] says `true` or `false`: a button that is part of a group is drawn by
+ *   whether it is the chosen one, which is the only thing about it the player needs to see.
  * @param enabled whether the button responds to taps; when `false`, the button is rendered with
  *   the disabled container/content colors and taps are ignored.
- * @param selected whether the button is the one picked out of a group of them, e.g. the deposit
- *   term the player has chosen, or `null` — the default — when the button belongs to no such group
- *   at all. A `true`/`false` button keeps its own container color when selected — the muted
- *   [androidx.compose.material3.ColorScheme.secondaryContainer] rather than the filled one — and
- *   carries [androidx.compose.ui.semantics.SemanticsProperties.Selected] for a screen reader, which
- *   is what tells a deselected button apart from one that is simply turned off: a picked option is
- *   still an option, and one announced as disabled reads as a button the player may not press. A
- *   `null` button carries neither: it is not part of a group, so there is nothing to say it was not
- *   picked, and it looks exactly as an unselected one does.
  * @param compact whether the pill (a) uses [PillCompactHorizontalPadding] instead of the normal,
  *   wider [PillHorizontalPadding] and (b) actually stretches into a [modifier] with
  *   `Modifier.fillMaxWidth()` in it rather than staying wrap-content-sized regardless (`Compose`'s
@@ -638,50 +786,72 @@ fun EffectChip(
  *   it, no wider than the label needs). Meant for a button meant to fill a narrow space — a shop
  *   card, say — so the label gets the padding out of its way and the width to shrink into before
  *   `autoSize` ever needs its floor; everywhere else the button keeps wrapping its own label.
+ * @param selected whether the button is the one picked out of a group of them, e.g. the deposit
+ *   term the player has chosen, or `null` — the default — when the button belongs to no such group
+ *   at all. The picked one is the filled one and the rest are outlines, which is the way round it
+ *   has to be: before this, a picked term came out pale and the six it was picked over came out in
+ *   solid green, so the group shouted down its own answer. A `true`/`false` button also carries
+ *   [androidx.compose.ui.semantics.SemanticsProperties.Selected] for a screen reader, which is what
+ *   tells a deselected button apart from one that is simply turned off: a picked option is still an
+ *   option, and one announced as disabled reads as a button the player may not press. A `null`
+ *   button carries neither: it is not part of a group, so there is nothing to say it was not picked.
+ * @param autoShrink whether the label may shrink to fit the pill. On by default, and worth turning
+ *   off for every button that stands in a row with others: `autoSize` measures each button against
+ *   its own width, so three buttons sharing a row by weight came out in three different sizes —
+ *   "Всё" twice the size of "Половина" beside it. A row of buttons whose labels are already short
+ *   enough does not need it and looks wrong with it.
  *
- * The label is always kept to a single line ([Text]'s `maxLines = 1`, with wrapping left on so the
- * label is measured against the width the pill has — `softWrap = false` would lay it out against an
- * endless one, and `autoSize`, never told it did not fit, would leave it at full size to be cropped
- * by a pill narrower than that): a button
- * narrow enough that the label does not fit at its normal size shrinks the label's font instead of
- * breaking a word across two lines, via `autoSize`, down to [PillButtonMinLabelSize] — a size that
- * does not grow with the system font scale, so the label can always shrink enough to fit rather than
- * running out of room and being cropped instead (see [pillButtonAutoSizeRange]). At a width wide
- * enough for the label, this changes nothing — `autoSize` picks the same size the label's
- * [MaterialTheme.typography] style already asks for.
+ * With [autoShrink] on, the label is kept to a single line ([Text]'s `maxLines = 1`, with wrapping
+ * left on so the label is measured against the width the pill has — `softWrap = false` would lay it
+ * out against an endless one, and `autoSize`, never told it did not fit, would leave it at full size
+ * to be cropped by a pill narrower than that): a button narrow enough that the label does not fit at
+ * its normal size shrinks the label's font instead of breaking a word across two lines, down to
+ * [PillButtonMinLabelSize] — a size that does not grow with the system font scale, so the label can
+ * always shrink enough to fit rather than running out of room and being cropped instead (see
+ * [pillButtonAutoSizeRange]). At a width wide enough for the label, this changes nothing.
  */
 @Composable
 fun PillButton(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    style: PillStyle = PillStyle.Tonal,
     enabled: Boolean = true,
     compact: Boolean = false,
-    selected: Boolean? = null
+    selected: Boolean? = null,
+    autoShrink: Boolean = true
 ) {
     val isSelected = selected == true
     val containerColor = when {
         !enabled -> GameColors.disabledContainer
-        isSelected -> MaterialTheme.colorScheme.secondaryContainer
-        else -> MaterialTheme.colorScheme.primary
+        selected == false -> Color.Transparent
+        isSelected || style == PillStyle.Primary -> MaterialTheme.colorScheme.primary
+        style == PillStyle.Tonal -> MaterialTheme.colorScheme.primaryContainer
+        else -> Color.Transparent
     }
     val contentColor = when {
         !enabled -> GameColors.disabledContent
-        isSelected -> MaterialTheme.colorScheme.onSecondaryContainer
-        else -> MaterialTheme.colorScheme.onPrimary
+        selected == false -> MaterialTheme.colorScheme.onSurfaceVariant
+        isSelected || style == PillStyle.Primary -> MaterialTheme.colorScheme.onPrimary
+        style == PillStyle.Tonal -> MaterialTheme.colorScheme.onPrimaryContainer
+        style == PillStyle.Outlined -> MaterialTheme.colorScheme.onSurface
+        else -> MaterialTheme.colorScheme.primary
     }
-    val interactionSource = remember { MutableInteractionSource() }
-    val density = LocalDensity.current
-    val textStyle = if (GameDimens.isTabletScreen) {
-        MaterialTheme.typography.titleMedium
+    // An unfilled button still has to have an edge, or a row of them reads as a row of loose words.
+    val borderStroke = if (enabled && (selected == false || (selected == null && style == PillStyle.Outlined))) {
+        BorderStroke(
+            width = PillBorderWidth,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = PillBorderAlpha)
+        )
     } else {
-        MaterialTheme.typography.labelLarge
+        null
     }
+    val textStyle = MaterialTheme.typography.bodyMedium
     val horizontalPadding = if (compact) PillCompactHorizontalPadding else PillHorizontalPadding
     val (minFontSize, maxFontSize) = pillButtonAutoSizeRange(
         minLabelSize = PillButtonMinLabelSize,
         styleFontSize = textStyle.fontSize,
-        density = density
+        density = LocalDensity.current
     )
     // wrapContentSize() relaxes the *minimum* width/height a caller's modifier might otherwise force
     // on the pill down to zero, so the pill stays only as big as its label needs even if it is placed
@@ -690,18 +860,23 @@ fun PillButton(
     // `Modifier.fillMaxWidth()` on purpose, specifically to be stretched, so it skips this altogether.
     val sizingModifier = if (compact) Modifier else Modifier.wrapContentSize()
 
+    // The click belongs to the Surface itself rather than to the modifier handed to it: Surface adds
+    // its own background and clip *inside* that modifier, so a `clickable` placed there draws its
+    // ripple under the fill and outside the rounding — which on a pill as small as a term chip came
+    // out as a rectangle standing around the button. Given to Surface, the ripple lands over the fill
+    // and inside the shape, and it takes its color from contentColor, i.e. from the button's own
+    // label rather than from the text color of the card the button happens to stand on.
     Surface(
+        onClick = onClick,
         modifier = modifier
             .then(sizingModifier)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = ripple(bounded = true),
-                enabled = enabled,
-                onClick = onClick
-            )
+            .defaultMinSize(minHeight = GameDimens.buttonSize(PillMinTouchSize))
             .semantics { if (selected != null) this.selected = isSelected },
+        enabled = enabled,
         shape = RoundedCornerShape(50),
-        color = containerColor
+        color = containerColor,
+        contentColor = contentColor,
+        border = borderStroke
     ) {
         Box(
             modifier = Modifier.padding(
@@ -713,20 +888,27 @@ fun PillButton(
             Text(
                 text = text,
                 style = textStyle,
-                fontWeight = FontWeight.Bold,
                 color = contentColor,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
-                autoSize = TextAutoSize.StepBased(
-                    minFontSize = minFontSize,
-                    maxFontSize = maxFontSize
-                )
+                overflow = TextOverflow.Ellipsis,
+                autoSize = if (autoShrink) {
+                    TextAutoSize.StepBased(minFontSize = minFontSize, maxFontSize = maxFontSize)
+                } else {
+                    null
+                }
             )
         }
     }
 }
 
-@Preview(name = "Components — Light", showBackground = true)
+/**
+ * Everything the game is built out of, on one screen, in the light theme: the four voices of
+ * [PillButton] with the states each of them has, the two kinds of [SpriteButton], the chips and a
+ * window. What a new palette or a new scale does to the game is visible here before it is visible
+ * anywhere else.
+ */
+@Preview(name = "Components — Light", showBackground = true, heightDp = 1200)
 @Composable
 private fun GameComponentsLightPreview() {
     FinGameTheme(darkTheme = false) {
@@ -736,7 +918,7 @@ private fun GameComponentsLightPreview() {
     }
 }
 
-/** Preview of the same components on a tablet, where the buttons are drawn enlarged. */
+/** The same components on a tablet, where the buttons grow but the writing on them does not. */
 @Preview(name = "Components — Tablet", showBackground = true, device = Devices.TABLET)
 @Composable
 private fun GameComponentsTabletPreview() {
@@ -747,13 +929,165 @@ private fun GameComponentsTabletPreview() {
     }
 }
 
-@Preview(name = "Components — Dark", showBackground = true)
+/** The same components in the dark theme, which is warm now rather than blue-grey. */
+@Preview(name = "Components — Dark", showBackground = true, heightDp = 1200)
 @Composable
 private fun GameComponentsDarkPreview() {
     FinGameTheme(darkTheme = true) {
         Surface(color = MaterialTheme.colorScheme.background) {
             PreviewContent()
         }
+    }
+}
+
+/**
+ * The buttons on the narrowest screen the game is laid out for, at the largest font scale it is
+ * read at — the pair of numbers every label in the game is checked against.
+ */
+@Preview(name = "Buttons — 360dp, font 1.0", showBackground = true, widthDp = 360, heightDp = 540)
+@Composable
+private fun PillButtonsNarrowPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            PillButtonGallery(modifier = Modifier.padding(16.dp))
+        }
+    }
+}
+
+@Preview(
+    name = "Buttons — 360dp, font 1.3",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 640,
+    fontScale = 1.3f
+)
+@Composable
+private fun PillButtonsLargeFontPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            PillButtonGallery(modifier = Modifier.padding(16.dp))
+        }
+    }
+}
+
+/** A window on the narrowest screen: its buttons stand in a column, one under the other. */
+@Preview(name = "Dialog — 360dp", showBackground = true, widthDp = 360, heightDp = 420)
+@Composable
+private fun GameDialogPreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            Box(modifier = Modifier.padding(16.dp)) {
+                GameDialogBlock(
+                    title = "Бюджет",
+                    closeDescription = "Отменить подтверждение",
+                    onDismiss = {},
+                    actions = {
+                        PillButton(
+                            text = "Подтвердить",
+                            onClick = {},
+                            modifier = Modifier.fillMaxWidth(),
+                            style = PillStyle.Primary,
+                            compact = true
+                        )
+                        PillButton(
+                            text = "Отмена",
+                            onClick = {},
+                            modifier = Modifier.fillMaxWidth(),
+                            style = PillStyle.Text,
+                            compact = true
+                        )
+                    }
+                ) {
+                    Text(
+                        text = "После подтверждения бюджет не изменить.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Every state a [PillButton] has, in rows: the four styles, a row of buttons sharing the width the
+ * way a picker's do, a group with one of them selected, and a button with nothing to do.
+ */
+@Composable
+private fun PillButtonGallery(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text(
+            text = "Четыре голоса",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PillButton(text = "Главное", onClick = {}, style = PillStyle.Primary)
+            PillButton(text = "Рядом", onClick = {}, style = PillStyle.Tonal)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PillButton(text = "Своё", onClick = {}, style = PillStyle.Outlined)
+            PillButton(text = "Тихое", onClick = {}, style = PillStyle.Text)
+            PillButton(text = "Нельзя", onClick = {}, enabled = false)
+        }
+        Text(
+            text = "Ряд: один кегль на всех",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        // autoShrink = false is the point of this row: with it on, each of the three measures its
+        // own width and "Всё" comes out twice the size of "Половина" standing beside it.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf("Ничего", "50%", "Всё").forEach { label ->
+                PillButton(
+                    text = label,
+                    onClick = {},
+                    modifier = Modifier.weight(1f),
+                    style = PillStyle.Text,
+                    compact = true,
+                    autoShrink = false
+                )
+            }
+        }
+        Text(
+            text = "Группа: выбранное — залитое",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            (2..7).forEach { term ->
+                PillButton(
+                    text = term.toString(),
+                    onClick = {},
+                    modifier = Modifier.weight(1f),
+                    compact = true,
+                    selected = term == 3,
+                    autoShrink = false
+                )
+            }
+        }
+        Text(
+            text = "Кнопка во всю ширину",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        PillButton(
+            text = "Подтвердить",
+            onClick = {},
+            modifier = Modifier.fillMaxWidth(),
+            style = PillStyle.Primary,
+            compact = true
+        )
     }
 }
 
@@ -767,19 +1101,46 @@ private fun PreviewContent() {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Sprite(assetPath = Sprites.pet("cat", "white"), contentDescription = "Питомец", modifier = Modifier.size(72.dp))
+            Sprite(
+                assetPath = Sprites.pet("cat", "white"),
+                contentDescription = "Питомец",
+                modifier = Modifier.size(72.dp)
+            )
+            BalanceChip(balance = 12400, depositAmount = 500)
+            // The same chip with nothing on deposit: the caption is gone, not written as a zero.
+            BalanceChip(balance = 250, depositAmount = 0)
+        }
+        // A button that belongs to a row of tabs keeps room for the mark of the chosen one; a button
+        // that stands on its own is exactly as tall as its artwork.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             SpriteButton(
                 assetPath = Sprites.SHOP,
                 contentDescription = "Открыть магазин",
-                onClick = {}
+                onClick = {},
+                selected = true
             )
             SpriteButton(
                 assetPath = Sprites.LOCATIONS,
                 contentDescription = "Локации",
-                onClick = {},
-                selected = true
+                onClick = {}
             )
-            BalanceChip(balance = 12400, depositAmount = 500)
+            SpriteButton(
+                assetPath = Sprites.SHOP,
+                contentDescription = "Открыть магазин",
+                onClick = {},
+                showIndicator = false
+            )
+            // Sprites.BUDGET has no file in assets/ yet, so this shows SpriteButton's label fallback.
+            SpriteButton(
+                assetPath = Sprites.BUDGET,
+                contentDescription = "Открыть бюджет",
+                onClick = {},
+                showIndicator = false,
+                label = "Бюджет"
+            )
         }
         GoalCard(title = "Велосипед", progress = 0.64f)
         val stats = PetStats(
@@ -792,6 +1153,11 @@ private fun PreviewContent() {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             StatKind.entries.forEach { stat -> StatChip(stat = stat, stats = stats) }
         }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            StatKind.entries.forEach { stat ->
+                StatChip(stat = stat, stats = stats, compact = true)
+            }
+        }
         // The two sizes an effect is shown in: the roomy one of the inventory's item window and the
         // compact one that fits two to a row inside a shop card.
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -802,16 +1168,6 @@ private fun PreviewContent() {
             EffectChip(stat = StatKind.HUNGER, value = 20, compact = true)
             EffectChip(stat = StatKind.HEALTH, value = -5, compact = true)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            PillButton(text = "Купить", onClick = {})
-            PillButton(text = "Недоступно", onClick = {}, enabled = false)
-        }
-        // Sprites.BUDGET has no file in assets/ yet, so this shows SpriteButton's label fallback.
-        SpriteButton(
-            assetPath = Sprites.BUDGET,
-            contentDescription = "Открыть бюджет",
-            onClick = {},
-            label = "Бюджет"
-        )
+        PillButtonGallery()
     }
 }

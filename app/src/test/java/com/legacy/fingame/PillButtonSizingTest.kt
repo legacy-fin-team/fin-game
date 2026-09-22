@@ -3,7 +3,9 @@ package com.legacy.fingame
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.legacy.fingame.ui.components.PillButtonMinLabelSize
 import com.legacy.fingame.ui.components.pillButtonAutoSizeRange
+import com.legacy.fingame.ui.theme.PixelTypography
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -65,6 +67,32 @@ class PillButtonSizingTest {
         assertEquals(13f, min.value, 0f)
         assertEquals(13f, max.value, 0f)
         assertTrue("min must never end up above max", min <= max)
+    }
+
+    @Test
+    fun `the floor never drops below what a child can read`() {
+        // Пиксельный шрифт теряет читаемость куда раньше обычного: 11.dp — пол, ниже которого
+        // подпись не опускается никогда. Подпись, которая и в этот размер не влезла, — подпись,
+        // которую надо укоротить, а не ужать ещё.
+        assertEquals(11f, PillButtonMinLabelSize.value, 0f)
+    }
+
+    @Test
+    fun `a pill label is the size of the text around it, tablet or not`() {
+        // Раньше кегль подписи выбирался веткой `if (isTabletScreen) titleMedium else labelLarge`,
+        // и на планшете слово в рамке выходило крупнее текста рядом с ним. Теперь потолок всегда
+        // один — `bodyMedium`, тот самый размер, которым написан текст игры.
+        val labelSize = PixelTypography.bodyMedium.fontSize
+        val phone = pillButtonAutoSizeRange(PillButtonMinLabelSize, labelSize, Density(2f, 1f))
+        val tablet = pillButtonAutoSizeRange(PillButtonMinLabelSize, labelSize, Density(2.5f, 1f))
+
+        assertEquals(labelSize.value, phone.second.value, 0f)
+        assertEquals(phone.second.value, tablet.second.value, 0f)
+        // И он не крупнее заголовка карточки, под которым такая кнопка обычно и стоит.
+        assertTrue(
+            "the writing on a button must never outgrow the title above it",
+            labelSize.value < PixelTypography.titleMedium.fontSize.value
+        )
     }
 
     @Test

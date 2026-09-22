@@ -5,9 +5,6 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-/** Разделитель балансов в шапке: одна иконка монеты и два числа через него. */
-private const val BalanceSeparator = " | "
-
 /**
  * Как пишется время записи журнала: часы и минуты, без секунд и без даты. Язык записан явно, а не
  * взят у устройства: в самом времени слов нет, зато цифры в некоторых локалях пишутся не
@@ -16,25 +13,28 @@ private const val BalanceSeparator = " | "
 private val TimeFormat: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT)
 
 /**
- * Оба счёта игрока одной строкой.
+ * Подпись про вклад в шапке — та, что стоит рядом с деньгами.
  *
- * @param balance текущие деньги — то, что можно потратить прямо сейчас.
+ * Пока вклада нет, подписи нет совсем: раньше оба счёта писались одной строкой через чёрточку
+ * (`250 | 0`), и ноль в ней ребёнку не говорил ничего, а чёрточка читалась как случайный значок.
+ *
  * @param depositAmount тело вклада, без процентов: проценты ещё не начислены, показывать их как
  * деньги игрока было бы обещанием.
- * @return Строка вида `100 | 510`.
+ * @return Строка вида `вклад 510`, либо `null`, когда вклада нет.
  */
-fun balancesTextOf(balance: Int, depositAmount: Int): String =
-    listOf(balance, depositAmount).joinToString(BalanceSeparator)
+fun depositTextOf(depositAmount: Int): String? =
+    if (depositAmount > 0) "вклад $depositAmount" else null
 
 /**
- * То же самое словами, для тех, кто слушает экран: числа через чёрточку вслух не читаются.
+ * Оба счёта словами, для тех, кто слушает экран.
  *
- * @param balance текущие деньги.
+ * @param balance текущие деньги — то, что можно потратить прямо сейчас.
  * @param depositAmount тело вклада.
- * @return Описание обоих счётов.
+ * @return Описание счётов; про вклад в нём сказано, только когда вклад есть — ровно то же, что
+ * видит глазами тот, кто на экран смотрит.
  */
 fun balancesDescriptionOf(balance: Int, depositAmount: Int): String =
-    "Текущие $balance, на вкладе $depositAmount"
+    if (depositAmount > 0) "Текущие $balance, на вкладе $depositAmount" else "Текущие $balance"
 
 /**
  * @param amount сумма со знаком.
