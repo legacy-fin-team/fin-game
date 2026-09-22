@@ -63,7 +63,7 @@ class MoneyLogTest {
     }
 
     @Test
-    fun `журнал раскладывает записи новейшими вперёд`() {
+    fun `a log built at once lays its records out newest first`() {
         val log = MoneyLog.of(
             listOf(
                 entry("День 1, запись а", 1, day = 19_000L),
@@ -80,7 +80,7 @@ class MoneyLogTest {
     }
 
     @Test
-    fun `порядок внутри одного момента — порядок, в котором записи пришли`() {
+    fun `records of one and the same moment keep the order they came in`() {
         val first = MoneyEntry("Первая", 1, gameDay = 19_000L, timestampMillis = 1_700_000_000_000L)
         val second = MoneyEntry("Вторая", 2, gameDay = 19_000L, timestampMillis = 1_700_000_000_000L)
 
@@ -90,7 +90,7 @@ class MoneyLogTest {
     }
 
     @Test
-    fun `of обрезает до MAX_ENTRIES после сортировки, а не по позиции в списке`() {
+    fun `the newest MAX_ENTRIES are kept, whatever place they had in the list`() {
         val shuffled = (0 until MoneyLog.MAX_ENTRIES + 1)
             .map { day -> entry("День $day", day, day = day.toLong()) }
             .shuffled()

@@ -1,7 +1,7 @@
 package com.legacy.fingame
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.SemanticsNodeInteraction
@@ -63,10 +63,13 @@ class SceneGesturesTest {
     private val phoneWindow: Dp = 280.dp
 
     /**
-     * Side of one the way a tablet gives it: room to spare, so the whole scene fits and the card
-     * shrinks to it.
+     * Side of one the way a tablet gives it: a good deal larger than the phone's.
+     *
+     * Small enough to fit on the narrowest screen these tests are run on, so what they measure is
+     * the area and not the device it happens to be shown on ([showStage] holds the area to this
+     * size whatever the screen, and this keeps it on the screen as well).
      */
-    private val tabletWindow: Dp = 460.dp
+    private val tabletWindow: Dp = 360.dp
 
     /** The scene the area shows: the demo pet standing in the first sub-location, as in a preview. */
     private val scene: GameScene = GameScene.of(
@@ -107,12 +110,17 @@ class SceneGesturesTest {
     /**
      * Shows a game area of a given size and nothing else.
      *
+     * The size is required rather than asked for: a plain `size` is a wish the screen may cut down
+     * — a window wider than the device is simply squeezed into it — and the test would then be
+     * measuring the device rather than the area. `requiredSize` hands the area exactly the window
+     * this test is about, on a phone and on a tablet alike.
+     *
      * @param side side of the box the area is given to fill.
      */
     private fun showStage(side: Dp) {
         compose.setContent {
             FinGameTheme(darkTheme = false) {
-                Box(modifier = Modifier.size(side)) {
+                Box(modifier = Modifier.requiredSize(side)) {
                     PetStage(scene = scene)
                 }
             }
@@ -146,9 +154,13 @@ class SceneGesturesTest {
         assertTrue(free() > 0f)
         assertEquals(Offset.Zero, moved())
 
-        // A short drag to the right brings the scene right, and not as far as the edge.
+        // A short drag to the right brings the scene right, and not as far as the edge. How short
+        // is counted from what the scene actually has hidden, which depends on the density of the
+        // screen: a fixed number of pixels is a nudge on one device and the whole way to the edge
+        // on another, and the drag has to stop before the edge for there to be anything to tell.
+        val shortDrag = free() / 2f
         stage.performTouchInput {
-            swipeRight(startX = centerX - 60f, endX = centerX + 60f)
+            swipeRight(startX = centerX - shortDrag / 2f, endX = centerX + shortDrag / 2f)
         }
         val dragged = moved()
         assertTrue(dragged.x > 0f)
@@ -216,8 +228,11 @@ class SceneGesturesTest {
         showStage(tabletWindow)
         val node = stage.fetchSemanticsNode()
 
+        // The card is square and is exactly the window it was given — the whole of it, with no
+        // band of its own surface anywhere, since the scene never draws smaller than the window.
         assertEquals(node.size.width, node.size.height)
         assertEquals(with(compose.density) { tabletWindow.roundToPx() }, node.size.width)
+        assertEquals(node.size.width, windowSide())
         assertTrue(sceneSide() >= node.size.width.toFloat())
     }
 
@@ -226,15 +241,16 @@ class SceneGesturesTest {
         val restoration = StateRestorationTester(compose)
         restoration.setContent {
             FinGameTheme(darkTheme = false) {
-                Box(modifier = Modifier.size(phoneWindow)) {
+                Box(modifier = Modifier.requiredSize(phoneWindow)) {
                     PetStage(scene = scene)
                 }
             }
         }
 
         pinchBy(from = 40f, to = 120f)
+        val shortDrag = free() / 2f
         stage.performTouchInput {
-            swipeRight(startX = centerX - 60f, endX = centerX + 60f)
+            swipeRight(startX = centerX - shortDrag / 2f, endX = centerX + shortDrag / 2f)
         }
         val scale = scale()
         val moved = moved()

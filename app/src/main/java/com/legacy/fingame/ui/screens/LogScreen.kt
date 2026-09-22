@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -41,6 +42,37 @@ private const val ReasonMaxLines = 2
 /** Ширина столбца изменения и столбца времени: колонки должны совпадать от строки к строке. */
 private val AmountColumnWidth = 76.dp
 private val TimeColumnWidth = 104.dp
+
+/**
+ * Чем пишется один столбец журнала: стиль надписи и диапазон, в котором она ужимается.
+ *
+ * Стиль и диапазон ходят вместе намеренно: диапазон считается от размера шрифта этого самого стиля
+ * ([pillButtonAutoSizeRange]), и стиль, взятый строкой отдельно от него, разошёлся бы с диапазоном,
+ * которым её ужимают, — надпись ужималась бы не от своего размера.
+ *
+ * @property style стиль, которым написан столбец.
+ * @property minFontSize мельче этого надпись не становится.
+ * @property maxFontSize крупнее этого — тоже: это размер самого [style].
+ */
+private data class LogColumnStyle(
+    val style: TextStyle,
+    val minFontSize: TextUnit,
+    val maxFontSize: TextUnit
+)
+
+/**
+ * @param style стиль столбца.
+ * @return Тот же стиль вместе с диапазоном, в котором ужимается написанное им.
+ */
+@Composable
+private fun logColumnStyleOf(style: TextStyle): LogColumnStyle {
+    val (minFontSize, maxFontSize) = pillButtonAutoSizeRange(
+        minLabelSize = PillButtonMinLabelSize,
+        styleFontSize = style.fontSize,
+        density = LocalDensity.current
+    )
+    return LogColumnStyle(style = style, minFontSize = minFontSize, maxFontSize = maxFontSize)
+}
 
 /**
  * Экран журнала: всё, что происходило с деньгами игрока, новейшее сверху.
@@ -66,13 +98,9 @@ fun LogScreen(
 ) {
     val entries = log.entries
     val oldestGameDay = entries.lastOrNull()?.gameDay ?: 0L
-    val density = LocalDensity.current
-    val reasonStyle = MaterialTheme.typography.bodyMedium
-    val amountStyle = MaterialTheme.typography.labelLarge
-    val timeStyle = MaterialTheme.typography.labelMedium
-    val reasonSizeRange = pillButtonAutoSizeRange(PillButtonMinLabelSize, reasonStyle.fontSize, density)
-    val amountSizeRange = pillButtonAutoSizeRange(PillButtonMinLabelSize, amountStyle.fontSize, density)
-    val timeSizeRange = pillButtonAutoSizeRange(PillButtonMinLabelSize, timeStyle.fontSize, density)
+    val reasonStyle = logColumnStyleOf(MaterialTheme.typography.bodyMedium)
+    val amountStyle = logColumnStyleOf(MaterialTheme.typography.labelLarge)
+    val timeStyle = logColumnStyleOf(MaterialTheme.typography.labelMedium)
 
     Column(
         modifier = modifier
@@ -111,9 +139,9 @@ fun LogScreen(
                     MoneyLogRow(
                         entry = entry,
                         oldestGameDay = oldestGameDay,
-                        reasonSizeRange = reasonSizeRange,
-                        amountSizeRange = amountSizeRange,
-                        timeSizeRange = timeSizeRange
+                        reasonStyle = reasonStyle,
+                        amountStyle = amountStyle,
+                        timeStyle = timeStyle
                     )
                     if (index < entries.lastIndex) {
                         HorizontalDivider(color = GameColors.cardStroke)
@@ -134,25 +162,21 @@ fun LogScreen(
  *
  * @param entry запись журнала.
  * @param oldestGameDay день самой старой хранимой записи, от которого считается номер дня.
- * @param reasonSizeRange диапазон `autoSize` для столбца причины (см. [pillButtonAutoSizeRange]),
- * считается один раз на весь журнал, а не на каждую строку.
- * @param amountSizeRange диапазон `autoSize` для столбца изменения.
- * @param timeSizeRange диапазон `autoSize` для столбца времени.
+ * @param reasonStyle чем пишется столбец причины: стиль и диапазон, в котором он ужимается
+ * (см. [LogColumnStyle]). Считается один раз на весь журнал, а не на каждую строку.
+ * @param amountStyle чем пишется столбец изменения.
+ * @param timeStyle чем пишется столбец времени.
  * @param modifier модификатор строки.
  */
 @Composable
 private fun MoneyLogRow(
     entry: MoneyEntry,
     oldestGameDay: Long,
-    reasonSizeRange: Pair<TextUnit, TextUnit>,
-    amountSizeRange: Pair<TextUnit, TextUnit>,
-    timeSizeRange: Pair<TextUnit, TextUnit>,
+    reasonStyle: LogColumnStyle,
+    amountStyle: LogColumnStyle,
+    timeStyle: LogColumnStyle,
     modifier: Modifier = Modifier
 ) {
-    val (minReason, maxReason) = reasonSizeRange
-    val (minAmount, maxAmount) = amountSizeRange
-    val (minTime, maxTime) = timeSizeRange
-
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -163,33 +187,40 @@ private fun MoneyLogRow(
         Text(
             text = entry.reason,
             modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
+            style = reasonStyle.style,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = ReasonMaxLines,
             overflow = TextOverflow.Ellipsis,
             // Название товара из данных может оказаться длинным словом, которое некуда перенести:
             // надпись ужимается тем же механизмом, что и подписи кнопок.
-            autoSize = TextAutoSize.StepBased(minFontSize = minReason, maxFontSize = maxReason)
+            autoSize = TextAutoSize.StepBased(
+                minFontSize = reasonStyle.minFontSize,
+                maxFontSize = reasonStyle.maxFontSize
+            )
         )
         Text(
             text = signedAmountText(entry.delta),
             modifier = Modifier.width(AmountColumnWidth),
             textAlign = TextAlign.End,
-            style = MaterialTheme.typography.labelLarge,
+            style = amountStyle.style,
             color = if (entry.delta < 0) MaterialTheme.colorScheme.error else GameColors.success,
             maxLines = 1,
-            softWrap = false,
-            autoSize = TextAutoSize.StepBased(minFontSize = minAmount, maxFontSize = maxAmount)
+            autoSize = TextAutoSize.StepBased(
+                minFontSize = amountStyle.minFontSize,
+                maxFontSize = amountStyle.maxFontSize
+            )
         )
         Text(
             text = dayTimeTextOf(entry.gameDay, oldestGameDay, entry.timestampMillis),
             modifier = Modifier.width(TimeColumnWidth),
             textAlign = TextAlign.End,
-            style = MaterialTheme.typography.labelMedium,
+            style = timeStyle.style,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
-            softWrap = false,
-            autoSize = TextAutoSize.StepBased(minFontSize = minTime, maxFontSize = maxTime)
+            autoSize = TextAutoSize.StepBased(
+                minFontSize = timeStyle.minFontSize,
+                maxFontSize = timeStyle.maxFontSize
+            )
         )
     }
 }
