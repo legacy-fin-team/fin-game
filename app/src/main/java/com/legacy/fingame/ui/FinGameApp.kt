@@ -176,7 +176,10 @@ fun FinGameApp(
                     )
 
                     Screen.QUESTS -> PlaceholderScreen("Квесты", Sprites.QUESTS, vm::closeScreen)
-                    Screen.LOCATIONS -> PlaceholderScreen("Локации", Sprites.LOCATIONS, vm::closeScreen)
+                    // Screen.BUDGET and Screen.LOG get their real screens in a later task; a
+                    // placeholder keeps the app compiling and navigable in the meantime.
+                    Screen.BUDGET -> PlaceholderScreen("Бюджет", Sprites.COIN, vm::closeScreen)
+                    Screen.LOG -> PlaceholderScreen("Журнал", Sprites.COIN, vm::closeScreen)
                     Screen.OPTIONS -> PlaceholderScreen("Опции", Sprites.SETTINGS, vm::closeScreen)
                 }
             }

@@ -277,6 +277,8 @@ class EconomyTest {
         assertTrue(vm.claimDailyBonus())
         assertEquals(Economy.STARTING_BALANCE + Economy.DAILY_BONUS, vm.state.value.balance)
         assertFalse(vm.state.value.dailyBonusAvailable)
+        assertEquals(Screen.BUDGET, vm.state.value.screen)
+        vm.closeScreen()
 
         assertFalse(vm.claimDailyBonus())
         assertEquals(Economy.STARTING_BALANCE + Economy.DAILY_BONUS, vm.state.value.balance)
@@ -287,6 +289,7 @@ class EconomyTest {
         val clock = FakeGameClock()
         val vm = testGameViewModel(clock = clock)
         assertTrue(vm.claimDailyBonus())
+        vm.closeScreen()
 
         clock.day += 1
         // The app may have been left open past midnight, so coming back to the main screen asks

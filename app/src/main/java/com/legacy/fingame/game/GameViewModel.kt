@@ -7,9 +7,16 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.legacy.fingame.game.animals.Animal
 import com.legacy.fingame.game.animals.AnimalSelection
 import com.legacy.fingame.game.animals.Growth
+import com.legacy.fingame.game.economy.Budget
+import com.legacy.fingame.game.economy.BudgetDraft
+import com.legacy.fingame.game.economy.BudgetResult
+import com.legacy.fingame.game.economy.BudgetState
+import com.legacy.fingame.game.economy.Deposit
 import com.legacy.fingame.game.economy.Economy
 import com.legacy.fingame.game.economy.FastForwardClock
 import com.legacy.fingame.game.economy.GameClock
+import com.legacy.fingame.game.economy.MoneyEntry
+import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.items.ItemCategory
@@ -36,8 +43,10 @@ enum class Screen {
     INVENTORY,
     /** The quests screen. */
     QUESTS,
-    /** The locations screen, which browses through sub-locations. */
-    LOCATIONS,
+    /** Экран планирования бюджета: итог прошлого периода и раскладка на следующий. */
+    BUDGET,
+    /** Экран журнала: все изменения денег игрока, новейшие сверху. */
+    LOG,
     /** The options/settings screen. */
     OPTIONS
 }
@@ -55,6 +64,20 @@ enum class Screen {
  * @property petName name the player gave the pet, restored from [PlayerState.petName], or an empty
  * string when the pet goes unnamed; the main screen then only names the sub-location above it.
  * @property balance coins the player can spend right now, restored from [PlayerState.balance].
+ * @property savings coins the player set aside, restored from [PlayerState.savings]; spendable
+ * again only by moving it back to [balance].
+ * @property deposit the deposit currently open, or null when there isn't one, restored from
+ * [PlayerState.deposit].
+ * @property budget the confirmed budget of the running period, or null when no period has started
+ * yet, restored from [PlayerState.budget].
+ * @property previousBudgetResult the result of the period last closed, shown while planning the
+ * next one, restored from [PlayerState.previousBudgetResult].
+ * @property budgetDraft the layout the player started on the planning screen but has not confirmed
+ * yet, or null when they haven't touched it, restored from [PlayerState.budgetDraft].
+ * @property planningOpen whether budget planning is open right now, restored from
+ * [PlayerState.planningOpen]; becomes true when the daily bonus is claimed and false once a budget
+ * is confirmed. See [canPlanBudget] for whether the planning screen may actually be opened.
+ * @property moneyLog the player's money log, newest first, restored from [PlayerState.moneyLog].
  * @property dailyBonusAvailable whether the daily bonus is waiting to be claimed; recomputed
  * whenever the player comes back to [Screen.MAIN], so an app left open overnight offers it again.
  * @property lastDailyBonusDay day the bonus was last claimed on, kept here only so it can be saved
@@ -92,6 +115,13 @@ data class GameUiState(
     val selection: AnimalSelection? = null,
     val petName: String = "",
     val balance: Int = Economy.STARTING_BALANCE,
+    val savings: Int = 0,
+    val deposit: Deposit? = null,
+    val budget: BudgetState? = null,
+    val previousBudgetResult: BudgetResult? = null,
+    val budgetDraft: BudgetDraft? = null,
+    val planningOpen: Boolean = false,
+    val moneyLog: MoneyLog = MoneyLog.EMPTY,
     val dailyBonusAvailable: Boolean = false,
     val lastDailyBonusDay: Long = Economy.NEVER_CLAIMED,
     val selectedCategory: ItemCategory = ItemCategory.entries.first(),
@@ -124,6 +154,24 @@ data class GameUiState(
 
     /** Whether the cart holds something the player can actually pay for. */
     val canBuyCart: Boolean get() = hasCart && canAffordCart
+
+    /** Сколько денег игрок может разложить: текущие плюс сбережения. Тело вклада сюда не входит. */
+    val totalToPlan: Int get() = balance + savings
+
+    /** Тело открытого вклада, без процентов; ноль, когда вклада нет. */
+    val depositAmount: Int get() = deposit?.amount ?: 0
+
+    /** Раскладка, которую показывает экран планирования: начатая игроком или начальная. */
+    val planningDraft: BudgetDraft get() = budgetDraft ?: Budget.startingDraft(savings)
+
+    /** Сколько из запланированного на период ещё не потрачено; ноль, когда периода нет. */
+    val budgetLeft: Int get() = budget?.let { it.planned - it.spent } ?: 0
+
+    /**
+     * Планирование доступно после получения бонуса дня, а также игроку, который ещё ни разу не
+     * подтверждал бюджет (первый запуск и старые сохранения).
+     */
+    val canPlanBudget: Boolean get() = planningOpen || (budget == null && previousBudgetResult == null)
 
     /**
      * @param item item shown in the shop.
@@ -497,33 +545,71 @@ class GameViewModel(
     }
 
     /**
+     * Записывает изменение текущего счёта в [GameUiState.moneyLog], со знаком и причиной, как
+     * их читает игрок.
+     *
+     * @param reason причина изменения так, как её читает игрок.
+     * @param delta изменение текущего счёта, со знаком.
+     * @return Это состояние с дописанной строкой журнала.
+     */
+    private fun GameUiState.logged(reason: String, delta: Int): GameUiState = copy(
+        moneyLog = moneyLog.plus(
+            MoneyEntry(
+                reason = reason,
+                delta = delta,
+                gameDay = clock.today(),
+                timestampMillis = clock.nowMillis()
+            )
+        )
+    )
+
+    /**
      * Adds coins the player earned to the balance and remembers them right away, so money is never
      * lost to the app being closed.
      *
      * @param amount coins to add; zero or less is ignored, as spending goes through [buyCart].
+     * @param reason причина начисления так, как её читает игрок в журнале; по умолчанию —
+     * [MoneyLog.REASON_REWARD].
      */
-    fun earn(amount: Int) {
+    fun earn(amount: Int, reason: String = MoneyLog.REASON_REWARD) {
         if (amount <= 0) return
         _state.value = _state.value.let { it.copy(balance = it.balance + amount) }
+            .logged(reason, amount)
         persist()
     }
 
     /**
-     * Hands the player the daily bonus, once per calendar day (see [Economy.isDailyBonusAvailable]).
+     * Выдаёт игроку бонус дня — один раз за игровой день (см. [Economy.isDailyBonusAvailable]) — и
+     * этим же начинает новый игровой период: прошлый бюджет закрывается в
+     * [GameUiState.previousBudgetResult], открывается планирование и игрок оказывается на экране
+     * бюджета, откуда бы он ни нажал кнопку.
      *
-     * @return True when the bonus was paid out, false when this day has already paid.
+     * @return True, когда бонус выдан, false, когда этот день уже платил.
      */
     fun claimDailyBonus(): Boolean {
         val current = _state.value
         val today = clock.today()
         if (!Economy.isDailyBonusAvailable(current.lastDailyBonusDay, today)) return false
 
+        val running = current.budget
         _state.value = current.copy(
             balance = current.balance + Economy.DAILY_BONUS,
             lastDailyBonusDay = today,
-            dailyBonusAvailable = false
-        )
+            dailyBonusAvailable = false,
+            budget = null,
+            previousBudgetResult = running?.let {
+                BudgetResult(
+                    planned = it.planned,
+                    plannedSavings = it.plannedSavings,
+                    plannedDeposit = it.plannedDeposit,
+                    actual = it.spent
+                )
+            } ?: current.previousBudgetResult,
+            budgetDraft = null,
+            planningOpen = true
+        ).logged(MoneyLog.REASON_DAILY_BONUS, Economy.DAILY_BONUS)
         persist()
+        openScreen(Screen.BUDGET)
         return true
     }
 
@@ -613,6 +699,13 @@ class GameViewModel(
             selection = saved.selection,
             petName = saved.petName,
             balance = saved.balance,
+            savings = saved.savings,
+            deposit = saved.deposit,
+            budget = saved.budget,
+            previousBudgetResult = saved.previousBudgetResult,
+            budgetDraft = saved.budgetDraft,
+            planningOpen = saved.planningOpen,
+            moneyLog = saved.moneyLog,
             lastDailyBonusDay = saved.lastDailyBonusDay,
             dailyBonusAvailable = Economy.isDailyBonusAvailable(
                 lastClaimedDay = saved.lastDailyBonusDay,
@@ -669,6 +762,13 @@ class GameViewModel(
                 petName = current.petName,
                 subLocationIndex = current.subLocationIndex,
                 balance = current.balance,
+                savings = current.savings,
+                deposit = current.deposit,
+                budget = current.budget,
+                previousBudgetResult = current.previousBudgetResult,
+                budgetDraft = current.budgetDraft,
+                planningOpen = current.planningOpen,
+                moneyLog = current.moneyLog,
                 lastDailyBonusDay = current.lastDailyBonusDay,
                 owned = current.owned,
                 worn = current.worn,

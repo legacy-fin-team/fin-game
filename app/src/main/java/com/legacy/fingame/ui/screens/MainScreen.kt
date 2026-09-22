@@ -695,14 +695,6 @@ private fun ControlsCorner(
             size = SecondaryActionSize
         )
     }
-    val locations: @Composable () -> Unit = {
-        SpriteButton(
-            assetPath = Sprites.LOCATIONS,
-            contentDescription = "Открыть локации",
-            onClick = { onOpenScreen(Screen.LOCATIONS) },
-            size = SecondaryActionSize
-        )
-    }
     val fastForward: @Composable () -> Unit = {
         if (onFastForward != null) {
             PillButton(
@@ -719,7 +711,6 @@ private fun ControlsCorner(
             verticalAlignment = Alignment.CenterVertically
         ) {
             fastForward()
-            locations()
             settings()
         }
     } else {
@@ -729,7 +720,6 @@ private fun ControlsCorner(
             horizontalAlignment = Alignment.End
         ) {
             settings()
-            locations()
             fastForward()
         }
     }
