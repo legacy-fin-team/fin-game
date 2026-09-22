@@ -5,7 +5,6 @@ import com.legacy.fingame.game.scene.SceneOffset
 import com.legacy.fingame.game.scene.SceneViewport
 import com.legacy.fingame.ui.screens.SceneOffsetSaver
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -67,26 +66,24 @@ class SceneViewportTest {
     }
 
     @Test
-    fun `an area the scene fits into shrinks to it, so none of the card shows around the room`() {
-        // 128 * 11 = 1408 fits into 1440, while one more pixel per pixel of the art would not.
+    fun `the window is always exactly what the area gave, and the scene covers it`() {
+        // 128 * 12 = 1536 is the smallest whole blow-up of the art that still covers 1440.
         val window = viewport(availableWidth = 1440f)
 
-        assertEquals(1408f, window.sceneSide, 0f)
-        assertEquals(window.sceneSide, window.windowSide, 0f)
-        assertTrue(window.windowSide < window.availableSide)
-        assertFalse(window.isDraggable)
-        assertEquals(SceneOffset.NONE, window.clamp(SceneOffset(x = 300f, y = -300f)))
-        assertEquals(SceneOffset.NONE, window.initialOffset)
+        assertEquals(1440f, window.windowSide, 0f)
+        assertTrue(window.sceneSide >= window.windowSide)
+        assertTrue(window.isDraggable)
     }
 
     @Test
-    fun `an area that is not square is measured by its shorter side, so the scene fits whole`() {
+    fun `an area that is not square is measured by its shorter side, and the scene covers it`() {
         val window = viewport(availableWidth = 1200f, availableHeight = 600f, pixelSize = 3f)
 
-        // 128 * 4 = 512 is the largest whole blow-up the shorter side of the area holds.
-        assertEquals(512f, window.sceneSide, 0f)
-        assertEquals(512f, window.windowSide, 0f)
-        assertFalse(window.isDraggable)
+        // 128 * 5 = 640 is the smallest whole blow-up of the art that still covers the 600 the
+        // shorter side of the area allows.
+        assertEquals(640f, window.sceneSide, 0f)
+        assertEquals(600f, window.windowSide, 0f)
+        assertTrue(window.sceneSide >= window.windowSide)
     }
 
     @Test
@@ -180,14 +177,14 @@ class SceneViewportTest {
     }
 
     @Test
-    fun `an area that grew past the scene puts it back in the middle`() {
+    fun `an area that grew keeps the scene as close to where it was dragged as the new edges allow`() {
         val small = viewport(availableWidth = 512f)
         val dragged = small.clamp(SceneOffset(x = 1000f, y = 1000f))
 
         val grown = viewport(availableWidth = 1440f)
 
-        assertFalse(grown.isDraggable)
-        assertEquals(SceneOffset.NONE, grown.clamp(dragged))
+        assertTrue(grown.isDraggable)
+        assertEquals(SceneOffset(x = grown.free, y = grown.free), grown.clamp(dragged))
     }
 
     @Test
@@ -257,9 +254,9 @@ class SceneViewportTest {
     fun `a pinch goes no further than the sizes the scene may be drawn at`() {
         val window = viewport(availableWidth = 700f)
 
-        // 128 * 5 = 640 is the largest whole blow-up the area holds, and twice the size the art is
-        // meant to have is as large as the room may get.
-        assertEquals(5f, window.minScale, 0f)
+        // 128 * 6 = 768 is the smallest whole blow-up that still covers the area, and twice the
+        // size the art is meant to have is as large as the room may get.
+        assertEquals(6f, window.minScale, 0f)
         assertEquals(16f, window.maxScale, 0f)
         assertEquals(
             16f,
@@ -268,7 +265,7 @@ class SceneViewportTest {
             0f
         )
         assertEquals(
-            5f,
+            6f,
             window.zoomedAt(rawScale = 0.01f, focusX = 0f, focusY = 0f, moved = SceneOffset.NONE)
                 .viewport.scale,
             0f
@@ -276,21 +273,19 @@ class SceneViewportTest {
     }
 
     @Test
-    fun `a pinch that shrinks the scene into the card holds the drag and the card to it`() {
+    fun `a pinch that shrinks the scene never shrinks the card with it`() {
         val window = viewport(availableWidth = 700f)
         val dragged = window.clamp(SceneOffset(x = window.free, y = window.free))
 
-        val zoomed = window.zoomedAt(
-            rawScale = window.minScale,
-            focusX = 0f,
-            focusY = 0f,
-            moved = dragged
-        )
-
-        assertEquals(640f, zoomed.viewport.sceneSide, 0f)
-        assertEquals(640f, zoomed.viewport.windowSide, 0f)
-        assertFalse(zoomed.viewport.isDraggable)
-        assertEquals(SceneOffset.NONE, zoomed.offset)
+        listOf(window.minScale, window.maxScale, 1f, 900f).forEach { rawScale ->
+            val zoomed = window.zoomedAt(
+                rawScale = rawScale,
+                focusX = 0f,
+                focusY = 0f,
+                moved = dragged
+            )
+            assertEquals(700f, zoomed.viewport.windowSide, 0f)
+        }
     }
 
     @Test
@@ -316,17 +311,25 @@ class SceneViewportTest {
     fun `a size the player pinched to is held to what an area of another shape allows`() {
         val phone = viewport(availableWidth = 700f)
         val pinched = phone.zoomedAt(
-            rawScale = 5f,
+            rawScale = 6f,
             focusX = 0f,
             focusY = 0f,
             moved = SceneOffset.NONE
         ).viewport
 
-        // A tablet cannot draw the room that small: it would leave a card larger than the scene.
+        // A tablet cannot draw the room that small: it would leave a band of the card around it.
         val tablet = viewport(availableWidth = 1440f)
 
-        assertEquals(5f, pinched.scale, 0f)
-        assertEquals(11f, tablet.heldScale(pinched.scale), 0f)
+        assertEquals(6f, pinched.scale, 0f)
+        assertEquals(12f, tablet.heldScale(pinched.scale), 0f)
+    }
+
+    @Test
+    fun `the card never changes size, however the player pinches the scene`() {
+        val window = viewport(availableWidth = 735f, availableHeight = 2254f, pixelSize = 7.875f)
+        val sizes = listOf(window.minScale, 1f, 8f, 12f, 900f)
+            .map { window.withScale(it).windowSide }
+        assertEquals(setOf(735f), sizes.toSet())
     }
 
     @Test

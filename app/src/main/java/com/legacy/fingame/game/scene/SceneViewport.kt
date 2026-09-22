@@ -1,7 +1,7 @@
 package com.legacy.fingame.game.scene
 
 import kotlin.math.abs
-import kotlin.math.floor
+import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -63,14 +63,15 @@ data class SceneZoom(val viewport: SceneViewport, val offset: SceneOffset)
  *
  * The scene — the room with the pet and everything standing in it — is a square picture of
  * [scenePixels] pixels of artwork, blown up by [scale] screen pixels per pixel of that artwork. The
- * window is the card on the screen showing it, and it is square as well: as large as the game area
- * is allowed to be ([availableWidth] by [availableHeight]), or exactly as large as the scene when
- * the scene is the smaller of the two. That is why a screen with room to spare never shows a band
- * of the card around the room — there is no card left over to show (see [windowSide]).
+ * window is the card on the screen showing it, and it is square as well: exactly as large as the
+ * game area is allowed to be ([availableWidth] by [availableHeight]), whatever the scene is doing —
+ * the card never changes size as the player pinches (see [windowSide]).
  *
- * When the scene is the larger of the two only a part of it is visible at a time and the player
- * drags the rest into view; a pinch changes [scale] between [minScale] and [maxScale] (see
- * [zoomedAt]).
+ * The scene itself is never drawn smaller than the window: [minScale] is the smallest whole blow-up
+ * that still covers it, so the card's own surface never shows around the room. When the scene comes
+ * out larger than the window — which it usually does by a little, since [minScale] only ever rounds
+ * up — only part of it is visible at a time and the player drags the rest into view; a pinch changes
+ * [scale] between [minScale] and [maxScale] (see [zoomedAt]).
  *
  * This is the whole geometry of the game area and it knows nothing about Compose: the UI measures
  * how much room the area has, builds a viewport out of it and asks it how big the card is, how big
@@ -82,8 +83,8 @@ data class SceneZoom(val viewport: SceneViewport, val offset: SceneOffset)
  * @property scale how many screen pixels one pixel of the artwork takes up. Always a whole number:
  * the scene is pixel art, and anything else would smear its grid across the screen and make some
  * pixels wider than their neighbours.
- * @property minScale smallest [scale] the player may pinch down to, i.e. the largest whole blow-up
- * at which the whole room still fits into the game area.
+ * @property minScale smallest [scale] the player may pinch down to, i.e. the smallest whole blow-up
+ * at which the scene still covers the game area.
  * @property maxScale largest [scale] the player may pinch up to.
  */
 data class SceneViewport(
@@ -106,10 +107,11 @@ data class SceneViewport(
     val sceneSide: Float = scenePixels * scale
 
     /**
-     * Side of the square window the scene is shown through, in screen pixels: as much of the room
-     * as the game area is allowed to take, and no more of the card than there is room to fill.
+     * Side of the square window the scene is shown through, in screen pixels: exactly as much room
+     * as the game area was given, and nothing else. Does not depend on [scale] — the card is the
+     * same size at any zoom and in any room; only how much of the scene is visible in it changes.
      */
-    val windowSide: Float = min(availableSide, sceneSide)
+    val windowSide: Float = availableSide
 
     /**
      * How far the scene may be moved either way before its own edge would come into the window.
@@ -236,12 +238,11 @@ data class SceneViewport(
          * Builds the viewport of a measured game area, picking how big the scene is drawn to begin
          * with and how far the player may pinch it either way.
          *
-         * The scene takes [pixelSize] — the size a pixel of the game is meant to have — and falls
-         * back to the largest whole blow-up that still fits into the area when the area is bigger
-         * than that, so a tablet shows the whole room instead of a needlessly small picture in the
-         * middle of a large card. That same blow-up is as far as a pinch may take the scale down
-         * ([minScale]): there is no point in shrinking the room past the card it is shown in, as
-         * the card shrinks with it (see [windowSide]).
+         * The scene takes [pixelSize] — the size a pixel of the game is meant to have — but never
+         * less than the smallest whole blow-up that still covers the area, so a tablet never shows
+         * a band of the card around the room instead of a needlessly small picture in the middle of
+         * a large one. That same blow-up is as far as a pinch may take the scale down ([minScale]):
+         * going any smaller would open exactly that band up (see [windowSide]).
          *
          * @param availableWidth widest the game area may be, in screen pixels.
          * @param availableHeight tallest it may be, in screen pixels.
@@ -261,15 +262,17 @@ data class SceneViewport(
         ): SceneViewport {
             val artPixels = max(1, scenePixels)
             val side = max(0f, min(availableWidth, availableHeight))
-            val fitting = max(1f, floor(side / artPixels))
+            // Smallest whole blow-up at which the scene still COVERS the window: any less and a
+            // band of the card would show next to the room.
+            val covering = max(1f, ceil(side / artPixels))
             val wanted = max(1f, pixelSize.roundToInt().toFloat())
-            val started = max(fitting, wanted)
+            val started = max(covering, wanted)
             return SceneViewport(
                 availableWidth = availableWidth,
                 availableHeight = availableHeight,
                 scenePixels = artPixels,
                 scale = started,
-                minScale = fitting,
+                minScale = covering,
                 maxScale = max(started, (started * max(1f, maxZoom)).roundToInt().toFloat())
             )
         }

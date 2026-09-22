@@ -167,6 +167,7 @@ class SceneGesturesTest {
     fun twoFingersBlowTheSceneUpAndBackDownByWholePixelsOfTheArt() {
         showStage(phoneWindow)
         val started = scale()
+        val window = windowSide()
 
         pinchBy(from = 40f, to = 160f)
         val blownUp = scale()
@@ -185,16 +186,18 @@ class SceneGesturesTest {
         assertTrue(shrunk < blownUp)
         assertEquals(0f, shrunk % 1f, 0f)
         // Nor does it shrink without end: the smallest it may be drawn at is the one that still
-        // fills the card, and past that the card shrinks with it instead of showing around it.
+        // covers the card, so no band of the card's own surface ever shows around the room.
         assertTrue(sceneSide() >= windowSide().toFloat())
+        // Whatever a pinch does to the scene, the card itself never changes size.
+        assertEquals(window, windowSide())
     }
 
     @Test
-    fun aSceneShrunkUntilItFitsLeavesNoCardAroundItAndNothingToDrag() {
+    fun aSceneShrunkAllTheWayLeavesTheCardTheSizeItWas() {
         showStage(phoneWindow)
 
         // Pinched together over and over, the scene comes down to the smallest it may be drawn at,
-        // which is the largest whole blow-up the window still holds whole.
+        // which is the smallest whole blow-up that still covers the window.
         var smallest = scale()
         repeat(4) {
             pinchBy(from = 160f, to = 40f)
@@ -203,30 +206,19 @@ class SceneGesturesTest {
         pinchBy(from = 160f, to = 40f)
         assertEquals(smallest, scale(), 0f)
 
-        // The card is then exactly the scene: no surface of its own shows around the room.
-        assertEquals(sceneSide(), windowSide().toFloat(), 0f)
-        assertEquals(0f, free(), 0f)
-
-        val before = moved()
-        stage.performTouchInput { swipeRight() }
-        assertEquals(before, moved())
+        // The card stays exactly the size the area gave it, and the scene still covers it whole.
+        assertEquals(with(compose.density) { phoneWindow.roundToPx() }, windowSide())
+        assertTrue(sceneSide() >= windowSide().toFloat())
     }
 
     @Test
-    fun aWindowWithRoomToSpareIsExactlyTheSceneAndNeverMoves() {
+    fun aWindowWithRoomToSpareIsTheWholeArea() {
         showStage(tabletWindow)
         val node = stage.fetchSemanticsNode()
 
         assertEquals(node.size.width, node.size.height)
-        assertEquals(sceneSide(), node.size.width.toFloat(), 0f)
-        assertTrue(node.size.width <= with(compose.density) { tabletWindow.roundToPx() })
-        assertEquals(Offset.Zero, moved())
-
-        stage.performTouchInput { swipeRight() }
-        assertEquals(Offset.Zero, moved())
-
-        stage.performTouchInput { swipeUp() }
-        assertEquals(Offset.Zero, moved())
+        assertEquals(with(compose.density) { tabletWindow.roundToPx() }, node.size.width)
+        assertTrue(sceneSide() >= node.size.width.toFloat())
     }
 
     @Test

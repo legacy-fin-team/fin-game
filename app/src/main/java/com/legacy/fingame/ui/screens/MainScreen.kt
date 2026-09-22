@@ -883,20 +883,20 @@ private fun stageTitleOf(petName: String, subLocationTitle: String?): String? = 
 /**
  * The game area: the square card the pet lives in, and the window onto the scene it is.
  *
- * The card is as large as the room it is given — the caller hands it the width and the height the
- * area may take and it squares that off — with one exception: when the whole scene fits into that
- * much, the card shrinks to exactly the scene. The scene is pixel art blown up by a whole number of
- * screen pixels ([SceneViewport.scale]), so it almost never comes out at the very size of the area,
- * and a card kept at the full size would show a band of its own surface around the room. Shrinking
- * it instead means the room fills the card to the last pixel on every screen, rounded corners and
- * all (see [SceneViewport.windowSide]).
+ * The card is exactly as large as the room it is given — the caller hands it the width and the
+ * height the area may take and it squares that off — whatever the scene is doing: a pinch changes
+ * how much of the room is visible, never the size of the card ([SceneViewport.windowSide]). The
+ * scene is pixel art blown up by a whole number of screen pixels ([SceneViewport.scale]) and is
+ * never drawn smaller than the window ([SceneViewport.minScale]), so the card's own surface never
+ * shows around the room, on a phone or on a tablet alike.
  *
- * When the scene does not fit, which on a phone it does not, only a part of it is visible at a time
- * and the player moves the rest into view with a finger, like a map: the whole scene travels
- * together, and the edges of the room stop the drag so no empty band next to it can be pulled into
- * view. Two fingers pinch the scene larger or smaller around the spot they hold, between
+ * On a phone the scene is larger than the window and only a part of it is visible at a time; the
+ * player moves the rest into view with a finger, like a map: the whole scene travels together, and
+ * the edges of the room stop the drag so no empty band next to it can be pulled into view. Two
+ * fingers pinch the scene larger or smaller around the spot they hold, between
  * [SceneViewport.minScale] and [SceneViewport.maxScale]; the scene steps from one whole blow-up to
- * the next as they go, so the pixel grid stays as crisp in the middle of a pinch as it is at rest.
+ * the next as they go, so the pixel grid stays as crisp in the middle of a pinch as it is at rest. A
+ * tablet may leave the player nothing to drag, but the card is exactly the same size either way.
  *
  * How big the scene is drawn and how far it is dragged outlive a recomposition and a turn of the
  * device, and an area that changed size holds both to what it now allows. Both are read in the
@@ -944,7 +944,7 @@ internal fun PetStage(
 
         Surface(
             modifier = Modifier
-                .sceneWindow { viewport().windowSide }
+                .sceneWindow { base.windowSide }
                 .testTag(PetStageTag)
                 .semantics {
                     sceneScale = scale
@@ -1056,9 +1056,9 @@ private fun SceneLayers(
  * Lays what this modifier is applied to out as the window of the game area: a square of the side
  * the viewport has picked, whatever the layout around it was prepared to give.
  *
- * The side is asked for at measuring time rather than during composition, so a pinch that makes the
- * window shrink around a scene that now fits into it re-measures the card without composing
- * anything again.
+ * The side is asked for at measuring time rather than during composition, so an area that is
+ * resized — a turn of the device, a folded screen — re-measures the card without composing anything
+ * again; a pinch never changes it at all.
  *
  * @param side side of the window, in screen pixels, as [SceneViewport.windowSide] states it.
  * @return This modifier with the window sized that way.
@@ -1321,7 +1321,7 @@ private fun MainScreenNarrowLandscapePreview() {
 
 /**
  * Preview of [MainScreen] on a tablet held sideways, where the buttons are drawn enlarged and the
- * whole room fits into the game area: the card is exactly the scene, with none of its own surface
+ * game area has room to spare: the scene covers the whole card, with none of the card's own surface
  * showing around it.
  */
 @Preview(name = "MainScreen — Tablet", showBackground = true, widthDp = 1280, heightDp = 800)
@@ -1379,8 +1379,9 @@ private fun PetStagePhonePreview() {
 }
 
 /**
- * Preview of the game area at the size a tablet gives it: the whole scene fits, so the card shrinks
- * to exactly the room and nothing of the card itself is left to see around it.
+ * Preview of the game area at the size a tablet gives it: there is room to spare, so the scene
+ * covers the whole card instead of a part of it, and nothing of the card itself is left to see
+ * around the room.
  */
 @Preview(name = "PetStage — Tablet", showBackground = true, widthDp = 492, heightDp = 492)
 @Composable
