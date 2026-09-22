@@ -55,6 +55,18 @@ object Sprites {
     const val COIN = "ui/coin.webp"
 
     /**
+     * Path to the budget icon sprite. The file does not exist yet — until the art team delivers
+     * it, [SpriteButton] draws its `label` fallback instead of falling back to `error.webp`.
+     */
+    const val BUDGET = "ui/budget.webp"
+
+    /**
+     * Path to the log icon sprite. The file does not exist yet — until the art team delivers it,
+     * [SpriteButton] draws its `label` fallback instead of falling back to `error.webp`.
+     */
+    const val LOG = "ui/log.webp"
+
+    /**
      * Builds the asset path for the icon of a pet stat, the one [StatChip] shows instead of naming
      * the stat in words.
      *

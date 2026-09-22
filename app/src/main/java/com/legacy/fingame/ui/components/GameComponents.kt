@@ -2,6 +2,7 @@ package com.legacy.fingame.ui.components
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -108,6 +109,13 @@ fun Sprite(
  *   button is enlarged from it by [GameDimens.buttonSize], so call sites only state the phone size.
  * @param selected whether this item is the currently active/selected one; when `true`, the sprite
  *   is shown at full opacity/scale and an underline is drawn beneath it to highlight it.
+ * @param label short caption to draw instead of the sprite while [assetPath] does not resolve to a
+ *   real file yet — a button whose icon is still missing from `assets/` would otherwise render
+ *   [SpriteLoader]'s `error.webp` placeholder, which reads as a bug rather than as unfinished art.
+ *   The fallback keeps the same size, press feedback and underline as the sprite it stands in for,
+ *   so once the file is added the button becomes an icon with no change at the call site. Left
+ *   `null` — the default — a button whose sprite is missing still falls back to `error.webp`, which
+ *   is what every other [SpriteButton] call wants.
  */
 /** Translucent black laid over a sprite while its button is held down. */
 private val PressedOverlayColor = Color(0x59000000)
@@ -140,8 +148,12 @@ fun SpriteButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = 72.dp,
-    selected: Boolean = false
+    selected: Boolean = false,
+    label: String? = null
 ) {
+    val context = LocalContext.current
+    val loader = remember(context) { SpriteLoader(context) }
+    val hasSprite = remember(assetPath, loader) { loader.hasSprite(assetPath) }
     val spriteSize = GameDimens.buttonSize(size)
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -150,6 +162,12 @@ fun SpriteButton(
     } else {
         null
     }
+    val labelTextStyle = MaterialTheme.typography.labelLarge
+    val (labelMinFontSize, labelMaxFontSize) = pillButtonAutoSizeRange(
+        minLabelSize = PillButtonMinLabelSize,
+        styleFontSize = labelTextStyle.fontSize,
+        density = LocalDensity.current
+    )
 
     Column(
         modifier = modifier
@@ -161,12 +179,48 @@ fun SpriteButton(
             .semantics { this.contentDescription = contentDescription },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Sprite(
-            assetPath = assetPath,
-            contentDescription = null,
-            modifier = Modifier.size(spriteSize),
-            colorFilter = pressFilter
-        )
+        if (hasSprite || label == null) {
+            Sprite(
+                assetPath = assetPath,
+                contentDescription = null,
+                modifier = Modifier.size(spriteSize),
+                colorFilter = pressFilter
+            )
+        } else {
+            // The sprite is not in assets/ yet: draw the button's own plate and caption instead of
+            // letting Sprite fall back to error.webp, which would read as a bug rather than as art
+            // still to be delivered. Same size as the sprite it stands in for, so the row around it
+            // is unaffected either way.
+            Box(
+                modifier = Modifier
+                    .size(spriteSize)
+                    .background(
+                        color = if (pressed) {
+                            GameColors.disabledContainer
+                        } else {
+                            MaterialTheme.colorScheme.secondaryContainer
+                        },
+                        shape = RoundedCornerShape(20.dp)
+                    )
+                    .border(BorderStroke(1.dp, GameColors.cardStroke), RoundedCornerShape(20.dp))
+                    .padding(4.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = label,
+                    style = labelTextStyle,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    softWrap = false,
+                    autoSize = TextAutoSize.StepBased(
+                        minFontSize = labelMinFontSize,
+                        maxFontSize = labelMaxFontSize
+                    )
+                )
+            }
+        }
         Spacer(modifier = Modifier.height(SpriteButtonUnderlineGap))
         Box(
             modifier = Modifier
@@ -521,12 +575,14 @@ fun EffectChip(
  * @param enabled whether the button responds to taps; when `false`, the button is rendered with
  *   the disabled container/content colors and taps are ignored.
  * @param selected whether the button is the one picked out of a group of them, e.g. the deposit
- *   term the player has chosen. A selected button keeps its own container color — the muted
+ *   term the player has chosen, or `null` — the default — when the button belongs to no such group
+ *   at all. A `true`/`false` button keeps its own container color when selected — the muted
  *   [androidx.compose.material3.ColorScheme.secondaryContainer] rather than the filled one — and
- *   says as much to a screen reader, which is what tells it apart from a button that is simply
- *   turned off: a picked option is still an option, and one announced as disabled reads as a
- *   button the player may not press. A button that belongs to no group is never selected, which is
- *   the default, and looks exactly as it did.
+ *   carries [androidx.compose.ui.semantics.SemanticsProperties.Selected] for a screen reader, which
+ *   is what tells a deselected button apart from one that is simply turned off: a picked option is
+ *   still an option, and one announced as disabled reads as a button the player may not press. A
+ *   `null` button carries neither: it is not part of a group, so there is nothing to say it was not
+ *   picked, and it looks exactly as an unselected one does.
  * @param compact whether the pill (a) uses [PillCompactHorizontalPadding] instead of the normal,
  *   wider [PillHorizontalPadding] and (b) actually stretches into a [modifier] with
  *   `Modifier.fillMaxWidth()` in it rather than staying wrap-content-sized regardless (`Compose`'s
@@ -552,16 +608,17 @@ fun PillButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     compact: Boolean = false,
-    selected: Boolean = false
+    selected: Boolean? = null
 ) {
+    val isSelected = selected == true
     val containerColor = when {
         !enabled -> GameColors.disabledContainer
-        selected -> MaterialTheme.colorScheme.secondaryContainer
+        isSelected -> MaterialTheme.colorScheme.secondaryContainer
         else -> MaterialTheme.colorScheme.primary
     }
     val contentColor = when {
         !enabled -> GameColors.disabledContent
-        selected -> MaterialTheme.colorScheme.onSecondaryContainer
+        isSelected -> MaterialTheme.colorScheme.onSecondaryContainer
         else -> MaterialTheme.colorScheme.onPrimary
     }
     val interactionSource = remember { MutableInteractionSource() }
@@ -593,7 +650,7 @@ fun PillButton(
                 enabled = enabled,
                 onClick = onClick
             )
-            .semantics { this.selected = selected },
+            .semantics { if (selected != null) this.selected = isSelected },
         shape = RoundedCornerShape(50),
         color = containerColor
     ) {
@@ -701,5 +758,12 @@ private fun PreviewContent() {
             PillButton(text = "Купить", onClick = {})
             PillButton(text = "Недоступно", onClick = {}, enabled = false)
         }
+        // Sprites.BUDGET has no file in assets/ yet, so this shows SpriteButton's label fallback.
+        SpriteButton(
+            assetPath = Sprites.BUDGET,
+            contentDescription = "Открыть бюджет",
+            onClick = {},
+            label = "Бюджет"
+        )
     }
 }

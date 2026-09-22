@@ -388,11 +388,9 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
  *   [ControlsCorner]). Stacked, the time button is wider than the button above it and hangs down
  *   past the player's things when it reaches that far across ([timeButtonTopOf]).
  * - Bottom-start and bottom-end: the buttons that lead to the budget and the log, and the action
- *   buttons for quests/inventory/shop. The bottom-end group shrinks by [bottomRowFit] on a screen
- *   too narrow for it, so its buttons stay the size of one another instead of the last one being
- *   squeezed; the bottom-start group is two text pills, side by side while the width
- *   [MainScreenStage] leaves them holds both and stacked one over the other when it does not, so
- *   a label is never cut short (see [MoneyActions]).
+ *   buttons for quests/inventory/shop. Both groups shrink together by [bottomRowFit] on a screen too
+ *   narrow for the row, so every button of it — money and action alike — stays the size of the
+ *   others instead of one of them being squeezed (see [MoneyActions], [PrimaryActions]).
  * - Middle: the badge naming the pet and the sub-location, the [PetStage] under it and the daily
  *   bonus button under that while the bonus is unclaimed ([PetColumn]). The badge and the button
  *   take the room they need and the game area is handed every last bit of what is left, so a screen
@@ -472,7 +470,11 @@ fun MainScreen(
                 }
             },
             bottomStart = {
-                MoneyActions(gap = ActionGap * fit, onOpenScreen = onOpenScreen)
+                MoneyActions(
+                    size = SecondaryActionSize * fit,
+                    gap = ActionGap * fit,
+                    onOpenScreen = onOpenScreen
+                )
             },
             bottomEnd = {
                 PrimaryActions(
@@ -511,11 +513,10 @@ fun MainScreen(
  * - the two top blocks share one line. The one with the player's things keeps at least the width it
  *   needs to say them and the buttons beside it take what is left, wrapping their labels rather
  *   than running under the goal card;
- * - the bottom blocks share one line the same way the top ones do: the corner with the action
- *   buttons, already sized to the screen by [bottomRowFit], keeps what it asks for and the money
- *   buttons beside it are held to whatever is left — which they then split evenly between
- *   themselves, each shrinking its own label rather than the two of them running into the corner
- *   opposite (see [MoneyActions]);
+ * - the bottom blocks share one line the same way the top ones do: both the money buttons and the
+ *   action buttons are already sized to the screen by [bottomRowFit], so the two corners meet where
+ *   the row's own math says they will, with nothing left over for either side to claim (see
+ *   [MoneyActions]);
  * - the demo build's time button hangs under the top end corner, pinned to the end of the screen,
  *   and steps down past the player's things when it is wide enough to reach them
  *   ([timeButtonTopOf]). The corner it hangs under counts as reaching down to the bottom of it, so
@@ -732,39 +733,44 @@ private fun ControlsCorner(
 }
 
 /**
- * Угол с кнопками, которые ведут к деньгам: планирование бюджета и журнал операций.
+ * The corner with the buttons that lead to the money screens: the budget plan and the log.
  *
- * Кнопки текстовые, а не спрайтовые, намеренно: спрайта под них ещё нет, а спрайтовая кнопка без
- * файла рисуется заглушкой-ошибкой — ровно тем, что из этого угла только что убрали.
+ * Same [Row] geometry as [PrimaryActions] — same gap, same button size — so the two bottom corners
+ * read as one panel rather than two different kinds of controls. Neither sprite is in assets/ yet
+ * ([Sprites.BUDGET], [Sprites.LOG]), so both buttons currently draw [SpriteButton]'s `label`
+ * fallback instead of an icon; once the art is added, they become icons with no change here.
  *
- * Каждая пилюля берёт ровно столько ширины, сколько нужно её подписи, а сама строка переносится:
- * пока остаток угла, который оставляет [MainScreenStage], держит обе кнопки, они стоят рядом; как
- * только перестаёт — на узком экране или при крупном системном шрифте — вторая уходит на строку
- * ниже. Делить остаток поровну между двумя кнопками, как раньше, значило обрезать обе подписи
- * («Бюдже», «Журн») ровно там, где угол кончается.
- *
- * @param gap промежуток между кнопками — и между строками, когда кнопки встали друг под другом.
- * @param onOpenScreen вызывается с экраном, который открывает кнопка.
- * @param modifier модификатор строки.
+ * @param size size of one button; shrunk together with everything else along the bottom of the
+ *   screen by [bottomRowFit].
+ * @param gap gap between them, shrunk by the same amount.
+ * @param onOpenScreen called with the screen a button opens.
+ * @param modifier modifier applied to the row.
  */
 @Composable
 private fun MoneyActions(
+    size: Dp,
     gap: Dp,
     onOpenScreen: (Screen) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    FlowRow(
+    Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(gap),
-        verticalArrangement = Arrangement.spacedBy(gap)
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        PillButton(
-            text = "Бюджет",
-            onClick = { onOpenScreen(Screen.BUDGET) }
+        SpriteButton(
+            assetPath = Sprites.BUDGET,
+            contentDescription = "Открыть бюджет",
+            onClick = { onOpenScreen(Screen.BUDGET) },
+            size = size,
+            label = "Бюджет"
         )
-        PillButton(
-            text = "Журнал",
-            onClick = { onOpenScreen(Screen.LOG) }
+        SpriteButton(
+            assetPath = Sprites.LOG,
+            contentDescription = "Открыть журнал",
+            onClick = { onOpenScreen(Screen.LOG) },
+            size = size,
+            label = "Журнал"
         )
     }
 }
