@@ -27,6 +27,7 @@ import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.screens.AnimalSelectScreen
 import com.legacy.fingame.ui.screens.InventoryScreen
+import com.legacy.fingame.ui.screens.LogScreen
 import com.legacy.fingame.ui.screens.MainScreen
 import com.legacy.fingame.ui.screens.PlaceholderScreen
 import com.legacy.fingame.ui.screens.ShopScreen
@@ -52,8 +53,8 @@ private const val TICK_POLLS_PER_TICK = 10L
  * actually picked.
  *
  * Layout: a full-size [Surface] with an [AnimatedContent] that cross-fades between
- * [MainScreen], [ShopScreen], [InventoryScreen] and the [PlaceholderScreen] instances for the
- * yet-unspecified sections (quests, budget, log, options), based on [GameUiState.screen].
+ * [MainScreen], [ShopScreen], [InventoryScreen], [LogScreen] and the [PlaceholderScreen] instances
+ * for the yet-unspecified sections (quests, budget, options), based on [GameUiState.screen].
  *
  * While there is a pet to look after, this is also where its life goes on: a loop asks
  * [GameViewModel.tick] to catch up with the clock, so the stat bars fall and the pet grows up in
@@ -174,10 +175,10 @@ fun FinGameApp(
                     )
 
                     Screen.QUESTS -> PlaceholderScreen("Квесты", Sprites.QUESTS, vm::closeScreen)
-                    // Screen.BUDGET and Screen.LOG get their real screens in a later task; a
-                    // placeholder keeps the app compiling and navigable in the meantime.
+                    // Screen.BUDGET gets its real screen in a later task; a placeholder keeps the
+                    // app compiling and navigable in the meantime.
                     Screen.BUDGET -> PlaceholderScreen("Бюджет", Sprites.COIN, vm::closeScreen)
-                    Screen.LOG -> PlaceholderScreen("Журнал", Sprites.COIN, vm::closeScreen)
+                    Screen.LOG -> LogScreen(log = state.moneyLog, onClose = vm::closeScreen)
                     Screen.OPTIONS -> PlaceholderScreen("Опции", Sprites.SETTINGS, vm::closeScreen)
                 }
             }
