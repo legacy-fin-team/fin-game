@@ -9,16 +9,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,8 +28,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -49,8 +48,10 @@ import com.legacy.fingame.ui.components.BalanceChip
 import com.legacy.fingame.ui.components.GameDialog
 import com.legacy.fingame.ui.components.GameDialogBlock
 import com.legacy.fingame.ui.components.PillButton
+import com.legacy.fingame.ui.components.PillButtonMinLabelSize
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
+import com.legacy.fingame.ui.components.pillButtonAutoSizeRange
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
@@ -59,8 +60,8 @@ import com.legacy.fingame.ui.theme.GameDimens
 private val CloseButtonSize = 64.dp
 private val ShortScreenCloseButtonSize = 44.dp
 
-/** Сколько цифр принимает поле суммы: больше девяти игрок не наберёт и в самой долгой игре. */
-private const val AmountMaxDigits = 9
+/** Размер кнопок «плюс» и «минус», которыми набирается сумма. */
+private val AmountButtonSize = 44.dp
 
 /** Окно, открытое поверх экрана бюджета. Чисто экранное: игре до него дела нет. */
 private enum class BudgetWindow { NONE, CONFIRM_BUDGET, CLOSE_DEPOSIT }
@@ -68,10 +69,10 @@ private enum class BudgetWindow { NONE, CONFIRM_BUDGET, CLOSE_DEPOSIT }
 /**
  * Экран бюджета: всё, что игрок делает со своими деньгами между покупками.
  *
- * Сверху — итог прошлого периода, чтобы игрок увидел, чем кончился его прошлый план, и только
- * потом решал, как жить дальше. Ниже — ровно один блок про «сейчас»: пока бонус дня не получен,
- * это кнопка бонуса (бонус и открывает новый период, так что планировать до него нечего); после
- * бонуса — раскладка денег; после подтверждения — как идёт текущий период.
+ * Сверху — итог прошлого периода, чтобы игрок увидел, чем кончился его прошлый план, и сразу под
+ * ним — как идёт текущий: два отчёта подряд, прошлый и сегодняшний. Ниже — то, что игрок может
+ * сделать прямо сейчас: пока бонус дня не получен, это кнопка бонуса (бонус и открывает новый
+ * период, так что планировать до него нечего), после бонуса — раскладка денег.
  * Действующий вклад показывается своей карточкой в любом из этих состояний: он живёт по своему
  * сроку и от периода не зависит.
  *
@@ -108,14 +109,12 @@ fun BudgetScreen(
     val showBonus = state.dailyBonusAvailable
     val showPlanning = !showBonus && state.canPlanBudget
 
-    // Клавиатура отрезает от прокручиваемой области ровно свою высоту (`imePadding`), а не
-    // ложится поверх неё: иначе поле, к которому прокрутка и так не доставала, при наборе уходит
-    // под клавиатуру вместе со всем, что ниже, — сроком вклада и кнопкой подтверждения.
+    // Клавиатуры на экране больше нет: суммы набираются ползунком и кнопками, поэтому отступ
+    // под неё прокручиваемой области не нужен.
     Column(
         modifier = modifier
             .fillMaxSize()
             .systemBarsPadding()
-            .imePadding()
             .padding(16.dp)
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -162,6 +161,14 @@ fun BudgetScreen(
 
         state.previousBudgetResult?.let { result -> PreviousBudgetCard(result = result) }
 
+        state.budget?.let { budget ->
+            RunningBudgetCard(
+                budget = budget,
+                balance = state.balance,
+                depositAmount = state.depositAmount
+            )
+        }
+
         if (showBonus) {
             DailyBonusCard(onClaimDailyBonus = onClaimDailyBonus)
         } else if (showPlanning) {
@@ -176,20 +183,13 @@ fun BudgetScreen(
             )
         }
 
-        state.budget?.let { budget ->
-            RunningBudgetCard(
-                budget = budget,
-                balance = state.balance,
-                depositAmount = state.depositAmount
-            )
-        }
-
         state.deposit?.let { deposit ->
             DepositCard(
                 deposit = deposit,
                 // Дни игра считает от эпохи; игроку показывается порядковый номер, отсчитанный от
                 // самой старой записи журнала, — тот же счёт, по которому дни подписаны в журнале.
                 oldestGameDay = state.moneyLog.entries.lastOrNull()?.gameDay ?: deposit.openedDay,
+                planningOpen = showPlanning,
                 onCloseEarly = { window = BudgetWindow.CLOSE_DEPOSIT }
             )
         }
@@ -226,6 +226,7 @@ fun BudgetScreen(
 
         BudgetWindow.CLOSE_DEPOSIT -> CloseDepositDialog(
             amount = state.depositAmount,
+            planningOpen = showPlanning,
             onConfirm = {
                 onCloseDepositEarly()
                 window = BudgetWindow.NONE
@@ -352,16 +353,22 @@ private fun PlanningCard(
 ) {
     BudgetCard(title = "Распределите $total", modifier = modifier) {
         if (depositAllowed) {
-            AmountField(
+            AmountPicker(
                 label = "На вклад",
                 value = draft.depositAmount,
+                max = total - draft.mustSpend - draft.wantSpend,
                 onValueChange = { onDraftChange(draft.copy(depositAmount = it)) }
             )
+            Text(
+                text = "Срок вклада",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TermPicker(
+                selected = draft.depositTermDays,
+                onSelect = { onDraftChange(draft.copy(depositTermDays = it)) }
+            )
             if (draft.depositAmount > 0) {
-                TermPicker(
-                    selected = draft.depositTermDays,
-                    onSelect = { onDraftChange(draft.copy(depositTermDays = it)) }
-                )
                 val rate = Deposit.rateOf(draft.depositTermDays)
                 AmountRow(
                     label = "Ставка",
@@ -372,53 +379,102 @@ private fun PlanningCard(
             }
         } else {
             Text(
-                text = "Вклад уже открыт",
+                text = "Вклад уже открыт. Новый можно открыть только при планировании — в " +
+                    "начале следующего периода, после бонуса дня.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        AmountField(
+
+        AmountPicker(
             label = SpendKind.MUST.title,
             value = draft.mustSpend,
+            max = total - draft.depositAmount - draft.wantSpend,
             onValueChange = { onDraftChange(draft.copy(mustSpend = it)) }
         )
-        AmountField(
+        Text(
+            text = "Еда и игрушки",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        AmountPicker(
             label = SpendKind.WANT.title,
             value = draft.wantSpend,
+            max = total - draft.depositAmount - draft.mustSpend,
             onValueChange = { onDraftChange(draft.copy(wantSpend = it)) }
         )
+        Text(
+            text = "Декор и одежда",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
         AmountRow(label = "Останется", value = Budget.savingsOf(draft, total).toString())
+        Text(
+            text = "Останется — то, что вы планируете сохранить",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         PillButton(text = "Подтвердить бюджет", onClick = onConfirm)
     }
 }
 
 /**
- * Поле ввода суммы: только цифры, пустое поле читается как ноль.
+ * Набор суммы без цифр: ползунок, кнопки «плюс» и «минус» круглым шагом и три быстрых ответа —
+ * «Ничего», «Половина», «Всё».
  *
- * @param label подпись поля.
- * @param value сумма, которая в нём сейчас.
+ * Цифры не набираются руками нигде на этом экране: клавиатура на телефоне закрывает половину
+ * раскладки, а игра про деньги, а не про набор чисел. Шаг берётся от самой суммы
+ * ([amountStepOf]), поэтому из сотни набирается «по десять», а из десяти тысяч — «по тысяче».
+ *
+ * @param label подпись суммы.
+ * @param value сумма, которая набрана сейчас.
+ * @param max сколько всего можно разложить в эту сумму.
  * @param onValueChange вызывается с новой суммой.
- * @param modifier модификатор поля.
+ * @param modifier модификатор блока.
  */
 @Composable
-private fun AmountField(
+private fun AmountPicker(
     label: String,
     value: Int,
+    max: Int,
     onValueChange: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    OutlinedTextField(
-        // Ноль показывается пустым полем: иначе его нельзя стереть, и набранное поверх него
-        // читалось бы как «01». Ноль это поле всё равно и означает.
-        value = if (value == 0) "" else value.toString(),
-        onValueChange = { typed ->
-            onValueChange(typed.filter { it.isDigit() }.take(AmountMaxDigits).toIntOrNull() ?: 0)
-        },
-        modifier = modifier.fillMaxWidth(),
-        label = { Text(text = label) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-    )
+    val step = amountStepOf(max)
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        AmountRow(label = label, value = value.toString())
+        Slider(
+            value = value.coerceIn(0, max.coerceAtLeast(0)).toFloat(),
+            onValueChange = { onValueChange(amountSnappedTo(it, max, step)) },
+            valueRange = 0f..max.coerceAtLeast(1).toFloat()
+        )
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SpriteButton(
+                assetPath = Sprites.MINUS,
+                contentDescription = "$label меньше на $step",
+                onClick = { onValueChange(amountSteppedBy(value, -1, max, step)) },
+                size = AmountButtonSize
+            )
+            SpriteButton(
+                assetPath = Sprites.PLUS,
+                contentDescription = "$label больше на $step",
+                onClick = { onValueChange(amountSteppedBy(value, 1, max, step)) },
+                size = AmountButtonSize
+            )
+            PillButton(text = "Ничего", onClick = { onValueChange(0) }, compact = true)
+            PillButton(
+                text = "Половина",
+                onClick = { onValueChange(amountSnappedTo(max / 2f, max, step)) },
+                compact = true
+            )
+            PillButton(text = "Всё", onClick = { onValueChange(max) }, compact = true)
+        }
+    }
 }
 
 /**
@@ -552,6 +608,8 @@ private fun RunningBudgetCard(
  *
  * @param deposit открытый вклад.
  * @param oldestGameDay день самой старой записи журнала, от которого игроку считаются дни.
+ * @param planningOpen идёт ли сейчас раскладка: от этого зависит, когда игрок сможет открыть
+ *   новый вклад взамен закрытого.
  * @param onCloseEarly вызывается по кнопке досрочного закрытия.
  * @param modifier модификатор карточки.
  */
@@ -559,6 +617,7 @@ private fun RunningBudgetCard(
 private fun DepositCard(
     deposit: Deposit,
     oldestGameDay: Long,
+    planningOpen: Boolean,
     onCloseEarly: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -576,6 +635,15 @@ private fun DepositCard(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        Text(
+            text = if (planningOpen) {
+                "Закроете сейчас — сможете открыть новый прямо в этой раскладке"
+            } else {
+                "Новый вклад открывается только в начале периода, при планировании"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         PillButton(text = "Закрыть досрочно", onClick = onCloseEarly)
     }
 }
@@ -585,11 +653,18 @@ private fun DepositCard(
  * тут сказать.
  *
  * @param amount тело вклада — ровно столько и вернётся.
+ * @param planningOpen идёт ли сейчас раскладка: от этого зависит, когда игрок сможет открыть
+ *   новый вклад.
  * @param onConfirm вызывается, когда игрок подтвердил закрытие.
  * @param onDismiss вызывается, когда закрытие отменено.
  */
 @Composable
-private fun CloseDepositDialog(amount: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+private fun CloseDepositDialog(
+    amount: Int,
+    planningOpen: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
     GameDialog(onDismiss = onDismiss) {
         GameDialogBlock(
             title = "Проценты сгорят",
@@ -599,6 +674,16 @@ private fun CloseDepositDialog(amount: Int, onConfirm: () -> Unit, onDismiss: ()
             Text(
                 text = "Досрочное закрытие вернёт только $amount, проценты не начислятся.",
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = if (planningOpen) {
+                    "Новый вклад можно открыть прямо в этой раскладке."
+                } else {
+                    "Новый вклад откроется только в начале периода, при планировании."
+                },
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
@@ -631,7 +716,19 @@ private fun BudgetCard(
     }
 }
 
-/** Строка «подпись — значение»: подпись слева, значение справа, обе в одну строку. */
+/**
+ * Строка «подпись — значение»: подпись слева, значение справа.
+ *
+ * Подпись занимает всё, что осталось от значения, и переносится на вторую строку, а не режется
+ * многоточием: на узком экране с крупным системным шрифтом «Планировали сохранить» иначе
+ * превращалось в «Планиро…». Значение места не уступает вовсе и ужимается, как надпись на
+ * [PillButton], — числа читаются целиком при любой ширине.
+ *
+ * @param label подпись строки.
+ * @param value значение так, как его читает игрок.
+ * @param modifier модификатор строки.
+ * @param valueColor цвет значения: им отмечается перерасход и выгода.
+ */
 @Composable
 private fun AmountRow(
     label: String,
@@ -639,9 +736,16 @@ private fun AmountRow(
     modifier: Modifier = Modifier,
     valueColor: Color = MaterialTheme.colorScheme.onSurface
 ) {
+    val valueStyle = MaterialTheme.typography.labelLarge
+    val (minFontSize, maxFontSize) = pillButtonAutoSizeRange(
+        minLabelSize = PillButtonMinLabelSize,
+        styleFontSize = valueStyle.fontSize,
+        density = LocalDensity.current
+    )
+
     Row(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -649,10 +753,20 @@ private fun AmountRow(
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
-        Text(text = value, style = MaterialTheme.typography.labelLarge, color = valueColor, maxLines = 1)
+        Text(
+            text = value,
+            style = valueStyle,
+            color = valueColor,
+            maxLines = 1,
+            softWrap = false,
+            autoSize = TextAutoSize.StepBased(
+                minFontSize = minFontSize,
+                maxFontSize = maxFontSize
+            )
+        )
     }
 }
 
@@ -847,5 +961,12 @@ private fun ConfirmBudgetDialogPreview() {
 @Preview(name = "BudgetScreen — Close deposit window", showBackground = true)
 @Composable
 private fun CloseDepositDialogPreview() {
-    FinGameTheme(darkTheme = false) { CloseDepositDialog(amount = 200, onConfirm = {}, onDismiss = {}) }
+    FinGameTheme(darkTheme = false) {
+        CloseDepositDialog(
+            amount = 200,
+            planningOpen = true,
+            onConfirm = {},
+            onDismiss = {}
+        )
+    }
 }
