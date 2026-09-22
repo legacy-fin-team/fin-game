@@ -240,4 +240,159 @@ class BudgetFlowTest {
         assertNull(vm.state.value.budgetDraft)
         assertEquals(savings, vm.state.value.savings)
     }
+
+    @Test
+    fun `a purchase is written into the log and counted as spending`() {
+        val vm = testGameViewModel()
+        vm.claimDailyBonus()
+        assertTrue(vm.confirmBudget())
+        val planned = vm.state.value.budget?.planned ?: 0
+
+        vm.increaseQty(TestItems.APPLE.id)
+        vm.increaseQty(TestItems.APPLE.id)
+        assertTrue(vm.buyCart())
+
+        val state = vm.state.value
+        val spent = TestItems.APPLE.price * 2
+        assertEquals(spent, state.budget?.spent)
+        assertEquals(planned - spent, state.balance)
+        assertEquals(
+            MoneyLog.purchaseReason(TestItems.APPLE.name, 2),
+            state.moneyLog.entries.first().reason
+        )
+        assertEquals(-spent, state.moneyLog.entries.first().delta)
+    }
+
+    @Test
+    fun `moving money after the budget was confirmed leaves the plan alone`() {
+        val store = FakePlayerStateStore(PlayerState(balance = 500))
+        val vm = testGameViewModel(store = store)
+        vm.claimDailyBonus()
+        vm.updateBudgetDraft(BudgetDraft(savings = 200, depositAmount = 0, depositTermDays = 2))
+        assertTrue(vm.confirmBudget())
+        val planned = vm.state.value.budget?.planned ?: 0
+
+        assertTrue(vm.transferToSavings(100))
+        assertEquals(300, vm.state.value.savings)
+        assertEquals(planned - 100, vm.state.value.balance)
+        assertEquals(planned, vm.state.value.budget?.planned)
+        assertEquals(0, vm.state.value.budget?.spent)
+        assertEquals(MoneyLog.REASON_TO_SAVINGS, vm.state.value.moneyLog.entries.first().reason)
+
+        assertTrue(vm.transferFromSavings(250))
+        assertEquals(50, vm.state.value.savings)
+        assertEquals(planned + 150, vm.state.value.balance)
+        assertEquals(MoneyLog.REASON_FROM_SAVINGS, vm.state.value.moneyLog.entries.first().reason)
+    }
+
+    @Test
+    fun `a transfer of nothing, or of more than there is, moves nothing`() {
+        val vm = testGameViewModel()
+        vm.claimDailyBonus()
+        assertTrue(vm.confirmBudget())
+        val balance = vm.state.value.balance
+
+        assertFalse(vm.transferToSavings(0))
+        assertFalse(vm.transferToSavings(-10))
+        assertFalse(vm.transferToSavings(balance + 1))
+        assertFalse(vm.transferFromSavings(1))
+
+        assertEquals(balance, vm.state.value.balance)
+        assertEquals(0, vm.state.value.savings)
+    }
+
+    @Test
+    fun `a deposit that lived out its term pays back the body and the interest`() {
+        val clock = FakeGameClock()
+        val store = FakePlayerStateStore(
+            PlayerState(
+                balance = 100,
+                deposit = Deposit.openedOn(
+                    amount = 500,
+                    termDays = 7,
+                    day = FakeGameClock.DEFAULT_DAY
+                )
+            )
+        )
+        val vm = testGameViewModel(store = store, clock = clock)
+        assertEquals(500, vm.state.value.deposit?.amount)
+
+        clock.day += 7
+        vm.openScreen(Screen.BUDGET)
+
+        val state = vm.state.value
+        assertNull(state.deposit)
+        assertEquals(100 + 500 + 75, state.balance)
+        assertEquals(
+            listOf(MoneyLog.REASON_DEPOSIT_INTEREST, MoneyLog.REASON_DEPOSIT_CLOSED),
+            state.moneyLog.entries.map { it.reason }
+        )
+        assertEquals(listOf(75, 500), state.moneyLog.entries.map { it.delta })
+    }
+
+    @Test
+    fun `a deposit that matured while the app was closed is paid back at the next launch`() {
+        val clock = FakeGameClock()
+        val store = FakePlayerStateStore(
+            PlayerState(
+                balance = 0,
+                deposit = Deposit.openedOn(
+                    amount = 100,
+                    termDays = 2,
+                    day = FakeGameClock.DEFAULT_DAY - 5
+                )
+            )
+        )
+
+        val vm = testGameViewModel(store = store, clock = clock)
+
+        assertNull(vm.state.value.deposit)
+        assertEquals(104, vm.state.value.balance)
+        assertNull(store.state.deposit)
+    }
+
+    @Test
+    fun `skipping time far enough pays the deposit back`() {
+        val clock = FakeGameClock()
+        val store = FakePlayerStateStore(
+            PlayerState(
+                balance = 0,
+                deposit = Deposit.openedOn(
+                    amount = 100,
+                    termDays = 2,
+                    day = FakeGameClock.DEFAULT_DAY
+                )
+            )
+        )
+        val vm = testGameViewModel(store = store, clock = clock)
+
+        vm.fastForward(java.util.concurrent.TimeUnit.DAYS.toMillis(2))
+
+        assertNull(vm.state.value.deposit)
+        assertEquals(104, vm.state.value.balance)
+    }
+
+    @Test
+    fun `closing a deposit early pays the body back and no interest`() {
+        val store = FakePlayerStateStore(
+            PlayerState(
+                balance = 10,
+                deposit = Deposit.openedOn(
+                    amount = 300,
+                    termDays = 7,
+                    day = FakeGameClock.DEFAULT_DAY
+                )
+            )
+        )
+        val vm = testGameViewModel(store = store)
+
+        assertTrue(vm.closeDepositEarly())
+
+        val state = vm.state.value
+        assertNull(state.deposit)
+        assertEquals(310, state.balance)
+        assertEquals(MoneyLog.REASON_DEPOSIT_CLOSED_EARLY, state.moneyLog.entries.first().reason)
+        assertEquals(300, state.moneyLog.entries.first().delta)
+        assertFalse(vm.closeDepositEarly())
+    }
 }

@@ -258,6 +258,12 @@ class GameViewModel(
     /** Current [GameUiState], observed by the UI. */
     val state: StateFlow<GameUiState> = _state.asStateFlow()
 
+    init {
+        // Вклад мог дожить до срока, пока приложение было закрыто: игрок должен найти деньги на
+        // счету, а не вклад, который «уже должен был закрыться».
+        settleMaturedDeposit()
+    }
+
     /**
      * Switches the currently displayed screen.
      *
@@ -268,6 +274,7 @@ class GameViewModel(
      * @param screen the screen to navigate to.
      */
     fun openScreen(screen: Screen) {
+        settleMaturedDeposit()
         _state.value = stateForNavigatingTo(screen)
     }
 
@@ -276,6 +283,7 @@ class GameViewModel(
      * If the player was on [Screen.SHOP], the unpaid shop cart is dropped.
      */
     fun closeScreen() {
+        settleMaturedDeposit()
         _state.value = stateForNavigatingTo(Screen.MAIN)
     }
 
@@ -366,6 +374,7 @@ class GameViewModel(
     fun fastForward(millis: Long) {
         if (millis <= 0) return
         clock.fastForward(millis)
+        settleMaturedDeposit()
 
         val current = _state.value
         _state.value = current.copy(
@@ -526,11 +535,16 @@ class GameViewModel(
         if (!current.canBuyCart) return false
 
         val owned = current.owned.toMutableMap()
+        var logged = current
         current.quantities.forEach { (itemId, quantity) ->
             if (quantity <= 0) return@forEach
             val item = catalog.findItemById(itemId) ?: return@forEach
             val key = ItemSelection(itemId, current.pickedVariantOf(item))
             owned[key] = (owned[key] ?: 0) + quantity
+            logged = logged.logged(
+                reason = MoneyLog.purchaseReason(item.name, quantity),
+                delta = -item.price * quantity
+            )
         }
 
         _state.value = stateForNavigatingTo(Screen.MAIN).copy(
@@ -538,10 +552,90 @@ class GameViewModel(
             owned = owned.toMap(),
             quantities = emptyMap(),
             pickedVariants = emptyMap(),
-            cartPrice = 0
+            cartPrice = 0,
+            moneyLog = logged.moneyLog,
+            budget = current.budget?.let { it.copy(spent = it.spent + current.cartPrice) }
         )
         persist()
         return true
+    }
+
+    /**
+     * Перекладывает деньги с текущего счёта в сбережения. План периода при этом не меняется:
+     * подтверждённый бюджет не переписывается, игрок просто распорядился своими деньгами иначе.
+     *
+     * @param amount сколько переложить; ноль, отрицательное число и сумма больше текущего счёта
+     * не перекладывают ничего.
+     * @return True, когда деньги переложены.
+     */
+    fun transferToSavings(amount: Int): Boolean {
+        val current = _state.value
+        if (amount <= 0 || amount > current.balance) return false
+
+        _state.value = current.copy(
+            balance = current.balance - amount,
+            savings = current.savings + amount
+        ).logged(MoneyLog.REASON_TO_SAVINGS, -amount)
+        persist()
+        return true
+    }
+
+    /**
+     * Берёт деньги из сбережений обратно на текущий счёт. План периода не меняется.
+     *
+     * @param amount сколько взять; ноль, отрицательное число и сумма больше сбережений не берут
+     * ничего.
+     * @return True, когда деньги взяты.
+     */
+    fun transferFromSavings(amount: Int): Boolean {
+        val current = _state.value
+        if (amount <= 0 || amount > current.savings) return false
+
+        _state.value = current.copy(
+            balance = current.balance + amount,
+            savings = current.savings - amount
+        ).logged(MoneyLog.REASON_FROM_SAVINGS, amount)
+        persist()
+        return true
+    }
+
+    /**
+     * Закрывает вклад до срока: тело возвращается на текущий счёт, проценты не начисляются.
+     *
+     * @return True, когда вклад закрыт, false, когда вклада не было.
+     */
+    fun closeDepositEarly(): Boolean {
+        val current = _state.value
+        val deposit = current.deposit ?: return false
+
+        _state.value = current.copy(
+            balance = current.balance + deposit.amount,
+            deposit = null
+        ).logged(MoneyLog.REASON_DEPOSIT_CLOSED_EARLY, deposit.amount)
+        persist()
+        return true
+    }
+
+    /**
+     * Гасит вклад, доживший до срока: тело и проценты возвращаются на текущий счёт, вклада больше
+     * нет. Вклад, которому ещё рано, и отсутствующий вклад не делают ничего.
+     *
+     * Вызывается там же, где пересчитывается доступность бонуса дня: при создании модели, при
+     * каждом переходе между экранами и после перемотки времени, — то есть в каждой точке, где
+     * игра узнаёт, что день сменился.
+     */
+    private fun settleMaturedDeposit() {
+        val current = _state.value
+        val deposit = current.deposit ?: return
+        if (!deposit.isMatureOn(clock.today())) return
+
+        _state.value = current.copy(
+            balance = current.balance + deposit.payout,
+            deposit = null
+        )
+            .logged(MoneyLog.REASON_DEPOSIT_CLOSED, deposit.amount)
+            .logged(MoneyLog.REASON_DEPOSIT_INTEREST, deposit.interest)
+        persist()
     }
 
     /**
