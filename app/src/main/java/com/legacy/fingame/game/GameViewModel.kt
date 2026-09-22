@@ -645,12 +645,19 @@ class GameViewModel(
         val deposit = current.deposit ?: return
         if (!deposit.isMatureOn(clock.today())) return
 
-        _state.value = current.copy(
+        // Проценты попадают в журнал, только когда они есть: вклад, который не заработал и
+        // монеты, не заработал ничего, и строка «Проценты по вкладу +0» рассказывала бы игроку
+        // ровно об этом — но так, будто что-то начислили.
+        val settled = current.copy(
             balance = current.balance + deposit.payout,
             deposit = null
-        )
-            .logged(MoneyLog.REASON_DEPOSIT_CLOSED, deposit.amount)
-            .logged(MoneyLog.REASON_DEPOSIT_INTEREST, deposit.interest)
+        ).logged(MoneyLog.REASON_DEPOSIT_CLOSED, deposit.amount)
+
+        _state.value = if (deposit.interest > 0) {
+            settled.logged(MoneyLog.REASON_DEPOSIT_INTEREST, deposit.interest)
+        } else {
+            settled
+        }
         persist()
     }
 
@@ -730,10 +737,16 @@ class GameViewModel(
      * Раскладка приводится в допустимый вид ([Budget.normalize]) до того, как попадёт в состояние,
      * поэтому раскладка, в которой суммы не сходятся, не сохраняется никогда.
      *
+     * Вклад, доживший до срока, сперва гасится [settleMaturedDeposit], как и в
+     * [closeDepositEarly]: раскладка считается от денег, которые у игрока действительно есть, и
+     * поле нового вклада появляется в тот же миг, когда старый закрылся.
+     *
      * @param draft что набрал игрок; игнорируется, когда планировать нечего
      * ([GameUiState.canPlanBudget]) — подтверждённый бюджет не переписывается.
      */
     fun updateBudgetDraft(draft: BudgetDraft) {
+        settleMaturedDeposit()
+
         val current = _state.value
         if (!current.canPlanBudget) return
 
@@ -751,10 +764,16 @@ class GameViewModel(
      * Подтверждает бюджет: деньги раскладываются по счетам, вклад — если игрок его выбрал —
      * открывается, и начинается период, в котором план уже не меняется.
      *
+     * Вклад, доживший до срока, сперва гасится [settleMaturedDeposit], как и в
+     * [closeDepositEarly]: его тело и проценты раскладываются вместе со всем остальным, а не
+     * лежат мимо подтверждённого плана.
+     *
      * @return True, когда бюджет подтверждён, false, когда планировать нечего
      * ([GameUiState.canPlanBudget]), то есть подтверждать нечего.
      */
     fun confirmBudget(): Boolean {
+        settleMaturedDeposit()
+
         val current = _state.value
         if (!current.canPlanBudget) return false
 

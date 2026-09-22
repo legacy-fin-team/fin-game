@@ -375,6 +375,35 @@ class BudgetFlowTest {
     }
 
     @Test
+    fun `a deposit too small to earn a coin writes no interest line at all`() {
+        val clock = FakeGameClock()
+        // 4% of 10 is less than half a coin, so the interest rounds to nothing.
+        val store = FakePlayerStateStore(
+            PlayerState(
+                balance = 100,
+                deposit = Deposit.openedOn(
+                    amount = 10,
+                    termDays = 2,
+                    day = FakeGameClock.DEFAULT_DAY
+                )
+            )
+        )
+        val vm = testGameViewModel(store = store, clock = clock)
+
+        clock.day += 2
+        vm.openScreen(Screen.BUDGET)
+
+        val state = vm.state.value
+        assertNull(state.deposit)
+        assertEquals(100 + 10, state.balance)
+        assertEquals(
+            listOf(MoneyLog.REASON_DEPOSIT_CLOSED),
+            state.moneyLog.entries.map { it.reason }
+        )
+        assertEquals(listOf(10), state.moneyLog.entries.map { it.delta })
+    }
+
+    @Test
     fun `a deposit that matured while the app was closed is paid back at the next launch`() {
         val clock = FakeGameClock()
         val store = FakePlayerStateStore(

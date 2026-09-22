@@ -257,11 +257,15 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         val amount = preferences.getInt(KEY_DEPOSIT_AMOUNT, 0)
         if (amount <= 0) return null
 
+        val termDays = preferences.getInt(KEY_DEPOSIT_TERM_DAYS, Deposit.MIN_TERM_DAYS)
+            .coerceIn(Deposit.TERM_DAYS)
         return Deposit(
             amount = amount,
-            termDays = preferences.getInt(KEY_DEPOSIT_TERM_DAYS, Deposit.MIN_TERM_DAYS)
-                .coerceIn(Deposit.TERM_DAYS),
-            ratePercent = preferences.getInt(KEY_DEPOSIT_RATE_PERCENT, 0),
+            termDays = termDays,
+            // Ставки, которой нет в сохранении, отвечает ставка этого срока, а не ноль: вклад,
+            // сохранённый версией игры, которая ставку ещё не писала, достаётся игроку с теми
+            // условиями, на которые он подписывался, а не беспроцентным.
+            ratePercent = preferences.getInt(KEY_DEPOSIT_RATE_PERCENT, Deposit.rateOf(termDays)),
             openedDay = preferences.getLong(KEY_DEPOSIT_OPENED_DAY, 0L)
         )
     }
