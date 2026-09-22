@@ -26,6 +26,7 @@ import com.legacy.fingame.game.scene.SceneSprite
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.screens.AnimalSelectScreen
+import com.legacy.fingame.ui.screens.BudgetScreen
 import com.legacy.fingame.ui.screens.InventoryScreen
 import com.legacy.fingame.ui.screens.LogScreen
 import com.legacy.fingame.ui.screens.MainScreen
@@ -53,8 +54,9 @@ private const val TICK_POLLS_PER_TICK = 10L
  * actually picked.
  *
  * Layout: a full-size [Surface] with an [AnimatedContent] that cross-fades between
- * [MainScreen], [ShopScreen], [InventoryScreen], [LogScreen] and the [PlaceholderScreen] instances
- * for the yet-unspecified sections (quests, budget, options), based on [GameUiState.screen].
+ * [MainScreen], [ShopScreen], [InventoryScreen], [BudgetScreen], [LogScreen] and the
+ * [PlaceholderScreen] instances for the yet-unspecified sections (quests, options), based on
+ * [GameUiState.screen].
  *
  * While there is a pet to look after, this is also where its life goes on: a loop asks
  * [GameViewModel.tick] to catch up with the clock, so the stat bars fall and the pet grows up in
@@ -175,9 +177,19 @@ fun FinGameApp(
                     )
 
                     Screen.QUESTS -> PlaceholderScreen("Квесты", Sprites.QUESTS, vm::closeScreen)
-                    // Screen.BUDGET gets its real screen in a later task; a placeholder keeps the
-                    // app compiling and navigable in the meantime.
-                    Screen.BUDGET -> PlaceholderScreen("Бюджет", Sprites.COIN, vm::closeScreen)
+
+                    Screen.BUDGET -> BudgetScreen(
+                        state = state,
+                        onDraftChange = vm::updateBudgetDraft,
+                        onConfirmBudget = { vm.confirmBudget() },
+                        onTransferToSavings = { amount -> vm.transferToSavings(amount) },
+                        onTransferFromSavings = { amount -> vm.transferFromSavings(amount) },
+                        onCloseDepositEarly = { vm.closeDepositEarly() },
+                        onClaimDailyBonus = { vm.claimDailyBonus() },
+                        onOpenLog = { vm.openScreen(Screen.LOG) },
+                        onClose = vm::closeScreen
+                    )
+
                     Screen.LOG -> LogScreen(log = state.moneyLog, onClose = vm::closeScreen)
                     Screen.OPTIONS -> PlaceholderScreen("Опции", Sprites.SETTINGS, vm::closeScreen)
                 }
