@@ -53,7 +53,7 @@ private const val TICK_POLLS_PER_TICK = 10L
  *
  * Layout: a full-size [Surface] with an [AnimatedContent] that cross-fades between
  * [MainScreen], [ShopScreen], [InventoryScreen] and the [PlaceholderScreen] instances for the
- * yet-unspecified sections (quests, locations, options), based on [GameUiState.screen].
+ * yet-unspecified sections (quests, budget, log, options), based on [GameUiState.screen].
  *
  * While there is a pet to look after, this is also where its life goes on: a loop asks
  * [GameViewModel.tick] to catch up with the clock, so the stat bars fall and the pet grows up in
@@ -117,8 +117,6 @@ fun FinGameApp(
                     Screen.MAIN -> MainScreen(
                         state = state,
                         onOpenScreen = vm::openScreen,
-                        onPrevSubLocation = vm::prevSubLocation,
-                        onNextSubLocation = vm::nextSubLocation,
                         onClaimDailyBonus = { vm.claimDailyBonus() },
                         // Only a demo build gets the time button; the player waits for the pet to
                         // get hungry and to grow up, as the game is meant to be played.

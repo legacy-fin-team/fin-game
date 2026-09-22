@@ -94,13 +94,13 @@ private val ActionGap = 8.dp
 /** Gap between the chips and the goal card stacked in the corner with the player's things. */
 private val ChipGap = 10.dp
 
-/** Gap between the settings, locations and time buttons. */
+/** Gap between the settings and time buttons. */
 private val ControlGap = 12.dp
 
 /**
- * Smallest gap between the two groups of the bottom row — the arrows and the action buttons. Wider
- * than [ActionGap], which separates buttons of one group, so the two groups still read as two even
- * when the row has been squeezed (see [bottomRowFit]).
+ * Smallest gap between the two groups of the bottom row — the money buttons and the action buttons.
+ * Wider than [ActionGap], which separates buttons of one group, so the two groups still read as two
+ * even when the row has been squeezed (see [bottomRowFit]).
  */
 private val BottomGroupGap = 16.dp
 
@@ -376,15 +376,17 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
  * - Top-start: the balance chip with the pet's health next to it, the rest of the stats
  *   ([SecondaryStats]) in a row under them, and the goal progress card. Every stat is a
  *   [StatChip] — an icon and a percentage — so the stats take a corner instead of half the screen.
- * - Top-end: buttons for opening settings and locations, and under them — in a demo build only —
- *   the button that skips [DemoMode.FAST_FORWARD_HOURS] hours of the pet's life. The three are
- *   stacked wherever there is height to stack them and laid along the top of a screen that has
- *   none, i.e. of a phone held sideways, where the action buttons sit right under that corner (see
- *   [ControlsCorner]). Stacked, the time button is wider than the two above it and hangs down past
- *   the player's things when it reaches that far across ([timeButtonTopOf]).
- * - Bottom-start and bottom-end: the sub-location arrows and the action buttons for
- *   quests/inventory/shop. Both groups shrink together by [bottomRowFit] on a screen too narrow
- *   for them, so the buttons stay the size of one another instead of the last one being squeezed.
+ * - Top-end: the button for opening settings, and under it — in a demo build only — the button
+ *   that skips [DemoMode.FAST_FORWARD_HOURS] hours of the pet's life. The two are stacked wherever
+ *   there is height to stack them and laid along the top of a screen that has none, i.e. of a
+ *   phone held sideways, where the action buttons sit right under that corner (see
+ *   [ControlsCorner]). Stacked, the time button is wider than the button above it and hangs down
+ *   past the player's things when it reaches that far across ([timeButtonTopOf]).
+ * - Bottom-start and bottom-end: the buttons that lead to the budget and the log, and the action
+ *   buttons for quests/inventory/shop. The bottom-end group shrinks by [bottomRowFit] on a screen
+ *   too narrow for it, so its buttons stay the size of one another instead of the last one being
+ *   squeezed; the bottom-start group is text pills that shrink their own labels instead, and gives
+ *   way to however much width the bottom-end group has claimed (see [MainScreenStage]).
  * - Middle: the badge naming the pet and the sub-location, the [PetStage] under it and the daily
  *   bonus button under that while the bonus is unclaimed ([PetColumn]). The badge and the button
  *   take the room they need and the game area is handed every last bit of what is left, so a screen
@@ -395,9 +397,7 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
  *   [GameUiState.dailyBonusAvailable] decides whether the bonus button is there at all and
  *   [GameUiState.stats] fills the stat chips.
  * @param onOpenScreen called with the [Screen] that should be opened when a navigation button
- *   (settings, locations, quests, inventory, shop) is pressed.
- * @param onPrevSubLocation called when the "previous sub-location" arrow is pressed.
- * @param onNextSubLocation called when the "next sub-location" arrow is pressed.
+ *   (settings, budget, log, quests, inventory, shop) is pressed.
  * @param onClaimDailyBonus called when the player takes the daily bonus.
  * @param modifier modifier applied to the screen root.
  * @param onFastForward called when the demo's time button is pressed, or `null` — the default — when
@@ -413,8 +413,6 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
 fun MainScreen(
     state: GameUiState,
     onOpenScreen: (Screen) -> Unit,
-    onPrevSubLocation: () -> Unit,
-    onNextSubLocation: () -> Unit,
     onClaimDailyBonus: () -> Unit,
     modifier: Modifier = Modifier,
     onFastForward: (() -> Unit)? = null,
@@ -457,7 +455,7 @@ fun MainScreen(
                     onFastForward = onFastForward.takeIf { controlsInRow }
                 )
             },
-            // Stacked, the corner hangs the demo build's time button under the locations button;
+            // Stacked, the corner hangs the demo build's time button under the settings button;
             // laid along the top, it has taken the button in beside the others already.
             timeButton = {
                 if (!controlsInRow && onFastForward != null) {
@@ -468,12 +466,7 @@ fun MainScreen(
                 }
             },
             bottomStart = {
-                SubLocationArrows(
-                    size = SecondaryActionSize * fit,
-                    gap = ActionGap * fit,
-                    onPrevSubLocation = onPrevSubLocation,
-                    onNextSubLocation = onNextSubLocation
-                )
+                MoneyActions(gap = ActionGap * fit, onOpenScreen = onOpenScreen)
             },
             bottomEnd = {
                 PrimaryActions(
@@ -512,8 +505,9 @@ fun MainScreen(
  * - the two top blocks share one line. The one with the player's things keeps at least the width it
  *   needs to say them and the buttons beside it take what is left, wrapping their labels rather
  *   than running under the goal card;
- * - the bottom blocks take the room they ask for, having already been sized to the screen by
- *   [bottomRowFit];
+ * - the bottom blocks share one line the same way the top ones do: the corner with the action
+ *   buttons, already sized to the screen by [bottomRowFit], keeps what it asks for and the money
+ *   buttons beside it take what is left, shrinking their own labels rather than running into it;
  * - the demo build's time button hangs under the top end corner, pinned to the end of the screen,
  *   and steps down past the player's things when it is wide enough to reach them
  *   ([timeButtonTopOf]). The corner it hangs under counts as reaching down to the bottom of it, so
@@ -525,7 +519,7 @@ fun MainScreen(
  * @param timeButton the demo build's time button, hung under [topEnd]; a slot that puts nothing
  *   there at all when the build is not a demo one, or when the corner itself has taken the button
  *   in beside the other buttons.
- * @param bottomStart block for the bottom start corner, e.g. [SubLocationArrows].
+ * @param bottomStart block for the bottom start corner, e.g. [MoneyActions].
  * @param bottomEnd block for the bottom end corner, e.g. [PrimaryActions].
  * @param center what goes in the middle, e.g. [PetColumn]. Laid out last, out of what the corners
  *   leave.
@@ -564,8 +558,12 @@ private fun MainScreenStage(
         val topStartPlaced = topStartOne.measure(
             loose.copy(maxWidth = (width - gapPx - topEndPlaced.width).coerceAtLeast(0))
         )
-        val bottomStartPlaced = bottomStartAt.first().measure(loose)
+        // Нижние углы делят одну строку так же, как верхние: угол с кнопками действий берёт,
+        // сколько ему нужно, а кнопкам денег остаётся остальное — их надписи ужимаются сами.
         val bottomEndPlaced = bottomEndAt.first().measure(loose)
+        val bottomStartPlaced = bottomStartAt.first().measure(
+            loose.copy(maxWidth = (width - gapPx - bottomEndPlaced.width).coerceAtLeast(0))
+        )
 
         // The time button is free to be wider than the corner it hangs under and to stick out
         // towards the middle of the screen, so it is measured against the whole width.
@@ -667,9 +665,8 @@ private fun PlayerCorner(
 }
 
 /**
- * The corner with the buttons that lead out of the game area: settings and locations, joined on a
- * screen with no height to stack them by the demo build's button that skips a while of the pet's
- * life.
+ * The corner with the button that opens settings, joined on a screen with no height to stack it
+ * by the demo build's button that skips a while of the pet's life.
  *
  * Which way they are laid out is decided by the shape of the screen, since the corner has to fit
  * next to the other blocks either way. A screen with height to spare stacks them into a column, and
@@ -730,21 +727,19 @@ private fun ControlsCorner(
 }
 
 /**
- * The corner with the arrows that walk the pet from one sub-location to the next.
+ * Угол с кнопками, которые ведут к деньгам: планирование бюджета и журнал операций.
  *
- * @param size size of one arrow; the screen shrinks it with [bottomRowFit] when the bottom of it is
- *   too narrow for the buttons at full size.
- * @param gap gap between the two, shrunk by the same amount.
- * @param onPrevSubLocation called when the "previous sub-location" arrow is pressed.
- * @param onNextSubLocation called when the "next sub-location" arrow is pressed.
- * @param modifier modifier applied to the row.
+ * Кнопки текстовые, а не спрайтовые, намеренно: спрайта под них ещё нет, а спрайтовая кнопка без
+ * файла рисуется заглушкой-ошибкой — ровно тем, что из этого угла только что убрали.
+ *
+ * @param gap промежуток между кнопками.
+ * @param onOpenScreen вызывается с экраном, который открывает кнопка.
+ * @param modifier модификатор строки.
  */
 @Composable
-private fun SubLocationArrows(
-    size: Dp,
+private fun MoneyActions(
     gap: Dp,
-    onPrevSubLocation: () -> Unit,
-    onNextSubLocation: () -> Unit,
+    onOpenScreen: (Screen) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -752,18 +747,8 @@ private fun SubLocationArrows(
         horizontalArrangement = Arrangement.spacedBy(gap),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        SpriteButton(
-            assetPath = Sprites.ARROW_LEFT,
-            contentDescription = "Предыдущая подлокация",
-            onClick = onPrevSubLocation,
-            size = size
-        )
-        SpriteButton(
-            assetPath = Sprites.ARROW_RIGHT,
-            contentDescription = "Следующая подлокация",
-            onClick = onNextSubLocation,
-            size = size
-        )
+        PillButton(text = "Бюджет", onClick = { onOpenScreen(Screen.BUDGET) }, compact = true)
+        PillButton(text = "Журнал", onClick = { onOpenScreen(Screen.LOG) }, compact = true)
     }
 }
 
@@ -1155,8 +1140,6 @@ private fun MainScreenLightPreview() {
             MainScreen(
                 state = PreviewState,
                 onOpenScreen = {},
-                onPrevSubLocation = {},
-                onNextSubLocation = {},
                 onClaimDailyBonus = {}
             )
         }
@@ -1172,8 +1155,6 @@ private fun MainScreenDemoPreview() {
             MainScreen(
                 state = PreviewState,
                 onOpenScreen = {},
-                onPrevSubLocation = {},
-                onNextSubLocation = {},
                 onClaimDailyBonus = {},
                 onFastForward = {}
             )
@@ -1202,8 +1183,6 @@ private fun MainScreenDarkPreview() {
                     )
                 ),
                 onOpenScreen = {},
-                onPrevSubLocation = {},
-                onNextSubLocation = {},
                 onClaimDailyBonus = {}
             )
         }
@@ -1227,8 +1206,6 @@ private fun MainScreenNarrowPreview() {
             MainScreen(
                 state = PreviewState,
                 onOpenScreen = {},
-                onPrevSubLocation = {},
-                onNextSubLocation = {},
                 onClaimDailyBonus = {},
                 onFastForward = {}
             )
@@ -1250,8 +1227,6 @@ private fun MainScreenSmallestPreview() {
             MainScreen(
                 state = PreviewState,
                 onOpenScreen = {},
-                onPrevSubLocation = {},
-                onNextSubLocation = {},
                 onClaimDailyBonus = {},
                 onFastForward = {}
             )
@@ -1274,8 +1249,6 @@ private fun MainScreenLargeTextPreview() {
             MainScreen(
                 state = PreviewState,
                 onOpenScreen = {},
-                onPrevSubLocation = {},
-                onNextSubLocation = {},
                 onClaimDailyBonus = {},
                 onFastForward = {}
             )
@@ -1297,8 +1270,6 @@ private fun MainScreenLandscapePreview() {
             MainScreen(
                 state = PreviewState,
                 onOpenScreen = {},
-                onPrevSubLocation = {},
-                onNextSubLocation = {},
                 onClaimDailyBonus = {},
                 onFastForward = {}
             )
@@ -1320,8 +1291,6 @@ private fun MainScreenNarrowLandscapePreview() {
             MainScreen(
                 state = PreviewState,
                 onOpenScreen = {},
-                onPrevSubLocation = {},
-                onNextSubLocation = {},
                 onClaimDailyBonus = {},
                 onFastForward = {}
             )
@@ -1342,8 +1311,6 @@ private fun MainScreenTabletPreview() {
             MainScreen(
                 state = PreviewState,
                 onOpenScreen = {},
-                onPrevSubLocation = {},
-                onNextSubLocation = {},
                 onClaimDailyBonus = {},
                 onFastForward = {}
             )
@@ -1365,8 +1332,6 @@ private fun MainScreenTabletPortraitPreview() {
             MainScreen(
                 state = PreviewState,
                 onOpenScreen = {},
-                onPrevSubLocation = {},
-                onNextSubLocation = {},
                 onClaimDailyBonus = {}
             )
         }
