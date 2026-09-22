@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -186,6 +187,10 @@ fun SpriteButton(
  * Надпись всегда в одну строку и ужимается вместе с шириной пилюли, как ужимается надпись на
  * [PillButton], поэтому при крупном системном шрифте на узком экране числа не обрезаются.
  *
+ * Для тех, кто слушает экран, пилюля — один узел с описанием из [balancesDescriptionOf]:
+ * собственный текст чисел из дерева убран совсем, иначе чёрточки между ними прочитались бы вслух
+ * как есть.
+ *
  * @param balance текущие деньги, из [com.legacy.fingame.game.GameUiState.balance].
  * @param savings сбережения, из [com.legacy.fingame.game.GameUiState.savings].
  * @param depositAmount тело вклада, из [com.legacy.fingame.game.GameUiState.depositAmount].
@@ -210,7 +215,7 @@ fun BalanceChip(
     Surface(
         modifier = modifier
             .wrapContentSize()
-            .semantics { contentDescription = description },
+            .clearAndSetSemantics { contentDescription = description },
         shape = RoundedCornerShape(50),
         color = MaterialTheme.colorScheme.secondaryContainer,
         border = BorderStroke(1.dp, GameColors.cardStroke)

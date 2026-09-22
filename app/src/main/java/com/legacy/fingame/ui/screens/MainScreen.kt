@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -197,10 +196,13 @@ internal val SceneOffsetSaver: Saver<SceneOffset, Any> = listSaver(
 private const val DemoGoalProgress = 0.4f
 
 /**
- * Stats shown in a row of their own under the balance: every stat the pet has except
- * [StatKind.HEALTH], which sits next to the money instead.
+ * Stats shown beside the balance, in the order they are laid out: every stat the pet has, health
+ * first, since that is the one the player looks for.
  */
-private val SecondaryStats: List<StatKind> = StatKind.entries.filter { it != StatKind.HEALTH }
+private val PlayerStats: List<StatKind> = StatKind.entries.sortedBy { it != StatKind.HEALTH }
+
+/** How many chips of the top start corner stand on one line while there is width for them. */
+private const val ChipsPerRow = 2
 
 /** Separator between the pet's name and the sub-location it is in, in the badge above the pet. */
 private const val StageTitleSeparator = " · "
@@ -375,9 +377,10 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
  * [MainScreenStage] from the sizes the blocks actually come out at rather than from guesses about
  * them — a screen that has to say more, because the text is set larger or the pet has a long name,
  * hands the pet less room instead of running one thing over another.
- * - Top-start: the balance chip with the pet's health next to it, the rest of the stats
- *   ([SecondaryStats]) in a row under them, and the goal progress card. Every stat is a
- *   [StatChip] — an icon and a percentage — so the stats take a corner instead of half the screen.
+ * - Top-start: the balance chip and the pet's stats ([PlayerStats]), two chips to a line and
+ *   wrapping onto a line of their own when the corner is too narrow for the pair, and the goal
+ *   progress card under them. Every stat is a [StatChip] — an icon and a percentage — so the
+ *   stats take a corner instead of half the screen.
  * - Top-end: the button for opening settings, and under it — in a demo build only — the button
  *   that skips [DemoMode.FAST_FORWARD_HOURS] hours of the pet's life. The two are stacked wherever
  *   there is height to stack them and laid along the top of a screen that has none, i.e. of a
@@ -387,9 +390,9 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
  * - Bottom-start and bottom-end: the buttons that lead to the budget and the log, and the action
  *   buttons for quests/inventory/shop. The bottom-end group shrinks by [bottomRowFit] on a screen
  *   too narrow for it, so its buttons stay the size of one another instead of the last one being
- *   squeezed; the bottom-start group is two text pills that split whatever width
- *   [MainScreenStage] leaves them evenly and let their own labels shrink first, rather than one
- *   pill running wider than the other or the pair running into the bottom-end group.
+ *   squeezed; the bottom-start group is two text pills, side by side while the width
+ *   [MainScreenStage] leaves them holds both and stacked one over the other when it does not, so
+ *   a label is never cut short (see [MoneyActions]).
  * - Middle: the badge naming the pet and the sub-location, the [PetStage] under it and the daily
  *   bonus button under that while the bonus is unclaimed ([PetColumn]). The badge and the button
  *   take the room they need and the game area is handed every last bit of what is left, so a screen
@@ -642,23 +645,24 @@ private fun PlayerCorner(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(ChipGap)
     ) {
-        Row(
+        // The chips stand two to a line and wrap: the balance chip carries three numbers and grows
+        // with them and with the system text size, and a line that cannot wrap hands it the whole
+        // width and squeezes the stat beside it into a sliver. Wrapping, a chip that no longer
+        // fits simply starts the next line, and the money keeps the line to itself. Two to a line
+        // rather than as many as fit, so a corner with room for them all still reads as the money
+        // with the pet's health beside it and the rest underneath, instead of one long strip.
+        FlowRow(
             horizontalArrangement = Arrangement.spacedBy(ActionGap),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.spacedBy(ChipGap),
+            maxItemsInEachRow = ChipsPerRow
         ) {
             BalanceChip(
                 balance = state.balance,
                 savings = state.savings,
                 depositAmount = state.depositAmount
             )
-            StatChip(stat = StatKind.HEALTH, stats = state.stats)
-        }
-
-        if (SecondaryStats.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(ActionGap)) {
-                SecondaryStats.forEach { stat ->
-                    StatChip(stat = stat, stats = state.stats)
-                }
+            PlayerStats.forEach { stat ->
+                StatChip(stat = stat, stats = state.stats)
             }
         }
 
@@ -737,15 +741,13 @@ private fun ControlsCorner(
  * Кнопки текстовые, а не спрайтовые, намеренно: спрайта под них ещё нет, а спрайтовая кнопка без
  * файла рисуется заглушкой-ошибкой — ровно тем, что из этого угла только что убрали.
  *
- * Обе кнопки поровну делят ширину строки (`Modifier.weight(1f)` у каждой, `compact = true`
- * заставляет пилюлю растягиваться в отведённую ей долю вместо того, чтобы жаться к размеру
- * подписи), а сама строка держится на [IntrinsicSize.Max] — её собственной естественной ширине,
- * не шире. На широком экране это не даёт кнопкам раздуться на весь угол: строка остаётся не шире,
- * чем ей нужно по подписям. На узком — [MainScreenStage] сжимает эту естественную ширину до
- * остатка угла, и `Row` с `weight` делит уже эту меньшую ширину поровну, так что кнопки не
- * наезжают друг на друга и не выходят за угол.
+ * Каждая пилюля берёт ровно столько ширины, сколько нужно её подписи, а сама строка переносится:
+ * пока остаток угла, который оставляет [MainScreenStage], держит обе кнопки, они стоят рядом; как
+ * только перестаёт — на узком экране или при крупном системном шрифте — вторая уходит на строку
+ * ниже. Делить остаток поровну между двумя кнопками, как раньше, значило обрезать обе подписи
+ * («Бюдже», «Журн») ровно там, где угол кончается.
  *
- * @param gap промежуток между кнопками.
+ * @param gap промежуток между кнопками — и между строками, когда кнопки встали друг под другом.
  * @param onOpenScreen вызывается с экраном, который открывает кнопка.
  * @param modifier модификатор строки.
  */
@@ -755,22 +757,18 @@ private fun MoneyActions(
     onOpenScreen: (Screen) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier.width(IntrinsicSize.Max),
+    FlowRow(
+        modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(gap),
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(gap)
     ) {
         PillButton(
             text = "Бюджет",
-            onClick = { onOpenScreen(Screen.BUDGET) },
-            modifier = Modifier.weight(1f),
-            compact = true
+            onClick = { onOpenScreen(Screen.BUDGET) }
         )
         PillButton(
             text = "Журнал",
-            onClick = { onOpenScreen(Screen.LOG) },
-            modifier = Modifier.weight(1f),
-            compact = true
+            onClick = { onOpenScreen(Screen.LOG) }
         )
     }
 }
