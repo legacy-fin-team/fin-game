@@ -433,14 +433,13 @@ fun MainScreen(
             .padding(ScreenPadding)
     ) {
         val upright = maxHeight >= maxWidth
-        val arrowSize = GameDimens.buttonSize(SecondaryActionSize)
         val actionSize = GameDimens.buttonSize(PrimaryActionSize)
         val fit = bottomRowFit(
             availableWidth = maxWidth.value,
-            neededWidth = (
-                arrowSize * 2 + actionSize * 3 + ActionGap * 3 + BottomGroupGap
-                ).value,
-            smallestButton = arrowSize.value,
+            // Five buttons of one size — money and action alike — a gap inside either group and a
+            // wider one between them.
+            neededWidth = (actionSize * 5 + ActionGap * 3 + BottomGroupGap).value,
+            smallestButton = actionSize.value,
             minTouchTarget = MinTouchTarget.value
         )
 
@@ -471,7 +470,7 @@ fun MainScreen(
             },
             bottomStart = {
                 MoneyActions(
-                    size = SecondaryActionSize * fit,
+                    size = PrimaryActionSize * fit,
                     gap = ActionGap * fit,
                     onOpenScreen = onOpenScreen
                 )
@@ -736,12 +735,14 @@ private fun ControlsCorner(
  * The corner with the buttons that lead to the money screens: the budget plan and the log.
  *
  * Same [Row] geometry as [PrimaryActions] — same gap, same button size — so the two bottom corners
- * read as one panel rather than two different kinds of controls. Neither sprite is in assets/ yet
+ * read as one panel rather than two different kinds of controls: the five buttons come out the same
+ * size and, both corners being pinned to the bottom of the screen, stand on one line. Neither sprite is in assets/ yet
  * ([Sprites.BUDGET], [Sprites.LOG]), so both buttons currently draw [SpriteButton]'s `label`
  * fallback instead of an icon; once the art is added, they become icons with no change here.
  *
- * @param size size of one button; shrunk together with everything else along the bottom of the
- *   screen by [bottomRowFit].
+ * @param size size of one button — the same [PrimaryActionSize] the action buttons take, so the
+ *   five of them come out one size and stand on one line; shrunk together with everything else
+ *   along the bottom of the screen by [bottomRowFit].
  * @param gap gap between them, shrunk by the same amount.
  * @param onOpenScreen called with the screen a button opens.
  * @param modifier modifier applied to the row.

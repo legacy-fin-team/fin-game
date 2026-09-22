@@ -27,6 +27,7 @@ import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.ColorFilter
@@ -38,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -93,34 +95,14 @@ fun Sprite(
     )
 }
 
-/**
- * Tappable sprite with no background, border or shadow — the artwork itself is the whole button.
- *
- * When [selected] is `false`, the sprite is drawn at reduced opacity and scale and no underline is
- * shown. When [selected] is `true`, the sprite is drawn at full opacity/scale and a thin underline
- * is drawn beneath it to highlight the active item; there is no circular plate behind the image in
- * either state.
- *
- * @param assetPath path to the sprite, relative to `assets/textures/`, passed through to [Sprite].
- * @param contentDescription accessibility description for the tappable element.
- * @param onClick called when the button is tapped.
- * @param modifier modifier applied to the outer [Column] container.
- * @param size side length (width and height) of the square sprite image on a phone; on tablets the
- *   button is enlarged from it by [GameDimens.buttonSize], so call sites only state the phone size.
- * @param selected whether this item is the currently active/selected one; when `true`, the sprite
- *   is shown at full opacity/scale and an underline is drawn beneath it to highlight it.
- * @param label short caption to draw instead of the sprite while [assetPath] does not resolve to a
- *   real file yet — a button whose icon is still missing from `assets/` would otherwise render
- *   [SpriteLoader]'s `error.webp` placeholder, which reads as a bug rather than as unfinished art.
- *   The fallback keeps the same size, press feedback and underline as the sprite it stands in for,
- *   so once the file is added the button becomes an icon with no change at the call site. Its own
- *   text carries no semantics of its own — [contentDescription] on the outer button already says
- *   what the button does, so a screen reader is meant to read that once, not the caption too. Left
- *   `null` — the default — a button whose sprite is missing still falls back to `error.webp`, which
- *   is what every other [SpriteButton] call wants.
- */
 /** Translucent black laid over a sprite while its button is held down. */
 private val PressedOverlayColor = Color(0x59000000)
+
+/** How much of its own opacity a [SpriteButton] keeps while it has nothing to do. */
+private const val DisabledContentAlpha = 0.38f
+
+/** Room left between the caption of a [SpriteButton]'s stand-in plate and the edge of the plate. */
+private val SpriteButtonLabelPadding = 4.dp
 
 /** Gap between the sprite of a [SpriteButton] and the underline that marks it as selected. */
 private val SpriteButtonUnderlineGap = 4.dp
@@ -143,6 +125,38 @@ private val SpriteButtonUnderlineThickness = 2.dp
 fun spriteButtonHeight(size: Dp): Dp =
     GameDimens.buttonSize(size) + SpriteButtonUnderlineGap + SpriteButtonUnderlineThickness
 
+/**
+ * Tappable sprite with no background, border or shadow — the artwork itself is the whole button.
+ *
+ * When [selected] is `false`, the sprite is drawn at reduced opacity and scale and no underline is
+ * shown. When [selected] is `true`, the sprite is drawn at full opacity/scale and a thin underline
+ * is drawn beneath it to highlight the active item; there is no circular plate behind the image in
+ * either state.
+ *
+ * @param assetPath path to the sprite, relative to `assets/textures/`, passed through to [Sprite].
+ * @param contentDescription accessibility description for the tappable element.
+ * @param onClick called when the button is tapped.
+ * @param modifier modifier applied to the outer [Column] container.
+ * @param size side length (width and height) of the square sprite image on a phone; on tablets the
+ *   button is enlarged from it by [GameDimens.buttonSize], so call sites only state the phone size.
+ * @param enabled whether the button responds to taps; when `false`, the sprite (or the caption
+ *   standing in for it) is dimmed and taps are ignored, and a screen reader announces the
+ *   button as disabled — which is what a button that is there but has nothing to do right now
+ *   should look and sound like, instead of looking pressable and doing nothing.
+ * @param selected whether this item is the currently active/selected one; when `true`, the sprite
+ *   is shown at full opacity/scale and an underline is drawn beneath it to highlight it.
+ * @param label short caption to draw instead of the sprite while [assetPath] does not resolve to a
+ *   real file yet — a button whose icon is still missing from `assets/` would otherwise render
+ *   [SpriteLoader]'s `error.webp` placeholder, which reads as a bug rather than as unfinished art.
+ *   The fallback keeps the same size, press feedback and underline as the sprite it stands in for,
+ *   so once the file is added the button becomes an icon with no change at the call site. A caption
+ *   too wide for the plate at its normal size is drawn smaller instead of being cropped by it, down
+ *   to whatever size the plate has room for. Its own
+ *   text carries no semantics of its own — [contentDescription] on the outer button already says
+ *   what the button does, so a screen reader is meant to read that once, not the caption too. Left
+ *   `null` — the default — a button whose sprite is missing still falls back to `error.webp`, which
+ *   is what every other [SpriteButton] call wants.
+ */
 @Composable
 fun SpriteButton(
     assetPath: String,
@@ -150,12 +164,19 @@ fun SpriteButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     size: Dp = 72.dp,
+    enabled: Boolean = true,
     selected: Boolean = false,
     label: String? = null
 ) {
     val context = LocalContext.current
     val loader = remember(context) { SpriteLoader(context) }
-    val hasSprite = remember(assetPath, loader) { loader.hasSprite(assetPath) }
+    // Looking the file up costs a walk of the assets, and only a button carrying a caption has
+    // anything to do with the answer: without one it falls back to error.webp either way. A grid of
+    // buttons — the shop's, say — would otherwise pay for that walk once per item on the screen.
+    val hasSprite = label == null || remember(assetPath, loader) { loader.hasSprite(assetPath) }
+    // The caption is drawn only while it has a missing sprite to stand in for; with the file there
+    // — or with no caption given at all — the button is the artwork and nothing else.
+    val fallbackLabel = label.takeIf { !hasSprite }
     val spriteSize = GameDimens.buttonSize(size)
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -165,8 +186,18 @@ fun SpriteButton(
         null
     }
     val labelTextStyle = MaterialTheme.typography.labelLarge
+    // The game's font is a monospaced one: every glyph takes a full em, so a caption of n letters
+    // comes out n times its own font size wide, whatever the letters are. A plate this narrow can
+    // therefore only hold the caption below the floor a pill label stops at, and the floor is
+    // lowered to what the plate actually has room for rather than the caption being cropped at it.
+    // The extra letter of room covers the letter spacing between them and the rounding.
+    val labelRoom = spriteSize - SpriteButtonLabelPadding * 2
+    val labelFloor = minOf(
+        PillButtonMinLabelSize,
+        labelRoom / (label?.length?.plus(1) ?: 1).coerceAtLeast(1)
+    )
     val (labelMinFontSize, labelMaxFontSize) = pillButtonAutoSizeRange(
-        minLabelSize = PillButtonMinLabelSize,
+        minLabelSize = labelFloor,
         styleFontSize = labelTextStyle.fontSize,
         density = LocalDensity.current
     )
@@ -176,16 +207,22 @@ fun SpriteButton(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
+                enabled = enabled,
                 onClick = onClick
             )
-            .semantics { this.contentDescription = contentDescription },
+            .semantics {
+                this.contentDescription = contentDescription
+                if (!enabled) disabled()
+            },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (hasSprite || label == null) {
+        if (fallbackLabel == null) {
             Sprite(
                 assetPath = assetPath,
                 contentDescription = null,
-                modifier = Modifier.size(spriteSize),
+                modifier = Modifier
+                    .size(spriteSize)
+                    .alpha(if (enabled) 1f else DisabledContentAlpha),
                 colorFilter = pressFilter
             )
         } else {
@@ -196,6 +233,7 @@ fun SpriteButton(
             Box(
                 modifier = Modifier
                     .size(spriteSize)
+                    .alpha(if (enabled) 1f else DisabledContentAlpha)
                     .background(
                         color = if (pressed) {
                             GameColors.disabledContainer
@@ -205,11 +243,11 @@ fun SpriteButton(
                         shape = RoundedCornerShape(20.dp)
                     )
                     .border(BorderStroke(1.dp, GameColors.cardStroke), RoundedCornerShape(20.dp))
-                    .padding(4.dp),
+                    .padding(SpriteButtonLabelPadding),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = label,
+                    text = fallbackLabel,
                     // The outer Column already carries contentDescription for the whole button;
                     // without this, TalkBack would also read the caption as its own node.
                     modifier = Modifier.clearAndSetSemantics {},
@@ -217,8 +255,11 @@ fun SpriteButton(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     textAlign = TextAlign.Center,
+                    // One line, and wrapping left on: `softWrap = false` lays the caption out
+                    // against an endless width, so `autoSize` is never told it did not fit and
+                    // leaves it at full size for the plate to crop. With wrapping on, the caption
+                    // is measured against the plate and shrinks into it instead.
                     maxLines = 1,
-                    softWrap = false,
                     autoSize = TextAutoSize.StepBased(
                         minFontSize = labelMinFontSize,
                         maxFontSize = labelMaxFontSize
@@ -598,7 +639,10 @@ fun EffectChip(
  *   card, say — so the label gets the padding out of its way and the width to shrink into before
  *   `autoSize` ever needs its floor; everywhere else the button keeps wrapping its own label.
  *
- * The label is always kept to a single line ([Text]'s `maxLines = 1`, `softWrap = false`): a button
+ * The label is always kept to a single line ([Text]'s `maxLines = 1`, with wrapping left on so the
+ * label is measured against the width the pill has — `softWrap = false` would lay it out against an
+ * endless one, and `autoSize`, never told it did not fit, would leave it at full size to be cropped
+ * by a pill narrower than that): a button
  * narrow enough that the label does not fit at its normal size shrinks the label's font instead of
  * breaking a word across two lines, via `autoSize`, down to [PillButtonMinLabelSize] — a size that
  * does not grow with the system font scale, so the label can always shrink enough to fit rather than
@@ -673,7 +717,6 @@ fun PillButton(
                 color = contentColor,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
-                softWrap = false,
                 autoSize = TextAutoSize.StepBased(
                     minFontSize = minFontSize,
                     maxFontSize = maxFontSize

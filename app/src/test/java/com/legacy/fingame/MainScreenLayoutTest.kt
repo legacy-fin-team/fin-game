@@ -14,20 +14,20 @@ import org.junit.Test
  */
 class MainScreenLayoutTest {
 
-    /** Size of an arrow button of the bottom row, in dp, as a phone draws it. */
-    private val arrowSize = 64f
-
-    /** Size of an action button of the bottom row, in dp, as a phone draws it. */
+    /** Size of a button of the bottom row, in dp, as a phone draws it: every one of them is that. */
     private val actionSize = 80f
 
     /**
-     * Width the bottom row takes at full size: two arrows, three action buttons, a gap inside
-     * either group and a wider one between them.
+     * Width the bottom row takes at full size: five buttons of one size — two for the money screens
+     * and three for the actions — a gap inside either group and a wider one between them.
      */
-    private val rowNeeds = arrowSize * 2 + actionSize * 3 + 8f * 3 + 16f
+    private val rowNeeds = actionSize * 5 + 8f * 3 + 16f
 
     /** Smallest a button may be squeezed to and still be comfortable to hit, in dp. */
     private val minTouchTarget = 40f
+
+    /** Size a button is comfortably hit at, in dp: what the row is checked to keep on a phone. */
+    private val comfortableTouchTarget = 48f
 
     /**
      * @param screenWidth width of the screen, in dp.
@@ -43,7 +43,7 @@ class MainScreenLayoutTest {
     private fun fitOn(screenWidth: Float): Float = bottomRowFit(
         availableWidth = rowWidthOf(screenWidth),
         neededWidth = rowNeeds,
-        smallestButton = arrowSize,
+        smallestButton = actionSize,
         minTouchTarget = minTouchTarget
     )
 
@@ -55,28 +55,39 @@ class MainScreenLayoutTest {
 
     @Test
     fun `the row of a phone too narrow for it shrinks as a whole, and stays easy to hit`() {
-        // 411dp: the row needs 408 of the 379 it has, so everything in it gives up a twentieth.
+        // 411dp: the row needs 440 of the 379 it has, so everything in it gives up a seventh.
         val wide = fitOn(screenWidth = 411f)
         // 360dp and 320dp: the narrowest screens the game is laid out for.
         val narrow = fitOn(screenWidth = 360f)
         val narrowest = fitOn(screenWidth = 320f)
 
-        assertEquals(0.929f, wide, 0.001f)
-        assertEquals(0.804f, narrow, 0.001f)
-        assertEquals(0.706f, narrowest, 0.001f)
+        assertEquals(0.861f, wide, 0.001f)
+        assertEquals(0.745f, narrow, 0.001f)
+        assertEquals(0.655f, narrowest, 0.001f)
 
         assertTrue(wide > narrow && narrow > narrowest)
-        assertTrue(arrowSize * narrowest >= minTouchTarget)
+        assertTrue(actionSize * narrowest >= minTouchTarget)
+        // Even on the narrowest of them the row is nowhere near that floor: a button comes out
+        // comfortably over the size a finger asks for.
+        assertTrue(actionSize * narrow >= comfortableTouchTarget)
+        assertTrue(actionSize * narrowest >= comfortableTouchTarget)
         assertTrue(rowNeeds * narrowest <= rowWidthOf(screenWidth = 320f) + 0.001f)
     }
 
     @Test
-    fun `every button of a shrunken row is shrunk by the very same amount`() {
+    fun `every part of a shrunken row is shrunk by the very same amount`() {
         val fit = fitOn(screenWidth = 320f)
+        val gap = 8f
+        val groupGap = 16f
 
-        // Two arrows and three action buttons, each of them a fifth larger than an arrow, just as
-        // they are on a screen that had room for them all along.
-        assertEquals(actionSize / arrowSize, (actionSize * fit) / (arrowSize * fit), 0.0001f)
+        // Five buttons, the gaps inside the two groups and the wider one between them, each
+        // multiplied by the same number: the row ends up exactly as wide as the screen leaves it,
+        // with nothing taken by one button at the expense of another.
+        assertEquals(
+            rowWidthOf(screenWidth = 320f),
+            actionSize * fit * 5 + gap * fit * 3 + groupGap * fit,
+            0.001f
+        )
     }
 
     @Test
@@ -84,12 +95,12 @@ class MainScreenLayoutTest {
         val fit = bottomRowFit(
             availableWidth = 100f,
             neededWidth = rowNeeds,
-            smallestButton = arrowSize,
+            smallestButton = actionSize,
             minTouchTarget = minTouchTarget
         )
 
-        assertEquals(minTouchTarget / arrowSize, fit, 0f)
-        assertEquals(minTouchTarget, arrowSize * fit, 0f)
+        assertEquals(minTouchTarget / actionSize, fit, 0f)
+        assertEquals(minTouchTarget, actionSize * fit, 0f)
     }
 
     @Test
