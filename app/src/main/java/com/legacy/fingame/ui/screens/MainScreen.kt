@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -385,8 +387,9 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
  * - Bottom-start and bottom-end: the buttons that lead to the budget and the log, and the action
  *   buttons for quests/inventory/shop. The bottom-end group shrinks by [bottomRowFit] on a screen
  *   too narrow for it, so its buttons stay the size of one another instead of the last one being
- *   squeezed; the bottom-start group is text pills that shrink their own labels instead, and gives
- *   way to however much width the bottom-end group has claimed (see [MainScreenStage]).
+ *   squeezed; the bottom-start group is two text pills that split whatever width
+ *   [MainScreenStage] leaves them evenly and let their own labels shrink first, rather than one
+ *   pill running wider than the other or the pair running into the bottom-end group.
  * - Middle: the badge naming the pet and the sub-location, the [PetStage] under it and the daily
  *   bonus button under that while the bonus is unclaimed ([PetColumn]). The badge and the button
  *   take the room they need and the game area is handed every last bit of what is left, so a screen
@@ -507,7 +510,9 @@ fun MainScreen(
  *   than running under the goal card;
  * - the bottom blocks share one line the same way the top ones do: the corner with the action
  *   buttons, already sized to the screen by [bottomRowFit], keeps what it asks for and the money
- *   buttons beside it take what is left, shrinking their own labels rather than running into it;
+ *   buttons beside it are held to whatever is left — which they then split evenly between
+ *   themselves, each shrinking its own label rather than the two of them running into the corner
+ *   opposite (see [MoneyActions]);
  * - the demo build's time button hangs under the top end corner, pinned to the end of the screen,
  *   and steps down past the player's things when it is wide enough to reach them
  *   ([timeButtonTopOf]). The corner it hangs under counts as reaching down to the bottom of it, so
@@ -732,6 +737,14 @@ private fun ControlsCorner(
  * Кнопки текстовые, а не спрайтовые, намеренно: спрайта под них ещё нет, а спрайтовая кнопка без
  * файла рисуется заглушкой-ошибкой — ровно тем, что из этого угла только что убрали.
  *
+ * Обе кнопки поровну делят ширину строки (`Modifier.weight(1f)` у каждой, `compact = true`
+ * заставляет пилюлю растягиваться в отведённую ей долю вместо того, чтобы жаться к размеру
+ * подписи), а сама строка держится на [IntrinsicSize.Max] — её собственной естественной ширине,
+ * не шире. На широком экране это не даёт кнопкам раздуться на весь угол: строка остаётся не шире,
+ * чем ей нужно по подписям. На узком — [MainScreenStage] сжимает эту естественную ширину до
+ * остатка угла, и `Row` с `weight` делит уже эту меньшую ширину поровну, так что кнопки не
+ * наезжают друг на друга и не выходят за угол.
+ *
  * @param gap промежуток между кнопками.
  * @param onOpenScreen вызывается с экраном, который открывает кнопка.
  * @param modifier модификатор строки.
@@ -743,12 +756,22 @@ private fun MoneyActions(
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier,
+        modifier = modifier.width(IntrinsicSize.Max),
         horizontalArrangement = Arrangement.spacedBy(gap),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        PillButton(text = "Бюджет", onClick = { onOpenScreen(Screen.BUDGET) }, compact = true)
-        PillButton(text = "Журнал", onClick = { onOpenScreen(Screen.LOG) }, compact = true)
+        PillButton(
+            text = "Бюджет",
+            onClick = { onOpenScreen(Screen.BUDGET) },
+            modifier = Modifier.weight(1f),
+            compact = true
+        )
+        PillButton(
+            text = "Журнал",
+            onClick = { onOpenScreen(Screen.LOG) },
+            modifier = Modifier.weight(1f),
+            compact = true
+        )
     }
 }
 
