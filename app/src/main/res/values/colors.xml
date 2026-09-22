@@ -2,17 +2,17 @@
 <resources>
 
     <!-- Material3 light scheme — mint + amber cozy casual-game palette -->
-    <color name="primary_light">#FF2E9C7A</color>
+    <color name="primary_light">#FF22765C</color>
     <color name="on_primary_light">#FFFFFFFF</color>
-    <color name="primary_container_light">#FFB6F0DA</color>
-    <color name="on_primary_container_light">#FF00311F</color>
+    <color name="primary_container_light">#FFD4EFE3</color>
+    <color name="on_primary_container_light">#FF0E3C2C</color>
 
-    <color name="secondary_light">#FFE0912B</color>
+    <color name="secondary_light">#FFC97D1E</color>
     <color name="on_secondary_light">#FFFFFFFF</color>
-    <color name="secondary_container_light">#FFFFDDB0</color>
+    <color name="secondary_container_light">#FFFFE6C6</color>
     <color name="on_secondary_container_light">#FF4A2B00</color>
 
-    <color name="tertiary_light">#FFE0745F</color>
+    <color name="tertiary_light">#FFC96A56</color>
     <color name="on_tertiary_light">#FFFFFFFF</color>
     <color name="tertiary_container_light">#FFFFDAD1</color>
     <color name="on_tertiary_container_light">#FF3E0A00</color>
@@ -21,21 +21,21 @@
     <color name="on_background_light">#FF231B10</color>
     <color name="surface_light">#FFFFFBF4</color>
     <color name="on_surface_light">#FF231B10</color>
-    <color name="surface_variant_light">#FFF1E4CE</color>
+    <color name="surface_variant_light">#FFF3E9D9</color>
     <color name="on_surface_variant_light">#FF504536</color>
-    <color name="outline_light">#FF827865</color>
-    <color name="error_light">#FFBA1A1A</color>
+    <color name="outline_light">#FF9A8F7B</color>
+    <color name="error_light">#FFB04A36</color>
     <color name="on_error_light">#FFFFFFFF</color>
 
-    <!-- Material3 dark scheme — mint + amber cozy casual-game palette -->
-    <color name="primary_dark">#FF8FD9BB</color>
-    <color name="on_primary_dark">#FF003824</color>
-    <color name="primary_container_dark">#FF0B5A40</color>
-    <color name="on_primary_container_dark">#FFB6F0DA</color>
+    <!-- Material3 dark scheme — the same mint and amber, over a warm dark ground -->
+    <color name="primary_dark">#FF6FC9A4</color>
+    <color name="on_primary_dark">#FF06291C</color>
+    <color name="primary_container_dark">#FF14523C</color>
+    <color name="on_primary_container_dark">#FFB6E8D2</color>
 
-    <color name="secondary_dark">#FFF6BC6A</color>
+    <color name="secondary_dark">#FFF0B563</color>
     <color name="on_secondary_dark">#FF4A2B00</color>
-    <color name="secondary_container_dark">#FF6B4200</color>
+    <color name="secondary_container_dark">#FF5C3A05</color>
     <color name="on_secondary_container_dark">#FFFFDDB0</color>
 
     <color name="tertiary_dark">#FFFFB4A2</color>
@@ -43,22 +43,22 @@
     <color name="tertiary_container_dark">#FF7F2A15</color>
     <color name="on_tertiary_container_dark">#FFFFDAD1</color>
 
-    <color name="background_dark">#FF14181F</color>
-    <color name="on_background_dark">#FFE4E2DD</color>
-    <color name="surface_dark">#FF1B2029</color>
-    <color name="on_surface_dark">#FFE4E2DD</color>
-    <color name="surface_variant_dark">#FF3A4048</color>
-    <color name="on_surface_variant_dark">#FFC3C9CF</color>
-    <color name="outline_dark">#FF8C939A</color>
-    <color name="error_dark">#FFFFB4AB</color>
-    <color name="on_error_dark">#FF690005</color>
+    <color name="background_dark">#FF16130F</color>
+    <color name="on_background_dark">#FFEDE6DA</color>
+    <color name="surface_dark">#FF211D18</color>
+    <color name="on_surface_dark">#FFEDE6DA</color>
+    <color name="surface_variant_dark">#FF3A342B</color>
+    <color name="on_surface_variant_dark">#FFCFC6B8</color>
+    <color name="outline_dark">#FF8A8072</color>
+    <color name="error_dark">#FFFF9F8E</color>
+    <color name="on_error_dark">#FF5C1409</color>
 
     <!-- Extra game tokens (coins, success state, card shadow base color) -->
     <color name="game_coin_light">#FFE0912B</color>
     <color name="game_coin_dark">#FFFFCB66</color>
 
-    <color name="game_success_light">#FF2E9C7A</color>
-    <color name="game_success_dark">#FF8FD9BB</color>
+    <color name="game_success_light">#FF1F7A54</color>
+    <color name="game_success_dark">#FF7FD9AF</color>
 
     <!-- Fully opaque base color; alpha is applied at composition time -->
     <color name="game_card_shadow_base_light">#FF7A6A4E</color>
