@@ -2,6 +2,7 @@ package com.legacy.fingame.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.TextAutoSize
@@ -28,8 +30,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -60,8 +62,25 @@ import com.legacy.fingame.ui.theme.GameDimens
 private val CloseButtonSize = 64.dp
 private val ShortScreenCloseButtonSize = 44.dp
 
-/** Размер кнопок «плюс» и «минус», которыми набирается сумма. */
-private val AmountButtonSize = 44.dp
+/**
+ * Размер кнопок «плюс» и «минус», которыми набирается сумма.
+ *
+ * Меньше обычной кнопки экрана: кнопки стоят по краям ползунка, и весь ряд должен уместиться в
+ * одну строку даже на узком экране с крупным системным шрифтом.
+ */
+private val AmountButtonSize = 40.dp
+
+/** Зазор внутри рядов пикера суммы: между кнопками, ползунком и пилюлями. */
+private val AmountRowGap = 6.dp
+
+/**
+ * Шире этого содержимое экрана не растягивается.
+ *
+ * В альбоме и на планшете строка «подпись — значение» иначе разъезжается во всю ширину экрана, и
+ * между подписью и её числом остаётся пустая полоса в пол-экрана: глазу приходится искать, какое
+ * число к какой строке относится.
+ */
+private val ContentMaxWidth = 560.dp
 
 /** Окно, открытое поверх экрана бюджета. Чисто экранное: игре до него дела нет. */
 private enum class BudgetWindow { NONE, CONFIRM_BUDGET, CLOSE_DEPOSIT }
@@ -77,7 +96,9 @@ private enum class BudgetWindow { NONE, CONFIRM_BUDGET, CLOSE_DEPOSIT }
  * сроку и от периода не зависит.
  *
  * Экран прокручивается целиком: блоков бывает много, а высоты экрана — на телефоне, повёрнутом
- * набок, и при крупном системном шрифте — мало.
+ * набок, и при крупном системном шрифте — мало. Вширь содержимое не растягивается дальше
+ * [ContentMaxWidth] и стоит по центру: на планшете и в альбоме строка «подпись — значение» иначе
+ * разъезжается во всю ширину экрана.
  *
  * @param state состояние игры: счета, бюджет, вклад и раскладка, которую игрок набирает.
  * @param onDraftChange вызывается с изменённой раскладкой при каждой правке полей.
@@ -111,90 +132,96 @@ fun BudgetScreen(
 
     // Клавиатуры на экране больше нет: суммы набираются ползунком и кнопками, поэтому отступ
     // под неё прокручиваемой области не нужен.
-    Column(
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .systemBarsPadding()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .systemBarsPadding(),
+        contentAlignment = Alignment.TopCenter
     ) {
-        // На экране с высотой шапка читается сверху вниз: счета и выход, под ними заголовок. На
-        // коротком все трое стоят в одну строку — высота, которую это экономит, достаётся блокам.
-        if (isShortScreen) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                BalanceChip(balance = state.balance, depositAmount = state.depositAmount)
-                Text(
-                    text = "Бюджет",
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.headlineMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                SpriteButton(
-                    assetPath = Sprites.CLOSE,
-                    contentDescription = "Закрыть бюджет",
-                    onClick = onClose,
-                    size = ShortScreenCloseButtonSize
+        Column(
+            modifier = Modifier
+                .widthIn(max = ContentMaxWidth)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // На экране с высотой шапка читается сверху вниз: счета и выход, под ними заголовок. На
+            // коротком все трое стоят в одну строку — высота, которую это экономит, достаётся блокам.
+            if (isShortScreen) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    BalanceChip(balance = state.balance, depositAmount = state.depositAmount)
+                    Text(
+                        text = "Бюджет",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.headlineMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    SpriteButton(
+                        assetPath = Sprites.CLOSE,
+                        contentDescription = "Закрыть бюджет",
+                        onClick = onClose,
+                        size = ShortScreenCloseButtonSize
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    BalanceChip(balance = state.balance, depositAmount = state.depositAmount)
+                    Spacer(modifier = Modifier.weight(1f))
+                    SpriteButton(
+                        assetPath = Sprites.CLOSE,
+                        contentDescription = "Закрыть бюджет",
+                        onClick = onClose,
+                        size = CloseButtonSize
+                    )
+                }
+                Text(text = "Бюджет", style = MaterialTheme.typography.headlineMedium)
+            }
+
+            state.previousBudgetResult?.let { result -> PreviousBudgetCard(result = result) }
+
+            state.budget?.let { budget ->
+                RunningBudgetCard(
+                    budget = budget,
+                    balance = state.balance,
+                    depositAmount = state.depositAmount
                 )
             }
-        } else {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.Top
-            ) {
-                BalanceChip(balance = state.balance, depositAmount = state.depositAmount)
-                Spacer(modifier = Modifier.weight(1f))
-                SpriteButton(
-                    assetPath = Sprites.CLOSE,
-                    contentDescription = "Закрыть бюджет",
-                    onClick = onClose,
-                    size = CloseButtonSize
+
+            if (showBonus) {
+                DailyBonusCard(onClaimDailyBonus = onClaimDailyBonus)
+            } else if (showPlanning) {
+                PlanningCard(
+                    total = state.totalToPlan,
+                    draft = state.planningDraft,
+                    // Вклад бывает только один одновременно: пока открыт этот, нового поля нет вовсе,
+                    // чтобы игрок не набирал сумму, которой всё равно некуда лечь.
+                    depositAllowed = state.deposit == null,
+                    onDraftChange = onDraftChange,
+                    onConfirm = { window = BudgetWindow.CONFIRM_BUDGET }
                 )
             }
-            Text(text = "Бюджет", style = MaterialTheme.typography.headlineMedium)
+
+            state.deposit?.let { deposit ->
+                DepositCard(
+                    deposit = deposit,
+                    // Дни игра считает от эпохи; игроку показывается порядковый номер, отсчитанный от
+                    // самой старой записи журнала, — тот же счёт, по которому дни подписаны в журнале.
+                    oldestGameDay = state.moneyLog.entries.lastOrNull()?.gameDay ?: deposit.openedDay,
+                    planningOpen = showPlanning,
+                    onCloseEarly = { window = BudgetWindow.CLOSE_DEPOSIT }
+                )
+            }
+
+            PillButton(text = "Журнал", onClick = onOpenLog)
         }
-
-        state.previousBudgetResult?.let { result -> PreviousBudgetCard(result = result) }
-
-        state.budget?.let { budget ->
-            RunningBudgetCard(
-                budget = budget,
-                balance = state.balance,
-                depositAmount = state.depositAmount
-            )
-        }
-
-        if (showBonus) {
-            DailyBonusCard(onClaimDailyBonus = onClaimDailyBonus)
-        } else if (showPlanning) {
-            PlanningCard(
-                total = state.totalToPlan,
-                draft = state.planningDraft,
-                // Вклад бывает только один одновременно: пока открыт этот, нового поля нет вовсе,
-                // чтобы игрок не набирал сумму, которой всё равно некуда лечь.
-                depositAllowed = state.deposit == null,
-                onDraftChange = onDraftChange,
-                onConfirm = { window = BudgetWindow.CONFIRM_BUDGET }
-            )
-        }
-
-        state.deposit?.let { deposit ->
-            DepositCard(
-                deposit = deposit,
-                // Дни игра считает от эпохи; игроку показывается порядковый номер, отсчитанный от
-                // самой старой записи журнала, — тот же счёт, по которому дни подписаны в журнале.
-                oldestGameDay = state.moneyLog.entries.lastOrNull()?.gameDay ?: deposit.openedDay,
-                planningOpen = showPlanning,
-                onCloseEarly = { window = BudgetWindow.CLOSE_DEPOSIT }
-            )
-        }
-
-        PillButton(text = "Журнал", onClick = onOpenLog)
     }
 
     // Окно, у которого пропала причина, закрывается само, а не стоит и молчит: закрывать нечего,
@@ -390,24 +417,16 @@ private fun PlanningCard(
             label = SpendKind.MUST.title,
             value = draft.mustSpend,
             max = total - draft.depositAmount - draft.wantSpend,
-            onValueChange = { onDraftChange(draft.copy(mustSpend = it)) }
-        )
-        Text(
-            text = "Еда и игрушки",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            onValueChange = { onDraftChange(draft.copy(mustSpend = it)) },
+            hint = "Еда и игрушки"
         )
 
         AmountPicker(
             label = SpendKind.WANT.title,
             value = draft.wantSpend,
             max = total - draft.depositAmount - draft.mustSpend,
-            onValueChange = { onDraftChange(draft.copy(wantSpend = it)) }
-        )
-        Text(
-            text = "Декор и одежда",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            onValueChange = { onDraftChange(draft.copy(wantSpend = it)) },
+            hint = "Декор и одежда"
         )
 
         AmountRow(label = "Останется", value = Budget.savingsOf(draft, total).toString())
@@ -428,11 +447,23 @@ private fun PlanningCard(
  * раскладки, а игра про деньги, а не про набор чисел. Шаг берётся от самой суммы
  * ([amountStepOf]), поэтому из сотни набирается «по десять», а из десяти тысяч — «по тысяче».
  *
+ * Ряд набора разбит надвое осознанно: «минус — ползунок — плюс» одной строкой, три быстрых ответа
+ * под ней. В одну строку пять кнопок не помещаются на узком экране с крупным шрифтом, а
+ * переносились они как придётся — «Всё» уезжало на свою строку, оставляя справа пустое место.
+ * Пилюли делят ширину поровну, и надпись на узкой ужимается сама, а не обрывается.
+ *
+ * Когда раскладывать уже нечего ([max] равен нулю), пикер не исчезает — он и есть ответ на вопрос
+ * «сколько сюда досталось» — но гасится весь целиком: ползунок, кнопки и пилюли не отвечают на
+ * нажатия и объявляются недоступными, а под ползунком говорится, почему.
+ *
  * @param label подпись суммы.
  * @param value сумма, которая набрана сейчас.
  * @param max сколько всего можно разложить в эту сумму.
  * @param onValueChange вызывается с новой суммой.
  * @param modifier модификатор блока.
+ * @param hint подпись под заголовком: что попадает в эту категорию. Стоит внутри самого пикера,
+ *   сразу под своей строкой, а не после ползунка: снизу она читалась как заголовок следующего
+ *   пикера, к которому не имеет отношения.
  */
 @Composable
 private fun AmountPicker(
@@ -440,39 +471,82 @@ private fun AmountPicker(
     value: Int,
     max: Int,
     onValueChange: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hint: String? = null
 ) {
     val step = amountStepOf(max)
+    // Раскладывать нечего: всё уже разошлось по другим строкам, и любое нажатие здесь вернуло бы
+    // ту же сумму. Кнопка, которая отвечает нажатием и не меняет ничего, читается как сломанная.
+    val enabled = max > 0
+
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         AmountRow(label = label, value = value.toString())
-        Slider(
-            value = value.coerceIn(0, max.coerceAtLeast(0)).toFloat(),
-            onValueChange = { onValueChange(amountSnappedTo(it, max, step)) },
-            valueRange = 0f..max.coerceAtLeast(1).toFloat()
-        )
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+        if (hint != null) {
+            Text(
+                text = hint,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(AmountRowGap),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             SpriteButton(
                 assetPath = Sprites.MINUS,
                 contentDescription = "$label меньше на $step",
                 onClick = { onValueChange(amountSteppedBy(value, -1, max, step)) },
-                size = AmountButtonSize
+                size = AmountButtonSize,
+                enabled = enabled
+            )
+            Slider(
+                value = value.coerceIn(0, max.coerceAtLeast(0)).toFloat(),
+                onValueChange = { onValueChange(amountSnappedTo(it, max, step)) },
+                modifier = Modifier.weight(1f),
+                enabled = enabled,
+                valueRange = 0f..max.coerceAtLeast(1).toFloat()
             )
             SpriteButton(
                 assetPath = Sprites.PLUS,
                 contentDescription = "$label больше на $step",
                 onClick = { onValueChange(amountSteppedBy(value, 1, max, step)) },
-                size = AmountButtonSize
+                size = AmountButtonSize,
+                enabled = enabled
             )
-            PillButton(text = "Ничего", onClick = { onValueChange(0) }, compact = true)
+        }
+        if (!enabled) {
+            Text(
+                text = "Всё уже распределено",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(AmountRowGap)
+        ) {
+            PillButton(
+                text = "Ничего",
+                onClick = { onValueChange(0) },
+                modifier = Modifier.weight(1f),
+                enabled = enabled,
+                compact = true
+            )
             PillButton(
                 text = "Половина",
                 onClick = { onValueChange(amountSnappedTo(max / 2f, max, step)) },
+                modifier = Modifier.weight(1f),
+                enabled = enabled,
                 compact = true
             )
-            PillButton(text = "Всё", onClick = { onValueChange(max) }, compact = true)
+            PillButton(
+                text = "Всё",
+                onClick = { onValueChange(max) },
+                modifier = Modifier.weight(1f),
+                enabled = enabled,
+                compact = true
+            )
         }
     }
 }
@@ -590,9 +664,15 @@ private fun RunningBudgetCard(
                 MaterialTheme.colorScheme.onSurface
             }
         )
+        val leftToSpend = budget.plannedSpend - budget.spent
         AmountRow(
             label = "Осталось потратить",
-            value = (budget.plannedSpend - budget.spent).toString()
+            value = leftToSpend.toString(),
+            valueColor = if (leftToSpend < 0) {
+                MaterialTheme.colorScheme.error
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            }
         )
         AmountRow(label = "Планировали сохранить", value = budget.plannedSavings.toString())
         HorizontalDivider(color = GameColors.cardStroke)
@@ -719,10 +799,13 @@ private fun BudgetCard(
 /**
  * Строка «подпись — значение»: подпись слева, значение справа.
  *
- * Подпись занимает всё, что осталось от значения, и переносится на вторую строку, а не режется
- * многоточием: на узком экране с крупным системным шрифтом «Планировали сохранить» иначе
- * превращалось в «Планиро…». Значение места не уступает вовсе и ужимается, как надпись на
- * [PillButton], — числа читаются целиком при любой ширине.
+ * Подпись из нескольких слов занимает всё, что осталось от значения, и переносится на вторую
+ * строку, а не режется многоточием: на узком экране с крупным системным шрифтом «Планировали
+ * сохранить» иначе превращалось в «Планиро…». Подписи из одного слова вторая строка не даётся
+ * вовсе: переносить в нём нечего, и Android рвал бы его посередине («Необязательны / е»), а
+ * `autoSize` этого и не заметил бы — в две строки слово поместилось. С одной строкой оно ужимается
+ * тем же механизмом, что и надпись на [PillButton], ровно настолько, чтобы влезть целиком.
+ * Значение места не уступает вовсе и ужимается так же — числа читаются целиком при любой ширине.
  *
  * @param label подпись строки.
  * @param value значение так, как его читает игрок.
@@ -736,11 +819,20 @@ private fun AmountRow(
     modifier: Modifier = Modifier,
     valueColor: Color = MaterialTheme.colorScheme.onSurface
 ) {
+    val density = LocalDensity.current
+    val labelStyle = MaterialTheme.typography.bodyMedium
+    // Перенести внутри слова некуда, поэтому одному слову вторая строка не даётся: пусть мельчает.
+    val labelMaxLines = if (label.contains(' ')) 2 else 1
     val valueStyle = MaterialTheme.typography.labelLarge
+    val (minLabelFontSize, maxLabelFontSize) = pillButtonAutoSizeRange(
+        minLabelSize = PillButtonMinLabelSize,
+        styleFontSize = labelStyle.fontSize,
+        density = density
+    )
     val (minFontSize, maxFontSize) = pillButtonAutoSizeRange(
         minLabelSize = PillButtonMinLabelSize,
         styleFontSize = valueStyle.fontSize,
-        density = LocalDensity.current
+        density = density
     )
 
     Row(
@@ -751,17 +843,20 @@ private fun AmountRow(
         Text(
             text = label,
             modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
+            style = labelStyle,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+            maxLines = labelMaxLines,
+            overflow = TextOverflow.Ellipsis,
+            autoSize = TextAutoSize.StepBased(
+                minFontSize = minLabelFontSize,
+                maxFontSize = maxLabelFontSize
+            )
         )
         Text(
             text = value,
             style = valueStyle,
             color = valueColor,
             maxLines = 1,
-            softWrap = false,
             autoSize = TextAutoSize.StepBased(
                 minFontSize = minFontSize,
                 maxFontSize = maxFontSize
