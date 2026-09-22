@@ -4,6 +4,7 @@ import com.legacy.fingame.game.GameUiState
 import com.legacy.fingame.game.PlayerState
 import com.legacy.fingame.game.Screen
 import com.legacy.fingame.game.economy.BudgetDraft
+import com.legacy.fingame.game.economy.BudgetResult
 import com.legacy.fingame.game.economy.BudgetState
 import com.legacy.fingame.game.economy.Deposit
 import com.legacy.fingame.game.economy.Economy
@@ -119,11 +120,24 @@ class BudgetFlowTest {
     }
 
     @Test
-    fun `planning is open to a player who never confirmed a budget, even before any bonus`() {
+    fun `planning is open to everyone without a confirmed budget, even before any bonus`() {
         val fresh = GameUiState()
 
         assertFalse(fresh.planningOpen)
         assertTrue(fresh.canPlanBudget)
+
+        // Закрытый период сам по себе планировать не мешает: подтверждённого бюджета нет, значит
+        // и показывать на экране, кроме раскладки, нечего.
+        val afterPeriod = fresh.copy(
+            previousBudgetResult = BudgetResult(
+                planned = 100,
+                plannedSavings = 0,
+                plannedDeposit = 0,
+                actual = 80
+            )
+        )
+
+        assertTrue(afterPeriod.canPlanBudget)
 
         val confirmed = fresh.copy(
             budget = BudgetState(
@@ -137,6 +151,36 @@ class BudgetFlowTest {
         )
 
         assertFalse(confirmed.canPlanBudget)
+    }
+
+    @Test
+    fun `a saved game without a confirmed budget plans even after its bonus was taken`() {
+        val clock = FakeGameClock()
+        // Так выглядит старое сохранение: бонус за сегодня уже получен, а планирование в нём
+        // никогда не открывалось и бюджет не подтверждался.
+        val store = FakePlayerStateStore(
+            PlayerState(
+                balance = 100,
+                savings = 40,
+                planningOpen = false,
+                lastDailyBonusDay = clock.day
+            )
+        )
+        val vm = testGameViewModel(store = store, clock = clock)
+
+        assertFalse(vm.state.value.dailyBonusAvailable)
+        assertTrue(vm.state.value.canPlanBudget)
+
+        vm.updateBudgetDraft(BudgetDraft(savings = 90, depositAmount = 0, depositTermDays = 3))
+
+        assertEquals(90, vm.state.value.planningDraft.savings)
+        assertTrue(vm.confirmBudget())
+
+        val state = vm.state.value
+        assertEquals(90, state.savings)
+        assertEquals(50, state.balance)
+        assertEquals(50, state.budget?.planned)
+        assertFalse(state.planningOpen)
     }
 
     @Test

@@ -168,10 +168,14 @@ data class GameUiState(
     val budgetLeft: Int get() = budget?.let { it.planned - it.spent } ?: 0
 
     /**
-     * Планирование доступно после получения бонуса дня, а также игроку, который ещё ни разу не
-     * подтверждал бюджет (первый запуск и старые сохранения).
+     * Планирование доступно после получения бонуса дня, а также всегда, когда подтверждённого
+     * бюджета нет: без него экрану бюджета всё равно нечего показать, а игроку — нечего ждать.
+     * Сюда попадают и первый запуск, и старые сохранения, в которых планирование не открывалось.
+     *
+     * Это же условие пропускает правки раскладки ([GameViewModel.updateBudgetDraft]) и её
+     * подтверждение ([GameViewModel.confirmBudget]), так что показанная раскладка всегда работает.
      */
-    val canPlanBudget: Boolean get() = planningOpen || (budget == null && previousBudgetResult == null)
+    val canPlanBudget: Boolean get() = planningOpen || budget == null
 
     /**
      * @param item item shown in the shop.
@@ -726,12 +730,12 @@ class GameViewModel(
      * Раскладка приводится в допустимый вид ([Budget.normalize]) до того, как попадёт в состояние,
      * поэтому раскладка, в которой суммы не сходятся, не сохраняется никогда.
      *
-     * @param draft что набрал игрок; игнорируется, когда планирование не открыто — подтверждённый
-     * бюджет не переписывается.
+     * @param draft что набрал игрок; игнорируется, когда планировать нечего
+     * ([GameUiState.canPlanBudget]) — подтверждённый бюджет не переписывается.
      */
     fun updateBudgetDraft(draft: BudgetDraft) {
         val current = _state.value
-        if (!current.planningOpen) return
+        if (!current.canPlanBudget) return
 
         _state.value = current.copy(
             budgetDraft = Budget.normalize(
@@ -747,12 +751,12 @@ class GameViewModel(
      * Подтверждает бюджет: деньги раскладываются по счетам, вклад — если игрок его выбрал —
      * открывается, и начинается период, в котором план уже не меняется.
      *
-     * @return True, когда бюджет подтверждён, false, когда планирование не открыто, то есть
-     * подтверждать нечего.
+     * @return True, когда бюджет подтверждён, false, когда планировать нечего
+     * ([GameUiState.canPlanBudget]), то есть подтверждать нечего.
      */
     fun confirmBudget(): Boolean {
         val current = _state.value
-        if (!current.planningOpen) return false
+        if (!current.canPlanBudget) return false
 
         val total = current.totalToPlan
         val draft = Budget.normalize(

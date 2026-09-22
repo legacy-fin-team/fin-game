@@ -20,6 +20,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -106,6 +107,10 @@ fun BudgetScreen(
     // повернули, игрок не должен.
     var transferText by rememberSaveable { mutableStateOf("") }
     val transferAmount = transferText.toIntOrNull() ?: 0
+    // Переложить можно только то, что есть на счёте, с которого берут: кнопка, которая ничего не
+    // сделает, гаснет, а не отвечает молча закрывшимся окном.
+    val canTransferToSavings = transferAmount in 1..state.balance
+    val canTransferFromSavings = transferAmount in 1..state.savings
     val isShortScreen = GameDimens.isShortScreen
 
     // Бонус дня открывает новый период, поэтому, пока он не получен, раскладывать нечего: экран
@@ -190,6 +195,8 @@ fun BudgetScreen(
                 budget = budget,
                 left = state.budgetLeft,
                 transferText = transferText,
+                canTransferToSavings = canTransferToSavings,
+                canTransferFromSavings = canTransferFromSavings,
                 onTransferTextChange = { typed ->
                     transferText = typed.filter { it.isDigit() }.take(AmountMaxDigits)
                 },
@@ -212,13 +219,20 @@ fun BudgetScreen(
     }
 
     // Окно, у которого пропала причина, закрывается само, а не стоит и молчит: закрывать нечего,
-    // когда вклада уже нет, и подтверждать нечего, когда раскладка уже подтверждена.
+    // когда вклада уже нет, подтверждать нечего, когда раскладка уже подтверждена, и перекладывать
+    // нечего, когда набранной суммы на счёте больше нет.
     val shownWindow = when (window) {
         BudgetWindow.NONE -> BudgetWindow.NONE
         BudgetWindow.CONFIRM_BUDGET -> window.takeIf { showPlanning } ?: BudgetWindow.NONE
-        BudgetWindow.TRANSFER_TO_SAVINGS,
-        BudgetWindow.TRANSFER_FROM_SAVINGS -> window.takeIf { transferAmount > 0 } ?: BudgetWindow.NONE
+        BudgetWindow.TRANSFER_TO_SAVINGS -> window.takeIf { canTransferToSavings } ?: BudgetWindow.NONE
+        BudgetWindow.TRANSFER_FROM_SAVINGS -> window.takeIf { canTransferFromSavings } ?: BudgetWindow.NONE
         BudgetWindow.CLOSE_DEPOSIT -> window.takeIf { state.deposit != null } ?: BudgetWindow.NONE
+    }
+
+    // Схлопнувшееся окно и забывается: иначе оно вернулось бы само, стоило причине появиться снова
+    // — например, стоило бы игроку снова набрать ту же сумму.
+    LaunchedEffect(shownWindow) {
+        if (window != shownWindow) window = shownWindow
     }
 
     when (shownWindow) {
@@ -235,9 +249,9 @@ fun BudgetScreen(
         )
 
         BudgetWindow.TRANSFER_TO_SAVINGS -> TransferDialog(
-            // Перевод — дело игрока, а не плана: модель сама решает, хватает ли денег, и
-            // отказ ничего не меняет, поэтому окно закрывается в любом случае, а набранная
-            // сумма остаётся в поле, чтобы её можно было поправить.
+            question = "Переложить $transferAmount в сбережения?",
+            // Набранная сумма остаётся в поле и после перевода: так видно, что именно уехало, и
+            // так же легко переложить столько же обратно.
             onConfirm = {
                 onTransferToSavings(transferAmount)
                 window = BudgetWindow.NONE
@@ -246,6 +260,7 @@ fun BudgetScreen(
         )
 
         BudgetWindow.TRANSFER_FROM_SAVINGS -> TransferDialog(
+            question = "Вернуть $transferAmount из сбережений?",
             onConfirm = {
                 onTransferFromSavings(transferAmount)
                 window = BudgetWindow.NONE
@@ -390,7 +405,9 @@ private fun AmountField(
     modifier: Modifier = Modifier
 ) {
     OutlinedTextField(
-        value = value.toString(),
+        // Ноль показывается пустым полем: иначе его нельзя стереть, и набранное поверх него
+        // читалось бы как «01». Ноль это поле всё равно и означает.
+        value = if (value == 0) "" else value.toString(),
         onValueChange = { typed ->
             onValueChange(typed.filter { it.isDigit() }.take(AmountMaxDigits).toIntOrNull() ?: 0)
         },
@@ -485,6 +502,8 @@ private fun ConfirmBudgetDialog(
  * @param budget подтверждённый бюджет периода.
  * @param left сколько из запланированного ещё не потрачено.
  * @param transferText сумма перевода так, как её набрал игрок.
+ * @param canTransferToSavings хватает ли текущих денег на набранную сумму.
+ * @param canTransferFromSavings хватает ли сбережений на набранную сумму.
  * @param onTransferTextChange вызывается с тем, что игрок набрал в поле.
  * @param onTransferToSavings вызывается по кнопке «В сбережения».
  * @param onTransferFromSavings вызывается по кнопке «Из сбережений».
@@ -495,13 +514,13 @@ private fun RunningBudgetCard(
     budget: BudgetState,
     left: Int,
     transferText: String,
+    canTransferToSavings: Boolean,
+    canTransferFromSavings: Boolean,
     onTransferTextChange: (String) -> Unit,
     onTransferToSavings: () -> Unit,
     onTransferFromSavings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val hasAmount = (transferText.toIntOrNull() ?: 0) > 0
-
     BudgetCard(title = "Текущий период", modifier = modifier) {
         AmountRow(label = "План", value = budget.planned.toString())
         AmountRow(label = "Потрачено", value = budget.spent.toString())
@@ -526,14 +545,14 @@ private fun RunningBudgetCard(
                 text = "В сбережения",
                 onClick = onTransferToSavings,
                 modifier = Modifier.weight(1f),
-                enabled = hasAmount,
+                enabled = canTransferToSavings,
                 compact = true
             )
             PillButton(
                 text = "Из сбережений",
                 onClick = onTransferFromSavings,
                 modifier = Modifier.weight(1f),
-                enabled = hasAmount,
+                enabled = canTransferFromSavings,
                 compact = true
             )
         }
@@ -577,11 +596,13 @@ private fun DepositCard(
  * Окно перед переводом между счетами: план периода от перевода не меняется, и игрок должен это
  * знать до того, как деньги уедут, а не после.
  *
+ * @param question что именно и куда перекладывается, вопросом: сумма и направление, чтобы окно
+ *   спрашивало про конкретный перевод, а не про переводы вообще.
  * @param onConfirm вызывается, когда игрок всё равно решил переложить.
  * @param onDismiss вызывается, когда перевод отменён.
  */
 @Composable
-private fun TransferDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+private fun TransferDialog(question: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     GameDialog(onDismiss = onDismiss) {
         GameDialogBlock(
             title = "Это не по бюджету",
@@ -589,7 +610,7 @@ private fun TransferDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
             onDismiss = onDismiss
         ) {
             Text(
-                text = "Перевод не входит в подтверждённый бюджет. План не изменится.",
+                text = "$question Это не соответствует бюджету, план не изменится.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
@@ -867,7 +888,13 @@ private fun ConfirmBudgetDialogPreview() {
 @Preview(name = "BudgetScreen — Transfer window", showBackground = true)
 @Composable
 private fun TransferDialogPreview() {
-    FinGameTheme(darkTheme = false) { TransferDialog(onConfirm = {}, onDismiss = {}) }
+    FinGameTheme(darkTheme = false) {
+        TransferDialog(
+            question = "Переложить 50 в сбережения?",
+            onConfirm = {},
+            onDismiss = {}
+        )
+    }
 }
 
 /** Превью окна досрочного закрытия вклада. */
