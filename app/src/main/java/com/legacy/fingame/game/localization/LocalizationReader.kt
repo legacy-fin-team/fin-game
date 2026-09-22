@@ -17,15 +17,32 @@ class LocalizationReader(private val context: Context) {
     }
 
     /**
-     * Загружает все XML файлы для указанного языка из папки "locale/<languageCode>".
-     * @param languageCode код языка (название папки), например "ru-RU" или "en-US".
-     * @return Словарь (Map) найденных ключей и их значений.
+     * Загружает все языки из папки "locale/".
+     * Каждая подпапка считается отдельным языком (например, "ru-RU", "en-US").
+     * @return Вложенный словарь: язык → (ключ перевода → значение).
      */
-    fun readLocales(languageCode: String): Map<String, String> {
+    fun readAllLocales(): Map<String, Map<String, String>> {
+        val allTranslations = mutableMapOf<String, Map<String, String>>()
+        val languageCodes = findLanguageCodes()
+
+        for (languageCode in languageCodes) {
+            val translations = readLanguage(languageCode)
+            allTranslations[languageCode] = translations
+            Log.i(TAG, "[$languageCode] Считано ${translations.size} строк.")
+        }
+        return allTranslations
+    }
+
+    /**
+     * Загружает все XML файлы для одного языка.
+     * @param languageCode код языка (название подпапки).
+     * @return Словарь ключ → значение для этого языка.
+     */
+    private fun readLanguage(languageCode: String): Map<String, String> {
         val translations = mutableMapOf<String, String>()
         val basePath = "locale/$languageCode"
         val xmlFiles = findXmlFiles(basePath)
-        
+
         for (filePath in xmlFiles) {
             try {
                 context.assets.open(filePath).use { inputStream ->
@@ -35,9 +52,21 @@ class LocalizationReader(private val context: Context) {
                 Log.e(TAG, "Ошибка при чтении файла: $filePath", e)
             }
         }
-        Log.i(TAG, "Считано ${translations.size} строк из ${xmlFiles.size} файлов.")
         return translations
     }
+
+    /**
+     * Возвращает список доступных языковых кодов (подпапок в "locale/").
+     */
+    private fun findLanguageCodes(): List<String> {
+        return try {
+            context.assets.list("locale")?.toList() ?: emptyList()
+        } catch (e: Exception) {
+            Log.e(TAG, "Ошибка при получении списка языков", e)
+            emptyList()
+        }
+    }
+
 
     /**
      * Рекурсивный поиск XML файлов в папке assets.
