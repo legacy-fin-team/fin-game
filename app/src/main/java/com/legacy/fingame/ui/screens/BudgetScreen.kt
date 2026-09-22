@@ -1,14 +1,15 @@
 package com.legacy.fingame.ui.screens
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -28,6 +29,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -112,16 +114,28 @@ fun BudgetScreen(
     val canTransferToSavings = transferAmount in 1..state.balance
     val canTransferFromSavings = transferAmount in 1..state.savings
     val isShortScreen = GameDimens.isShortScreen
+    val focusManager = LocalFocusManager.current
+    // Переведённая сумма из поля убирается, иначе она стоит там как приглашение перевести столько
+    // же ещё раз. Вместе с ней снимается и фокус: поле, оставшееся сфокусированным, поднимает
+    // клавиатуру заново, едва окно перевода закрылось.
+    val clearTransfer = {
+        transferText = ""
+        focusManager.clearFocus()
+    }
 
     // Бонус дня открывает новый период, поэтому, пока он не получен, раскладывать нечего: экран
     // показывает кнопку бонуса вместо раскладки, а не оба блока сразу.
     val showBonus = state.dailyBonusAvailable
     val showPlanning = !showBonus && state.canPlanBudget
 
+    // Клавиатура отрезает от прокручиваемой области ровно свою высоту (`imePadding`), а не
+    // ложится поверх неё: иначе поле, к которому прокрутка и так не доставала, при наборе уходит
+    // под клавиатуру вместе со всем, что ниже, — сроком вклада и кнопкой подтверждения.
     Column(
         modifier = modifier
             .fillMaxSize()
             .systemBarsPadding()
+            .imePadding()
             .padding(16.dp)
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -250,10 +264,9 @@ fun BudgetScreen(
 
         BudgetWindow.TRANSFER_TO_SAVINGS -> TransferDialog(
             question = "Переложить $transferAmount в сбережения?",
-            // Набранная сумма остаётся в поле и после перевода: так видно, что именно уехало, и
-            // так же легко переложить столько же обратно.
             onConfirm = {
                 onTransferToSavings(transferAmount)
+                clearTransfer()
                 window = BudgetWindow.NONE
             },
             onDismiss = { window = BudgetWindow.NONE }
@@ -263,6 +276,7 @@ fun BudgetScreen(
             question = "Вернуть $transferAmount из сбережений?",
             onConfirm = {
                 onTransferFromSavings(transferAmount)
+                clearTransfer()
                 window = BudgetWindow.NONE
             },
             onDismiss = { window = BudgetWindow.NONE }
@@ -421,8 +435,12 @@ private fun AmountField(
 /**
  * Выбор срока вклада: по кнопке на каждый предлагаемый срок, выбранный выделен.
  *
- * Ряд прокручивается вбок, чтобы шесть кнопок помещались и на самом узком экране при крупном
- * системном шрифте.
+ * Кнопки переносятся на следующую строку, а не уезжают вбок: прокручивающийся ряд обрывался краем
+ * карточки посреди кнопки, и последние сроки нельзя было ни увидеть, ни заподозрить.
+ *
+ * Выбранный срок выделен цветом выбранной кнопки ([PillButton]`(selected = true)`), а не погашен:
+ * погашенная кнопка читается — и вслух объявляется — как недоступная, хотя выбранный срок ровно
+ * наоборот. Нажатие на него ничего не меняет и так.
  *
  * @param selected выбранный срок в днях.
  * @param onSelect вызывается с выбранным сроком.
@@ -434,18 +452,17 @@ private fun TermPicker(
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    FlowRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Deposit.TERM_DAYS.forEach { term ->
             PillButton(
                 text = "$term дн",
                 onClick = { onSelect(term) },
-                enabled = term != selected,
-                compact = true
+                compact = true,
+                selected = term == selected
             )
         }
     }

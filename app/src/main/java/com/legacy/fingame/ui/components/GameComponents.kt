@@ -37,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -521,6 +522,13 @@ fun EffectChip(
  *   has all of to grow or shrink into (see `compact` below and [PillButtonMinLabelSize]).
  * @param enabled whether the button responds to taps; when `false`, the button is rendered with
  *   the disabled container/content colors and taps are ignored.
+ * @param selected whether the button is the one picked out of a group of them, e.g. the deposit
+ *   term the player has chosen. A selected button keeps its own container color — the muted
+ *   [androidx.compose.material3.ColorScheme.secondaryContainer] rather than the filled one — and
+ *   says as much to a screen reader, which is what tells it apart from a button that is simply
+ *   turned off: a picked option is still an option, and one announced as disabled reads as a
+ *   button the player may not press. A button that belongs to no group is never selected, which is
+ *   the default, and looks exactly as it did.
  * @param compact whether the pill (a) uses [PillCompactHorizontalPadding] instead of the normal,
  *   wider [PillHorizontalPadding] and (b) actually stretches into a [modifier] with
  *   `Modifier.fillMaxWidth()` in it rather than staying wrap-content-sized regardless (`Compose`'s
@@ -545,10 +553,19 @@ fun PillButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    compact: Boolean = false
+    compact: Boolean = false,
+    selected: Boolean = false
 ) {
-    val containerColor = if (enabled) MaterialTheme.colorScheme.primary else GameColors.disabledContainer
-    val contentColor = if (enabled) MaterialTheme.colorScheme.onPrimary else GameColors.disabledContent
+    val containerColor = when {
+        !enabled -> GameColors.disabledContainer
+        selected -> MaterialTheme.colorScheme.secondaryContainer
+        else -> MaterialTheme.colorScheme.primary
+    }
+    val contentColor = when {
+        !enabled -> GameColors.disabledContent
+        selected -> MaterialTheme.colorScheme.onSecondaryContainer
+        else -> MaterialTheme.colorScheme.onPrimary
+    }
     val interactionSource = remember { MutableInteractionSource() }
     val density = LocalDensity.current
     val textStyle = if (GameDimens.isTabletScreen) {
@@ -577,7 +594,8 @@ fun PillButton(
                 indication = ripple(bounded = true),
                 enabled = enabled,
                 onClick = onClick
-            ),
+            )
+            .semantics { this.selected = selected },
         shape = RoundedCornerShape(50),
         color = containerColor
     ) {
