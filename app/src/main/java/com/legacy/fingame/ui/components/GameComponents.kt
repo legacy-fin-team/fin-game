@@ -326,7 +326,7 @@ fun BalanceChip(
             Sprite(
                 assetPath = Sprites.COIN,
                 contentDescription = null,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
             Text(
