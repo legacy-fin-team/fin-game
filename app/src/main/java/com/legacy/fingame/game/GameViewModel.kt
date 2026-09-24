@@ -1,6 +1,7 @@
 package com.legacy.fingame.game
 
 import androidx.lifecycle.ViewModel
+import com.legacy.fingame.game.settings.GameSettings
 import com.legacy.fingame.ui.DemoContent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +25,9 @@ enum class Screen {
     /** The locations screen, which browses through sub-locations. */
     LOCATIONS,
     /** The options/settings screen. */
-    OPTIONS
+    OPTIONS,
+    /** The adult mode screen (placeholder). */
+    ADULT_MODE
 }
 
 /**
@@ -45,7 +48,8 @@ data class GameUiState(
     val screen: Screen = Screen.MAIN,
     val selectedCategoryId: String = DemoContent.categoryIds.first(),
     val quantities: Map<String, Int> = emptyMap(),
-    val subLocationIndex: Int = 0
+    val subLocationIndex: Int = 0,
+    val settings: GameSettings = GameSettings()
 )
 
 /**
@@ -167,5 +171,23 @@ class GameViewModel : ViewModel() {
         if (count == 0) return
         val current = _state.value.subLocationIndex
         _state.value = _state.value.copy(subLocationIndex = (current - 1 + count) % count)
+    }
+
+    /**
+     * Updates the game settings (sound, music, theme).
+     *
+     * @param settings the new [GameSettings] to apply.
+     */
+    fun updateSettings(settings: GameSettings) {
+        _state.value = _state.value.copy(settings = settings)
+    }
+
+    /**
+     * Resets the player's progress. Currently resets all UI state to defaults.
+     *
+     * TODO: wire this up to the actual save/progress data layer once it exists.
+     */
+    fun resetProgress() {
+        _state.value = GameUiState(settings = _state.value.settings)
     }
 }

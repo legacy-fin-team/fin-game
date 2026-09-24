@@ -18,6 +18,7 @@ import com.legacy.fingame.game.Screen
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.screens.MainScreen
 import com.legacy.fingame.ui.screens.PlaceholderScreen
+import com.legacy.fingame.ui.screens.SettingsScreen
 import com.legacy.fingame.ui.screens.ShopScreen
 
 /**
@@ -25,8 +26,9 @@ import com.legacy.fingame.ui.screens.ShopScreen
  * back-press handling to close any non-main screen.
  *
  * Layout: a full-size [Surface] with an [AnimatedContent] that cross-fades between
- * [MainScreen], [ShopScreen] and the [PlaceholderScreen] instances for the yet-unspecified
- * sections (inventory, quests, locations, options), based on [GameUiState.screen].
+ * [MainScreen], [ShopScreen], [SettingsScreen] and the [PlaceholderScreen] instances for the
+ * yet-unspecified sections (inventory, quests, locations, adult mode), based on
+ * [GameUiState.screen].
  *
  * @param modifier modifier applied to the root surface.
  * @param vm view model providing [GameUiState] and the navigation/action callbacks passed down
@@ -66,10 +68,23 @@ fun FinGameApp(
                     onClose = vm::closeScreen
                 )
 
+                Screen.OPTIONS -> SettingsScreen(
+                    settings = state.settings,
+                    onSettingsChanged = vm::updateSettings,
+                    onOpenAdultMode = { vm.openScreen(Screen.ADULT_MODE) },
+                    onResetProgress = vm::resetProgress,
+                    onBack = vm::closeScreen
+                )
+
+                Screen.ADULT_MODE -> PlaceholderScreen(
+                    "Режим взрослого",
+                    Sprites.SETTINGS,
+                    vm::closeScreen
+                )
+
                 Screen.INVENTORY -> PlaceholderScreen("Инвентарь", Sprites.INVENTORY, vm::closeScreen)
                 Screen.QUESTS -> PlaceholderScreen("Квесты", Sprites.QUESTS, vm::closeScreen)
                 Screen.LOCATIONS -> PlaceholderScreen("Локации", Sprites.LOCATIONS, vm::closeScreen)
-                Screen.OPTIONS -> PlaceholderScreen("Опции", Sprites.SETTINGS, vm::closeScreen)
             }
         }
     }
