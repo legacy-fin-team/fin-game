@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.legacy.fingame.game.GameViewModel
@@ -40,20 +41,25 @@ class MainActivity : ComponentActivity() {
         audio.startMusic()
         audioManager = audio
 
+        window.decorView.isSoundEffectsEnabled = savedSettings.soundEnabled
+
         setContent {
             val vm: GameViewModel = viewModel()
             val state by vm.state.collectAsStateWithLifecycle()
             val currentSettings = state.settings
+            val view = LocalView.current
 
             // Загружаем сохранённые настройки в ViewModel при первом запуске
             LaunchedEffect(Unit) {
                 vm.updateSettings(savedSettings)
             }
 
-            // Сохраняем настройки и обновляем аудио при каждом изменении
+            // Сохраняем настройки и обновляем аудио/звуки кнопок при каждом изменении
             LaunchedEffect(currentSettings) {
                 settingsRepository.save(currentSettings)
                 audioManager?.applySettings(currentSettings)
+                window.decorView.isSoundEffectsEnabled = currentSettings.soundEnabled
+                view.isSoundEffectsEnabled = currentSettings.soundEnabled
             }
 
             val isDark = when (currentSettings.themeMode) {

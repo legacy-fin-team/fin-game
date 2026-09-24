@@ -29,6 +29,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.legacy.fingame.game.settings.GameSettings
@@ -69,80 +71,86 @@ fun SettingsScreen(
 ) {
     var showResetDialog by remember { mutableStateOf(false) }
 
-    Box(
+    Column(
         modifier = modifier
             .fillMaxSize()
             .systemBarsPadding()
-            .padding(ScreenPadding)
+            .padding(ScreenPadding),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Кнопка закрытия (X)
-        SpriteButton(
-            assetPath = Sprites.CLOSE,
-            contentDescription = "Закрыть настройки",
-            onClick = onBack,
-            size = CloseButtonSize,
-            modifier = Modifier.align(Alignment.TopEnd)
-        )
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp, end = CloseButtonSize + 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        // Верхняя панель с заголовком и кнопкой закрытия (X)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // --- Звуки ---
-            SettingCheckbox(
-                label = "Звуки",
-                checked = settings.soundEnabled,
-                onCheckedChange = { onSettingsChanged(settings.copy(soundEnabled = it)) }
-            )
-
-            // --- Музыка ---
-            SettingCheckbox(
-                label = "Музыка",
-                checked = settings.musicEnabled,
-                onCheckedChange = { onSettingsChanged(settings.copy(musicEnabled = it)) }
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // --- Выбор темы ---
             Text(
-                text = "Тема",
-                style = MaterialTheme.typography.titleMedium,
+                text = "Настройки",
+                style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground
             )
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                ThemeMode.entries.forEach { mode ->
-                    val label = when (mode) {
-                        ThemeMode.LIGHT -> "Светлая"
-                        ThemeMode.DARK -> "Тёмная"
-                        ThemeMode.AUTO -> "Авто"
-                    }
-                    ThemeChip(
-                        label = label,
-                        selected = settings.themeMode == mode,
-                        onClick = { onSettingsChanged(settings.copy(themeMode = mode)) }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // --- Режим взрослого ---
-            SettingsButton(
-                text = "Режим взрослого",
-                onClick = onOpenAdultMode
-            )
-
-            // --- Сбросить прогресс ---
-            SettingsButton(
-                text = "Сбросить прогресс",
-                onClick = { showResetDialog = true }
+            SpriteButton(
+                assetPath = Sprites.CLOSE,
+                contentDescription = "Закрыть настройки",
+                onClick = onBack,
+                size = CloseButtonSize
             )
         }
+
+        // --- Звуки ---
+        SettingCheckbox(
+            label = "Звуки",
+            checked = settings.soundEnabled,
+            onCheckedChange = { onSettingsChanged(settings.copy(soundEnabled = it)) }
+        )
+
+        // --- Музыка ---
+        SettingCheckbox(
+            label = "Музыка",
+            checked = settings.musicEnabled,
+            onCheckedChange = { onSettingsChanged(settings.copy(musicEnabled = it)) }
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // --- Выбор темы ---
+        Text(
+            text = "Тема",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ThemeMode.entries.forEach { mode ->
+                val label = when (mode) {
+                    ThemeMode.LIGHT -> "Светлая"
+                    ThemeMode.DARK -> "Тёмная"
+                    ThemeMode.AUTO -> "Авто"
+                }
+                ThemeChip(
+                    label = label,
+                    selected = settings.themeMode == mode,
+                    onClick = { onSettingsChanged(settings.copy(themeMode = mode)) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // --- Режим взрослого ---
+        SettingsButton(
+            text = "Режим взрослого",
+            onClick = onOpenAdultMode
+        )
+
+        // --- Сбросить прогресс ---
+        SettingsButton(
+            text = "Сбросить прогресс",
+            onClick = { showResetDialog = true }
+        )
     }
 
     // Модальное окно подтверждения сброса прогресса
@@ -216,20 +224,28 @@ private fun ThemeChip(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = modifier.clickable(onClick = onClick),
+        onClick = onClick,
+        modifier = modifier,
         shape = RoundedCornerShape(50),
         color = if (selected) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, GameColors.cardStroke)
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-            color = if (selected) MaterialTheme.colorScheme.onPrimary
-            else MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-        )
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                color = if (selected) MaterialTheme.colorScheme.onPrimary
+                else MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }
 
@@ -243,9 +259,8 @@ private fun SettingsButton(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, GameColors.cardStroke),
