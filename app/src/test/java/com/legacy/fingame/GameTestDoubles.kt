@@ -175,13 +175,15 @@ internal fun testGameViewModel(
     catalog: ItemCatalog = FakeItemCatalog(),
     clock: GameClock = FakeGameClock(),
     questCatalog: QuestCatalog = QuestCatalog.EMPTY,
-    random: Random = ScriptedRandom()
+    random: Random = ScriptedRandom(),
+    allowRestart: Boolean = true
 ): GameViewModel = GameViewModel(
     store = store,
     catalog = catalog,
     clock = clock,
     questCatalog = questCatalog,
-    random = random
+    random = random,
+    allowRestart = allowRestart
 )
 
 /**

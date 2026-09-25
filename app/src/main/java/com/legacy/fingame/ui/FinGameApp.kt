@@ -195,7 +195,8 @@ fun FinGameApp(
                         onRestart = { questId -> vm.restartQuest(questId) },
                         onClose = vm::closeScreen,
                         balance = state.balance,
-                        depositAmount = state.depositAmount
+                        depositAmount = state.depositAmount,
+                        canRestart = DemoMode.ENABLED
                     )
 
                     Screen.BUDGET -> BudgetScreen(

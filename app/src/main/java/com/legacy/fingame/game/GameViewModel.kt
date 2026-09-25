@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.legacy.fingame.DemoMode
 import com.legacy.fingame.game.animals.Animal
 import com.legacy.fingame.game.animals.AnimalSelection
 import com.legacy.fingame.game.animals.Growth
@@ -236,13 +237,16 @@ data class GameUiState(
  * knowing about it.
  * @param questCatalog какие квесты есть в игре; правила над ними — в [QuestEngine].
  * @param random кости для случайных квестов; в тестах — заранее заданные.
+ * @param allowRestart можно ли пройти пройденный квест ещё раз ([restartQuest]); только в
+ * демо-сборке, иначе монеты «Копилки» можно было бы собирать без конца.
  */
 class GameViewModel(
     private val store: PlayerStateStore,
     private val catalog: ItemCatalog,
     clock: GameClock = GameClock.DEVICE,
     private val questCatalog: QuestCatalog = QuestCatalog.EMPTY,
-    private val random: Random = Random.Default
+    private val random: Random = Random.Default,
+    private val allowRestart: Boolean = DemoMode.ENABLED
 ) : ViewModel() {
 
     /**
@@ -276,15 +280,19 @@ class GameViewModel(
          * @param catalog what is on sale.
          * @param clock where the current day comes from; defaults to the device's calendar day.
          * @param questCatalog какие квесты есть в игре.
+         * @param allowRestart можно ли проходить квесты ещё раз; по умолчанию — только в демо.
          * @return A factory creating a [GameViewModel] backed by [store] and [catalog].
          */
         fun factory(
             store: PlayerStateStore,
             catalog: ItemCatalog,
             clock: GameClock = GameClock.DEVICE,
-            questCatalog: QuestCatalog = QuestCatalog.EMPTY
+            questCatalog: QuestCatalog = QuestCatalog.EMPTY,
+            allowRestart: Boolean = DemoMode.ENABLED
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { GameViewModel(store, catalog, clock, questCatalog) }
+            initializer {
+                GameViewModel(store, catalog, clock, questCatalog, allowRestart = allowRestart)
+            }
         }
     }
 
@@ -310,10 +318,11 @@ class GameViewModel(
      */
     fun openScreen(screen: Screen) {
         settleMaturedDeposit()
+        val seesQuests = screen == Screen.QUESTS || _state.value.screen == Screen.QUESTS
         _state.value = stateForNavigatingTo(screen)
-        // Открытый экран квестов — это «игрок всё увидел»: момент запоминается сразу, чтобы точка
-        // на кнопке не загорелась снова после перезапуска.
-        if (screen == Screen.QUESTS) persist()
+        // Открыть экран квестов или уйти с него — это «игрок всё увидел»: момент запоминается
+        // сразу, чтобы точка на кнопке не загорелась снова после перезапуска.
+        if (seesQuests) persist()
     }
 
     /**
@@ -321,8 +330,7 @@ class GameViewModel(
      * If the player was on [Screen.SHOP], the unpaid shop cart is dropped.
      */
     fun closeScreen() {
-        settleMaturedDeposit()
-        _state.value = stateForNavigatingTo(Screen.MAIN)
+        openScreen(Screen.MAIN)
     }
 
     /**
@@ -336,13 +344,15 @@ class GameViewModel(
         val previous = _state.value
         val leavingShop = previous.screen == Screen.SHOP && screen != Screen.SHOP
         val openingQuests = screen == Screen.QUESTS
+        // Уходя с экрана квестов, игрок видел всё, что на нём было, — и шаг, открывшийся без тика.
+        val leavingQuests = previous.screen == Screen.QUESTS
         return previous.copy(
-            questsSeenAtMillis = if (openingQuests) {
+            questsSeenAtMillis = if (openingQuests || leavingQuests) {
                 clock.nowMillis()
             } else {
                 previous.questsSeenAtMillis
             },
-            hasUnseenQuestStep = !openingQuests && previous.hasUnseenQuestStep,
+            hasUnseenQuestStep = !openingQuests && !leavingQuests && previous.hasUnseenQuestStep,
             screen = screen,
             quantities = if (leavingShop) emptyMap() else previous.quantities,
             pickedVariants = if (leavingShop) emptyMap() else previous.pickedVariants,
@@ -464,12 +474,13 @@ class GameViewModel(
 
     /**
      * «Ещё раз» для пройденного квеста игрока: он начинается заново с первого узла и нулевого
-     * прогресса. Минимум на счёте нужен и здесь.
+     * прогресса. Минимум на счёте нужен и здесь. Только в демо-сборке (см. `allowRestart`).
      *
      * @param questId id квеста.
      * @return True, когда квест начат заново.
      */
     fun restartQuest(questId: String): Boolean {
+        if (!allowRestart) return false
         val quest = questCatalog.findQuestById(questId) ?: return false
         if (quest.kind != QuestKind.PLAYER) return false
         if (_state.value.questProgressOf(questId)?.isFinished != true) return false

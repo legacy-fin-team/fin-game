@@ -1,6 +1,8 @@
 package com.legacy.fingame.ui.screens
 
+import com.legacy.fingame.game.quests.QuestEngine
 import com.legacy.fingame.game.quests.QuestEntry
+import com.legacy.fingame.game.quests.QuestOption
 import com.legacy.fingame.game.quests.QuestOutcome
 import com.legacy.fingame.ui.components.Sprites
 import java.util.Locale
@@ -30,6 +32,15 @@ fun coinsText(amount: Int): String {
 
 /** @return Статус квеста, на который не хватает денег: «Нужно 100 монет». */
 fun needCoinsText(amount: Int): String = "Нужно ${coinsText(amount)}"
+
+/**
+ * @param option вариант на шаге квеста.
+ * @param balance текущий счёт игрока.
+ * @return «Нужно 30 монет», когда на вариант не хватает монет (кнопка тогда неактивна), или null,
+ * когда его можно выбрать.
+ */
+fun optionLockText(option: QuestOption, balance: Int): String? =
+    if (QuestEngine.canAfford(option, balance)) null else needCoinsText(-option.moneyDelta)
 
 /** @return Пояснение к минимуму: монеты должны быть в запасе, но не тратятся. */
 fun minBalanceNoteText(amount: Int): String =

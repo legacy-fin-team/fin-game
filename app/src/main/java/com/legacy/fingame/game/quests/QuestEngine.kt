@@ -52,6 +52,15 @@ object QuestEngine {
         balance >= quest.minBalance && progressOf(quests, quest.id)?.isActive != true
 
     /**
+     * @param option вариант на шаге квеста.
+     * @param balance текущий счёт игрока.
+     * @return Хватает ли монет на этот вариант: доход и бесплатный вариант доступны всегда, трата —
+     * только когда она не больше счёта.
+     */
+    fun canAfford(option: QuestOption, balance: Int): Boolean =
+        option.moneyDelta >= 0 || -option.moneyDelta <= balance
+
+    /**
      * Начинает квест с первого узла; минимальная сумма не тратится.
      *
      * @return Новое состояние квестов, или null, когда начать нельзя (см. [canStart]).
@@ -72,14 +81,17 @@ object QuestEngine {
     }
 
     /**
-     * Выбор варианта на текущем узле. Трата больше баланса урезается до баланса (ниже нуля счёт
-     * не уходит), прогресс держится в 0..100 и двигается только у квестов с прогрессом. Следующий
-     * шаг откроется через задержку узла; после последнего варианта ждать нечего.
+     * Выбор варианта на текущем узле. Вариант, на который не хватает монет ([canAfford]), не
+     * выбирается; трата всё равно урезается до баланса — на случай, если счёт поменялся между
+     * проверкой и списанием, ниже нуля он не уходит. Прогресс держится в 0..100 и двигается только
+     * у квестов с прогрессом. Следующий шаг откроется через задержку узла; после последнего
+     * варианта ждать нечего.
      *
      * @param optionIndex номер варианта на узле.
      * @param balance текущий счёт игрока.
      * @return Новое состояние и исход, или null, когда выбирать сейчас нечего: квест не идёт, выбор
-     * уже сделан и показан результат, узел ещё не открылся, варианта с таким номером нет.
+     * уже сделан и показан результат, узел ещё не открылся, варианта с таким номером нет или на
+     * него не хватает монет.
      */
     fun choose(
         quest: Quest,
@@ -93,6 +105,7 @@ object QuestEngine {
         if (nowMillis < current.availableAtMillis) return null
         val node = quest.node(current.nodeId) ?: return null
         val option = node.options.getOrNull(optionIndex) ?: return null
+        if (!canAfford(option, balance)) return null
 
         val moneyDelta = if (option.moneyDelta < 0) {
             option.moneyDelta.coerceAtLeast(-balance.coerceAtLeast(0))

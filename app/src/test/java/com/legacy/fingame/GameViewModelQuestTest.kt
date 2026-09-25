@@ -55,12 +55,14 @@ class GameViewModelQuestTest {
     private fun vmOver(
         store: FakePlayerStateStore,
         clock: FakeGameClock = FakeGameClock(),
-        random: Random = ScriptedRandom()
+        random: Random = ScriptedRandom(),
+        allowRestart: Boolean = true
     ): GameViewModel = testGameViewModel(
         store = store,
         clock = clock,
         questCatalog = TestQuests.CATALOG,
-        random = random
+        random = random,
+        allowRestart = allowRestart
     )
 
     // --- Взять ---
@@ -138,17 +140,17 @@ class GameViewModelQuestTest {
     }
 
     @Test
-    fun `the balance never goes below zero`() {
-        val vm = vmOver(storeWith(balance = 30))
+    fun `an option the player cannot afford changes nothing`() {
+        val store = storeWith(balance = 30)
+        val vm = vmOver(store)
         vm.startQuest("ice_cream")
+        val before = vm.state.value
 
-        assertTrue(vm.chooseQuestOption("ice_cream", 0))
+        assertFalse(vm.chooseQuestOption("ice_cream", 0))
 
-        assertEquals(0, vm.state.value.balance)
-        val entry = vm.state.value.moneyLog.entries.first()
-        assertEquals("Квест: Мороженое", entry.reason)
-        assertEquals(-30, entry.delta)
-        assertEquals(-30, vm.state.value.questProgressOf("ice_cream")!!.lastChoice!!.moneyDelta)
+        assertEquals(before, vm.state.value)
+        assertEquals(30, store.state.balance)
+        assertNull(vm.state.value.questProgressOf("ice_cream")!!.lastChoice)
     }
 
     @Test
@@ -239,6 +241,24 @@ class GameViewModelQuestTest {
 
         assertFalse(vm.restartQuest("picnic"))
         assertFalse(vm.restartQuest("lost_wallet"))
+    }
+
+    @Test
+    fun `restart is only for the demo build`() {
+        val store = storeWith(balance = 150)
+        val player = vmOver(store, allowRestart = false)
+        player.startQuest("piggy_bank")
+        player.chooseQuestOption("piggy_bank", 0)
+        player.advanceQuest("piggy_bank")
+        val finished = player.state.value
+
+        assertFalse(player.restartQuest("piggy_bank"))
+        assertEquals(finished, player.state.value)
+        assertEquals(QuestStatus.FINISHED, store.state.quests.single().status)
+
+        val demo = vmOver(store, allowRestart = true)
+        assertTrue(demo.restartQuest("piggy_bank"))
+        assertEquals(QuestStatus.ACTIVE, demo.state.value.questProgressOf("piggy_bank")!!.status)
     }
 
     // --- Случайные квесты ---
@@ -357,6 +377,25 @@ class GameViewModelQuestTest {
         vm.tick()
 
         assertFalse(vm.state.value.hasUnseenQuestStep)
+        assertEquals(start + minute, store.state.questsSeenAtMillis)
+    }
+
+    @Test
+    fun `leaving the quests screen marks the steps as seen`() {
+        val clock = FakeGameClock()
+        val store = storeWith()
+        val vm = vmOver(store, clock)
+        vm.openScreen(Screen.QUESTS)
+        vm.startQuest("picnic")
+        vm.chooseQuestOption("picnic", 0)
+
+        // Шаг открылся, пока экран был перед глазами, но тика между этим и уходом не было.
+        clock.millis = start + minute
+        vm.closeScreen()
+        vm.tick()
+
+        assertFalse(vm.state.value.hasUnseenQuestStep)
+        assertEquals(start + minute, vm.state.value.questsSeenAtMillis)
         assertEquals(start + minute, store.state.questsSeenAtMillis)
     }
 

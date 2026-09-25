@@ -119,6 +119,7 @@ private const val CountdownStepMillis = 1_000L
  * @param balance текущий счёт — в шапке и для проверки минимума.
  * @param depositAmount тело вклада — в шапке.
  * @param initiallyExpanded карточка, раскрытая при первом показе; для превью.
+ * @param canRestart показывать ли «Ещё раз» у пройденного квеста игрока — только в демо-сборке.
  */
 @Composable
 fun QuestsScreen(
@@ -132,7 +133,8 @@ fun QuestsScreen(
     modifier: Modifier = Modifier,
     balance: Int = 0,
     depositAmount: Int = 0,
-    initiallyExpanded: String? = null
+    initiallyExpanded: String? = null,
+    canRestart: Boolean = false
 ) {
     var expandedId by rememberSaveable { mutableStateOf(initiallyExpanded) }
     // Момент берётся прямо из часов, когда меняются карточки (выбор, «Дальше») или приходит тик, —
@@ -207,6 +209,7 @@ fun QuestsScreen(
                         entry = entry,
                         expanded = expandedId == questId,
                         balance = balance,
+                        canRestart = canRestart,
                         nowMillis = nowMillis,
                         onToggle = { expandedId = nextExpandedQuest(expandedId, questId) },
                         onStart = { onStart(questId) },
@@ -229,6 +232,7 @@ private fun QuestCard(
     entry: QuestEntry,
     expanded: Boolean,
     balance: Int,
+    canRestart: Boolean,
     nowMillis: Long,
     onToggle: () -> Unit,
     onStart: () -> Unit,
@@ -318,6 +322,7 @@ private fun QuestCard(
                         quest = quest,
                         progress = progress,
                         balance = balance,
+                        canRestart = canRestart,
                         nowMillis = nowMillis,
                         onStart = onStart,
                         onChoose = onChoose,
@@ -336,6 +341,7 @@ private fun QuestBody(
     quest: Quest,
     progress: QuestProgress?,
     balance: Int,
+    canRestart: Boolean,
     nowMillis: Long,
     onStart: () -> Unit,
     onChoose: (Int) -> Unit,
@@ -345,7 +351,12 @@ private fun QuestBody(
     val choice = progress?.lastChoice
     when {
         progress == null -> StartBlock(quest = quest, balance = balance, onStart = onStart)
-        progress.isFinished -> FinishedBlock(quest = quest, balance = balance, onRestart = onRestart)
+        progress.isFinished -> FinishedBlock(
+            quest = quest,
+            balance = balance,
+            canRestart = canRestart,
+            onRestart = onRestart
+        )
         choice != null -> OutcomeBlock(
             quest = quest,
             outcome = choice,
@@ -353,7 +364,9 @@ private fun QuestBody(
             nowMillis = nowMillis,
             onAdvance = onAdvance
         )
-        else -> quest.node(progress.nodeId)?.let { node -> NodeBlock(node = node, onChoose = onChoose) }
+        else -> quest.node(progress.nodeId)?.let { node ->
+            NodeBlock(node = node, balance = balance, onChoose = onChoose)
+        }
     }
 }
 
@@ -377,16 +390,16 @@ private fun StartBlock(quest: Quest, balance: Int, onStart: () -> Unit) {
     }
 }
 
-/** Квест пройден: надпись и, для квеста игрока, «Ещё раз». */
+/** Квест пройден: надпись и, для квеста игрока в демо-сборке, «Ещё раз». */
 @Composable
-private fun FinishedBlock(quest: Quest, balance: Int, onRestart: () -> Unit) {
+private fun FinishedBlock(quest: Quest, balance: Int, canRestart: Boolean, onRestart: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(CardGap)) {
         Text(
             text = "Квест завершён",
             style = MaterialTheme.typography.bodyMedium,
             color = GameColors.success
         )
-        if (quest.kind == QuestKind.PLAYER) {
+        if (canRestart && quest.kind == QuestKind.PLAYER) {
             val affordable = balance >= quest.minBalance
             PillButton(
                 text = "Ещё раз",
@@ -420,9 +433,10 @@ private fun MinBalanceNote(amount: Int, affordable: Boolean) {
 /**
  * Текущая ситуация: картинка (если есть файл), текст и кнопки вариантов столбиком на всю ширину —
  * длинная надпись не сжимает кнопку в точку. Все варианты одного вида, ни один не выделен.
+ * Вариант, на который не хватает монет, неактивен, а под ним написано, сколько нужно.
  */
 @Composable
-private fun NodeBlock(node: QuestNode, onChoose: (Int) -> Unit) {
+private fun NodeBlock(node: QuestNode, balance: Int, onChoose: (Int) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(CardGap)) {
         NodeImage(imagePath = node.imagePath)
         Text(
@@ -435,14 +449,25 @@ private fun NodeBlock(node: QuestNode, onChoose: (Int) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(OptionGap)
         ) {
             node.options.forEachIndexed { index, option ->
+                val lockText = optionLockText(option, balance)
                 PillButton(
                     text = option.label,
                     onClick = { onChoose(index) },
                     modifier = Modifier.fillMaxWidth(),
                     // Все варианты одного вида: выделенный первый подсказывал бы «правильный» ответ.
                     style = PillStyle.Tonal,
+                    enabled = lockText == null,
                     compact = true
                 )
+                if (lockText != null) {
+                    Text(
+                        text = lockText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.fillMaxWidth(),
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
     }
@@ -671,7 +696,11 @@ private val PreviewGuests = Quest(
         "treat" to QuestNode(
             id = "treat",
             text = "Чем угостим гостей?",
-            options = listOf(QuestOption("Испечь пирог", "Пирог удался.", Quest.END_NODE))
+            options = listOf(
+                QuestOption("Испечь пирог", "Пирог удался.", Quest.END_NODE, moneyDelta = -10),
+                QuestOption("Купить торт", "Торт красивый.", Quest.END_NODE, moneyDelta = -30),
+                QuestOption("Позвать на чай", "Тепло и бесплатно.", Quest.END_NODE)
+            )
         )
     )
 )

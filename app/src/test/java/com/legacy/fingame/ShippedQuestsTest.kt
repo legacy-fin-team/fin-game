@@ -4,6 +4,7 @@ import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestCatalog
 import com.legacy.fingame.game.quests.QuestKind
 import com.legacy.fingame.game.quests.QuestReader
+import com.legacy.fingame.game.stats.StatKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -59,14 +60,15 @@ class ShippedQuestsTest {
     }
 
     @Test
-    fun `the piggy bank is taken by the player, has no progress and no waits`() {
+    fun `the piggy bank is taken by the player, has no progress and waits after saving`() {
         val piggy = readShippedQuests().single { it.id == "piggy_bank" }
 
         assertEquals(QuestKind.PLAYER, piggy.kind)
         assertFalse(piggy.hasProgress)
         assertEquals(0, piggy.minBalance)
         assertEquals(2, piggy.stepCount)
-        assertTrue(piggy.nodes.values.all { it.delayMinutes == 0 })
+        // «Подождём!» после «В копилку» — правда: следующий шаг открывается через две минуты.
+        assertEquals(listOf(2, 0), piggy.stepOrder.map { piggy.node(it)!!.delayMinutes })
         assertTrue(piggy.nodes.values.flatMap { it.options }.any { it.moneyDelta > 0 })
     }
 
@@ -81,6 +83,19 @@ class ShippedQuestsTest {
     }
 
     @Test
+    fun `returning the wallet pays less but feels better than keeping it`() {
+        val wallet = readShippedQuests().single { it.id == "lost_wallet" }
+        val (giveBack, keep) = wallet.node(wallet.firstNodeId)!!.options
+
+        assertEquals("Вернуть", giveBack.label)
+        assertEquals(20, giveBack.moneyDelta)
+        assertEquals(mapOf(StatKind.PLEASURE to 15), giveBack.statEffects)
+        assertEquals("Оставить себе", keep.label)
+        assertEquals(30, keep.moneyDelta)
+        assertEquals(mapOf(StatKind.PLEASURE to -20), keep.statEffects)
+    }
+
+    @Test
     fun `the guests come by themselves, have progress and wait two minutes`() {
         val guests = readShippedQuests().single { it.id == "guests" }
 
@@ -88,6 +103,23 @@ class ShippedQuestsTest {
         assertTrue(guests.hasProgress)
         assertEquals(2, guests.stepCount)
         assertEquals(2, guests.node(guests.firstNodeId)!!.delayMinutes)
+        val tea = guests.node(guests.firstNodeId)!!.options.single { it.label == "Позвать на чай" }
+        assertEquals(0, tea.moneyDelta)
+        assertEquals(10, tea.progressDelta)
+        assertEquals(mapOf(StatKind.PLEASURE to 5), tea.statEffects)
+        assertEquals("tidy", tea.nextNodeId)
+    }
+
+    @Test
+    fun `every step has an option that costs nothing`() {
+        readShippedQuests().forEach { quest ->
+            quest.nodes.values.forEach { node ->
+                assertTrue(
+                    "${quest.id}/${node.id} has no free option",
+                    node.options.any { it.moneyDelta >= 0 }
+                )
+            }
+        }
     }
 
     @Test

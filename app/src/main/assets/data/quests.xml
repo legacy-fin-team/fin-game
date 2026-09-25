@@ -2,6 +2,9 @@
 <!--
     Квесты игры.
 
+    Картинки quests/<id>.webp необязательны, файлов пока нет: без картинки на карточке
+    показывается иконка квестов.
+
     <quest id kind="player|random" title progress="true|false" min-balance="N" start="<id узла>" image>
         <description>Описание квеста</description>
         <node id delay-minutes="N" image>
@@ -66,7 +69,7 @@
     <quest id="piggy_bank" title="Копилка" kind="player" start="gift"
            image="quests/piggy_bank.webp">
         <description>Научись откладывать: терпение приносит монеты.</description>
-        <node id="gift">
+        <node id="gift" delay-minutes="2">
             <text>Бабушка подарила монетки. Потратить сразу или отложить?</text>
             <option label="В копилку" next="wait">
                 <result>Монетки звякнули в копилке. Подождём!</result>
@@ -94,13 +97,13 @@
         <description>На дорожке лежит чужой кошелёк.</description>
         <node id="found">
             <text>Внутри 30 монет и визитка хозяина. Как поступить?</text>
-            <option label="Вернуть" next="end" money="10">
-                <result>Хозяин обрадовался и дал 10 монет в награду.</result>
+            <option label="Вернуть" next="end" money="20">
+                <result>Хозяин сказал спасибо и дал 20 монет. На душе светло!</result>
                 <effect stat="pleasure" value="15" />
             </option>
             <option label="Оставить себе" next="end" money="30">
-                <result>Монеты твои, но на душе неспокойно.</result>
-                <effect stat="pleasure" value="-15" />
+                <result>Монет стало больше, а радости нет: хозяин ищет кошелёк.</result>
+                <effect stat="pleasure" value="-20" />
             </option>
         </node>
     </quest>
@@ -116,6 +119,10 @@
             </option>
             <option label="Купить торт" next="tidy" money="-30" progress="40">
                 <result>Торт красивый, но дорогой.</result>
+                <effect stat="pleasure" value="5" />
+            </option>
+            <option label="Позвать на чай" next="tidy" progress="10">
+                <result>Чай с вареньем и разговоры. Скромно, зато тепло и бесплатно.</result>
                 <effect stat="pleasure" value="5" />
             </option>
         </node>

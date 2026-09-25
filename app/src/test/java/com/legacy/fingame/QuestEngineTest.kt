@@ -109,11 +109,24 @@ class QuestEngineTest {
     }
 
     @Test
-    fun `a cost bigger than the balance takes only what there is`() {
+    fun `an option the player cannot afford is not chosen`() {
         val quests = started(TestQuests.ICE_CREAM)
 
-        assertEquals(-30, QuestEngine.choose(TestQuests.ICE_CREAM, quests, 0, 30, now)!!.outcome.moneyDelta)
-        assertEquals(0, QuestEngine.choose(TestQuests.ICE_CREAM, quests, 0, 0, now)!!.outcome.moneyDelta)
+        assertNull(QuestEngine.choose(TestQuests.ICE_CREAM, quests, 0, 39, now))
+        assertNull(QuestEngine.choose(TestQuests.ICE_CREAM, quests, 0, 0, now))
+        assertFalse(QuestEngine.canAfford(TestQuests.ICE_CREAM.node("shop")!!.options[0], 39))
+        assertTrue(QuestEngine.canAfford(TestQuests.ICE_CREAM.node("shop")!!.options[0], 40))
+        val paid = QuestEngine.choose(TestQuests.ICE_CREAM, quests, 0, 40, now)!!
+        assertEquals(-40, paid.outcome.moneyDelta)
+    }
+
+    @Test
+    fun `a free option or income is affordable with an empty balance`() {
+        val free = TestQuests.PICNIC.node("food")!!.options[1]
+        val income = TestQuests.PIGGY_BANK.node("start")!!.options[0]
+
+        assertTrue(QuestEngine.canAfford(free, 0))
+        assertTrue(QuestEngine.canAfford(income, 0))
     }
 
     @Test

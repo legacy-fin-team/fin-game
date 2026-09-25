@@ -2,6 +2,7 @@ package com.legacy.fingame
 
 import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestEntry
+import com.legacy.fingame.game.quests.QuestOption
 import com.legacy.fingame.game.quests.QuestOutcome
 import com.legacy.fingame.game.quests.QuestProgress
 import com.legacy.fingame.game.quests.QuestStatus
@@ -14,6 +15,7 @@ import com.legacy.fingame.ui.screens.hasWaitingStep
 import com.legacy.fingame.ui.screens.minBalanceNoteText
 import com.legacy.fingame.ui.screens.needCoinsText
 import com.legacy.fingame.ui.screens.nextExpandedQuest
+import com.legacy.fingame.ui.screens.optionLockText
 import com.legacy.fingame.ui.screens.progressChangeText
 import com.legacy.fingame.ui.screens.questImageOf
 import com.legacy.fingame.ui.screens.questStatusText
@@ -176,5 +178,18 @@ class QuestFormatTest {
         assertEquals("picnic", nextExpandedQuest(null, "picnic"))
         assertNull(nextExpandedQuest("picnic", "picnic"))
         assertEquals("guests", nextExpandedQuest("picnic", "guests"))
+    }
+
+    @Test
+    fun `an option that costs more than the balance says how much is needed`() {
+        val cake = QuestOption("Купить торт", "Торт.", "tidy", moneyDelta = -30)
+        val tea = QuestOption("Позвать на чай", "Чай.", "tidy")
+        val gift = QuestOption("Открыть", "Монеты!", Quest.END_NODE, moneyDelta = 20)
+
+        assertEquals("Нужно 30${nbsp}монет", optionLockText(cake, balance = 29))
+        assertEquals("Нужно 30${nbsp}монет", optionLockText(cake, balance = 0))
+        assertNull(optionLockText(cake, balance = 30))
+        assertNull(optionLockText(tea, balance = 0))
+        assertNull(optionLockText(gift, balance = 0))
     }
 }
