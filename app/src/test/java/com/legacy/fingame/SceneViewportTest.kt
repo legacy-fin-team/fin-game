@@ -123,7 +123,9 @@ class SceneViewportTest {
         val window = viewport(availableWidth = 700f)
         val dragged = window.clamp(window.initialOffset + SceneOffset(x = 0f, y = 120f))
 
-        assertEquals(120f, dragged.y, 0f)
+        // The scene starts 128 pixels up (the pet is on the floor, see below), so 120 down leaves
+        // it 8 pixels up.
+        assertEquals(-8f, dragged.y, 0f)
         assertEquals(window.free, window.clamp(dragged + SceneOffset(x = 0f, y = 9000f)).y, 0f)
     }
 
@@ -131,9 +133,31 @@ class SceneViewportTest {
     fun `the area starts out with the pet in the middle of the window`() {
         val window = viewport(availableWidth = 700f)
 
-        // The pet stands in the middle of the scene, and the scene is centered when it has not
-        // been moved, so there is nothing to move to put the pet in view.
-        assertEquals(SceneOffset.NONE, window.initialOffset)
+        // 128 * 8 = 1024 of scene in a window of 700: 162 of slack. The pet stands on the floor,
+        // 16 pixels of the art (16 * 8 = 128 screen pixels) below the middle of the scene, so the
+        // scene starts pulled up by exactly that much and not at all sideways.
+        assertEquals(162f, window.free, 0f)
+        assertEquals(SceneOffset(x = 0f, y = -128f), window.initialOffset)
+    }
+
+    @Test
+    fun `the pet is lowered onto the floor by whole pixels of the art at any size`() {
+        val window = viewport(availableWidth = 700f)
+
+        assertEquals(16, SceneViewport.PET_FLOOR_SHIFT_PX)
+        assertEquals(128, window.petFloorShift)
+        // Pinched up to 16 screen pixels per pixel of the art, the pet goes down with the room.
+        assertEquals(256, window.withScale(16f).petFloorShift)
+    }
+
+    @Test
+    fun `a pet on the floor near the edge of a scene is shown as close to the middle as it allows`() {
+        // 128 * 8 = 1024 of scene in a window of 1000: only 12 of slack, less than the 128 the
+        // pet is lowered by, so the scene goes up no further than its own bottom edge.
+        val window = viewport(availableWidth = 1000f)
+
+        assertEquals(12f, window.free, 0f)
+        assertEquals(SceneOffset(x = 0f, y = -12f), window.initialOffset)
     }
 
     @Test

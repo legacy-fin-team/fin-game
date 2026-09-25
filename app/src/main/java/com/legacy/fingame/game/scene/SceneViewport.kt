@@ -9,7 +9,8 @@ import kotlin.math.roundToInt
 /**
  * Where in the scene the pet stands, as a part of the side of the scene counted from its start.
  * Everything that lives in the room is drawn in the middle of it (see [GameLayer.sizeFraction]), so
- * the pet is exactly half a scene away from either edge.
+ * the pet is exactly half a scene away from either edge — before it is lowered onto the floor by
+ * [SceneViewport.PET_FLOOR_SHIFT_PX].
  */
 private const val PET_PLACE_IN_SCENE = 0.5f
 
@@ -127,12 +128,20 @@ data class SceneViewport(
     val isDraggable: Boolean = free > 0f
 
     /**
-     * Where the scene stands when the game area is first shown: with the pet in the middle of the
-     * window, as far as the edges of the scene allow.
+     * How far the pet and everything it wears are lowered from the middle of the scene onto the
+     * floor, in screen pixels: [PET_FLOOR_SHIFT_PX] pixels of the artwork at the current [scale].
+     * A whole number, since [scale] is one, so the pet stays on the pixel grid of the room.
+     */
+    val petFloorShift: Int = (PET_FLOOR_SHIFT_PX * scale).roundToInt()
+
+    /**
+     * Where the scene stands when the game area is first shown: with the pet — standing on the
+     * floor, [petFloorShift] below the middle of the scene — in the middle of the window, as far as
+     * the edges of the scene allow.
      */
     val initialOffset: SceneOffset = focusedOn(
         sceneX = sceneSide * PET_PLACE_IN_SCENE,
-        sceneY = sceneSide * PET_PLACE_IN_SCENE
+        sceneY = sceneSide * PET_PLACE_IN_SCENE + petFloorShift
     )
 
     /**
@@ -233,6 +242,14 @@ data class SceneViewport(
         if (free <= 0f) 0f else moved.coerceIn(-free, free)
 
     companion object {
+
+        /**
+         * How many pixels of the artwork the pet and its clothes are drawn below the middle of the
+         * scene, so its paws stand on the floor of the room instead of on the skirting board: the
+         * floor of the backgrounds starts at row 77 of 128, and the pet's paws are on row 80 when
+         * it stands in the middle.
+         */
+        const val PET_FLOOR_SHIFT_PX = 16
 
         /**
          * Builds the viewport of a measured game area, picking how big the scene is drawn to begin

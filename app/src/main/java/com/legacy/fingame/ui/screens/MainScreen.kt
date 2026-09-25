@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -51,6 +52,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.legacy.fingame.DemoMode
@@ -1169,6 +1171,12 @@ internal fun PetStage(
  * the scene for the pet, which is painted at a quarter of the resolution of the room — so a pixel
  * of the one is exactly as big on the screen as a pixel of the other.
  *
+ * The pet does not stand in the middle of the room but on its floor: the pet and everything on its
+ * grid — the clothes it wears, and the placeholder for missing art that is drawn in its place — are
+ * lowered by [SceneViewport.petFloorShift], a whole number of screen pixels that grows with the
+ * scene as it is pinched, so the pet stays on the room's pixel grid at any size ([isOnPetGrid],
+ * [loweredOntoFloor]).
+ *
  * A sprite whose file is not in the assets yet is not drawn here at all: [SpriteLoader] would hand
  * back the same placeholder for every one of them, and the scene would stack a pile of them on top
  * of each other — the scenery, the pet and everything it wears, all at once. Instead the scene
@@ -1205,6 +1213,7 @@ private fun SceneLayers(
                 contentDescription = sprite.description,
                 modifier = Modifier
                     .zIndex(layer.zIndex)
+                    .loweredOntoFloor(enabled = layer.isOnPetGrid, viewport = viewport)
                     .fillMaxSize(layer.sizeFraction)
                     .aspectRatio(1f)
             )
@@ -1216,12 +1225,34 @@ private fun SceneLayers(
                 contentDescription = "Часть картинок ещё не нарисована",
                 modifier = Modifier
                     .zIndex(GameLayer.CLOTHES.zIndex)
+                    .loweredOntoFloor(enabled = true, viewport = viewport)
                     .fillMaxSize(GameLayer.ANIMAL.sizeFraction)
                     .aspectRatio(1f)
             )
         }
     }
 }
+
+/**
+ * Whether the sprites of this layer are drawn on the pet's own grid — the pet itself and the
+ * clothes it wears — and so go down onto the floor together with it.
+ */
+private val GameLayer.isOnPetGrid: Boolean
+    get() = this == GameLayer.ANIMAL || this == GameLayer.CLOTHES
+
+/**
+ * Lowers what this modifier is applied to onto the floor of the room, by
+ * [SceneViewport.petFloorShift].
+ *
+ * The shift is read at placement time, so a pinch moves the pet down with the room without
+ * composing it again.
+ *
+ * @param enabled whether to lower it at all; the scenery of the room stays where it is.
+ * @param viewport geometry of the scene, for how many screen pixels the shift is at its size.
+ * @return This modifier, lowered when [enabled].
+ */
+private fun Modifier.loweredOntoFloor(enabled: Boolean, viewport: () -> SceneViewport): Modifier =
+    if (enabled) offset { IntOffset(x = 0, y = viewport().petFloorShift) } else this
 
 /**
  * Lays what this modifier is applied to out as the window of the game area: a square of the side

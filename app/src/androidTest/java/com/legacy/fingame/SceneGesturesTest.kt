@@ -19,6 +19,7 @@ import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.scene.GameLayer
 import com.legacy.fingame.game.scene.GameScene
 import com.legacy.fingame.game.scene.SceneSprite
+import com.legacy.fingame.game.scene.SceneViewport
 import com.legacy.fingame.ui.DemoContent
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.screens.PetStage
@@ -152,7 +153,11 @@ class SceneGesturesTest {
         // A phone shows a part of the room, so there is something to drag in the first place.
         assertTrue(sceneSide() > windowSide())
         assertTrue(free() > 0f)
-        assertEquals(Offset.Zero, moved())
+        // It starts with the pet in the middle of the window: not moved sideways, and pulled up by
+        // as much as the pet is lowered onto the floor, as far as the edge of the scene allows.
+        val lowered = SceneViewport.PET_FLOOR_SHIFT_PX * scale()
+        assertEquals(0f, moved().x, 0f)
+        assertEquals(-minOf(lowered, free()), moved().y, 0.5f)
 
         // A short drag to the right brings the scene right, and not as far as the edge. How short
         // is counted from what the scene actually has hidden, which depends on the density of the
