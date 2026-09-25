@@ -38,4 +38,13 @@ class PlayerPreferencesKeysTest {
         assertTrue(PlayerPreferences.LIVE_KEYS.none { it in statKeys })
         assertTrue(PlayerPreferences.RETIRED_KEYS.none { it in statKeys })
     }
+
+    @Test
+    fun `the quest keys are among the live ones`() {
+        // Квесты, момент последнего взгляда на экран квестов и момент последнего случайного
+        // квеста пишутся при каждом сохранении; ключ вне этого списка не пережил бы запуска.
+        assertTrue(PlayerPreferences.KEY_QUESTS in PlayerPreferences.LIVE_KEYS)
+        assertTrue(PlayerPreferences.KEY_QUESTS_SEEN_AT in PlayerPreferences.LIVE_KEYS)
+        assertTrue(PlayerPreferences.KEY_LAST_RANDOM_QUEST_AT in PlayerPreferences.LIVE_KEYS)
+    }
 }
