@@ -29,8 +29,10 @@ data class HeartFrame(val x: Float, val y: Float, val alpha: Float)
  * one [PetTouchController].
  * @property startMillis when the wave was set off, on the clock the taps were counted on.
  * @property spreads where each heart starts sideways, in pixels of the artwork from the middle of
- * the pet: one entry per heart, each on its own lane ([PetTouchController.LANES_PX]) so neighbours
- * never start on top of each other, and each within [PetTouchController.SPREAD_PX] either way.
+ * the pet: one entry per heart, each on its own lane ([PetTouchController.LANES_PX]) so the wave
+ * reads as three hearts rather than one repeated in the same spot, and each within
+ * [PetTouchController.SPREAD_PX] either way. Neighbours never overlap regardless of the lanes they
+ * land on, since [HEART_STAGGER_MILLIS] keeps them a whole sprite's height apart (see [heartAt]).
  */
 data class HeartBurst(val id: Long, val startMillis: Long, val spreads: List<Int>) {
 
@@ -70,11 +72,12 @@ data class HeartBurst(val id: Long, val startMillis: Long, val spreads: List<Int
         const val HEART_PIXELS = 8
 
         /**
-         * How much later each heart of a wave comes out than the one before it: 220 ms is just
-         * over 6 pixels of the 24-pixel rise ([HEART_RISE_PX] over [HEART_RISE_MILLIS]), so two
-         * neighbouring hearts are never at the same height and never read as one blob.
+         * How much later each heart of a wave comes out than the one before it: 300 ms is exactly
+         * [HEART_PIXELS] of the 24-pixel rise ([HEART_RISE_PX] over [HEART_RISE_MILLIS]), so by the
+         * time a heart is born the one before it has already risen a whole sprite's height further
+         * up — the two can never overlap, whatever their lanes happen to land on sideways.
          */
-        const val HEART_STAGGER_MILLIS = 220L
+        const val HEART_STAGGER_MILLIS = 300L
 
         /** How long one heart takes to rise and fade out. */
         const val HEART_RISE_MILLIS = 900L
@@ -147,9 +150,9 @@ class PetTouchController(
         val burst = HeartBurst(
             id = nextId++,
             startMillis = nowMillis,
-            // Each heart keeps to its own lane instead of an independent random spread, so two of
-            // them landing on top of each other and reading as one blob is not just unlikely — it
-            // cannot happen: the widest jitter still leaves a gap between neighbouring lanes.
+            // Each heart keeps to its own lane instead of an independent random spread, so they
+            // never start at the same spot sideways; what keeps two of them from ever overlapping
+            // is [HeartBurst.HEART_STAGGER_MILLIS] separating them vertically instead.
             spreads = LANES_PX.map { lane ->
                 lane + random.nextInt(-LANE_JITTER_PX, LANE_JITTER_PX + 1)
             }

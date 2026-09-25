@@ -7,7 +7,6 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.math.abs
 import kotlin.random.Random
 
 /**
@@ -33,13 +32,13 @@ class HeartBurstTest {
     }
 
     @Test
-    fun `a wave lives 1340 ms by the clock and is gone after that`() {
+    fun `a wave lives 1500 ms by the clock and is gone after that`() {
         val touch = controller()
         val burst = touch.onTap(start)!!
 
-        assertEquals(1340L, HeartBurst.LIFE_MILLIS)
-        assertEquals(listOf(burst), touch.alive(start + 1339))
-        assertEquals(emptyList<HeartBurst>(), touch.alive(start + 1340))
+        assertEquals(1500L, HeartBurst.LIFE_MILLIS)
+        assertEquals(listOf(burst), touch.alive(start + 1499))
+        assertEquals(emptyList<HeartBurst>(), touch.alive(start + 1500))
     }
 
     @Test
@@ -83,11 +82,16 @@ class HeartBurstTest {
     }
 
     @Test
-    fun `neighbouring hearts start on different lanes`() {
-        val touch = controller()
-        repeat(50) { i ->
-            val burst = touch.onTap(start + i * 1000L)!!
-            assertTrue(abs(burst.spreads[0] - burst.spreads[1]) >= 12)
+    fun `a younger heart is born fully below its older neighbour`() {
+        val burst = HeartBurst(id = 0, startMillis = start, spreads = listOf(0, 0, 0))
+
+        // The moment a heart is born, the one before it has already risen a whole sprite's height
+        // ([HeartBurst.HEART_PIXELS]) further up, so the two never overlap whatever their lanes.
+        listOf(0 to 1, 1 to 2).forEach { (older, younger) ->
+            val elapsed = younger * HeartBurst.HEART_STAGGER_MILLIS
+            val olderY = burst.heartAt(index = older, elapsedMillis = elapsed)!!.y
+            val youngerY = burst.heartAt(index = younger, elapsedMillis = elapsed)!!.y
+            assertTrue(olderY + HeartBurst.HEART_PIXELS <= youngerY)
         }
     }
 
@@ -124,11 +128,11 @@ class HeartBurstTest {
     fun `the hearts of a wave come out one after another`() {
         val burst = HeartBurst(id = 0, startMillis = start, spreads = listOf(0, 0, 0))
 
-        assertNull(burst.heartAt(index = 1, elapsedMillis = 219))
-        assertNotNull(burst.heartAt(index = 1, elapsedMillis = 220))
-        assertNull(burst.heartAt(index = 2, elapsedMillis = 439))
-        assertNotNull(burst.heartAt(index = 2, elapsedMillis = 1339))
-        assertNull(burst.heartAt(index = 2, elapsedMillis = 1340))
+        assertNull(burst.heartAt(index = 1, elapsedMillis = 299))
+        assertNotNull(burst.heartAt(index = 1, elapsedMillis = 300))
+        assertNull(burst.heartAt(index = 2, elapsedMillis = 599))
+        assertNotNull(burst.heartAt(index = 2, elapsedMillis = 1499))
+        assertNull(burst.heartAt(index = 2, elapsedMillis = 1500))
     }
 
     @Test
