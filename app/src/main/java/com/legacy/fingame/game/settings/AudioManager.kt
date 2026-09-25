@@ -24,6 +24,9 @@ class AudioManager(private val context: Context) {
         private const val MUSIC_DIR = "audio/music"
         private const val SOUNDS_ANIMAL_DIR = "audio/sounds/animal"
         private const val MAX_STREAMS = 4
+
+        /** Звук «погладил» при нажатии на питомца: `audio/sounds/animal/pat.wav`. */
+        const val SOUND_PAT = "pat"
     }
 
     private var mediaPlayer: MediaPlayer? = null
