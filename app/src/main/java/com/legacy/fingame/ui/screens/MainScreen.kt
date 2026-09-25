@@ -3,6 +3,7 @@ package com.legacy.fingame.ui.screens
 import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -534,7 +536,8 @@ fun MainScreen(
                 PrimaryActions(
                     size = PrimaryActionSize * fit,
                     gap = ActionGap * fit,
-                    onOpenScreen = onOpenScreen
+                    onOpenScreen = onOpenScreen,
+                    questsBadge = state.hasUnseenQuestStep
                 )
             },
             center = {
@@ -935,6 +938,13 @@ private fun MoneyActions(
 }
 
 /**
+ * Точка на кнопке квестов: есть шаг, который игрок ещё не видел. Кольцо цвета фона отделяет её от
+ * картинки кнопки, а сама она стоит в углу кнопки и размер кнопки не меняет.
+ */
+private val QuestBadgeSize = 12.dp
+private val QuestBadgeRing = 2.dp
+
+/**
  * The corner with the buttons that open the quests, the inventory and the shop.
  *
  * None of them belongs to a group one item of which is selected, so none keeps room under itself
@@ -945,6 +955,7 @@ private fun MoneyActions(
  *   screen by [bottomRowFit].
  * @param gap gap between them, shrunk by the same amount.
  * @param onOpenScreen called with the screen a button opens.
+ * @param questsBadge whether the quests button carries the dot of a step the player has not seen.
  * @param modifier modifier applied to the row.
  */
 @Composable
@@ -952,20 +963,36 @@ private fun PrimaryActions(
     size: Dp,
     gap: Dp,
     onOpenScreen: (Screen) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    questsBadge: Boolean = false
 ) {
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(gap),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        SpriteButton(
-            assetPath = Sprites.QUESTS,
-            contentDescription = "Открыть квесты",
-            onClick = { onOpenScreen(Screen.QUESTS) },
-            size = size,
-            showIndicator = false
-        )
+        Box {
+            SpriteButton(
+                assetPath = Sprites.QUESTS,
+                contentDescription = if (questsBadge) {
+                    "Открыть квесты, есть новый шаг"
+                } else {
+                    "Открыть квесты"
+                },
+                onClick = { onOpenScreen(Screen.QUESTS) },
+                size = size,
+                showIndicator = false
+            )
+            if (questsBadge) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(QuestBadgeSize)
+                        .background(MaterialTheme.colorScheme.error, CircleShape)
+                        .border(QuestBadgeRing, MaterialTheme.colorScheme.background, CircleShape)
+                )
+            }
+        }
         SpriteButton(
             assetPath = Sprites.INVENTORY,
             contentDescription = "Открыть инвентарь",
@@ -1312,6 +1339,7 @@ private fun StageBadge(
 private val PreviewState = GameUiState(
     balance = 250,
     dailyBonusAvailable = true,
+    hasUnseenQuestStep = true,
     subLocationIndex = 1,
     petName = "Барсик",
     stats = PetStats(

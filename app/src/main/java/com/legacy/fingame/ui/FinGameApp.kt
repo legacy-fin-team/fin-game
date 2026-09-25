@@ -21,6 +21,7 @@ import com.legacy.fingame.game.GameViewModel
 import com.legacy.fingame.game.Screen
 import com.legacy.fingame.game.items.Cart
 import com.legacy.fingame.game.items.Inventory
+import com.legacy.fingame.game.quests.QuestBoard
 import com.legacy.fingame.game.scene.GameScene
 import com.legacy.fingame.game.scene.SceneSprite
 import com.legacy.fingame.game.stats.PetStats
@@ -31,6 +32,7 @@ import com.legacy.fingame.ui.screens.InventoryScreen
 import com.legacy.fingame.ui.screens.LogScreen
 import com.legacy.fingame.ui.screens.MainScreen
 import com.legacy.fingame.ui.screens.PlaceholderScreen
+import com.legacy.fingame.ui.screens.QuestsScreen
 import com.legacy.fingame.ui.screens.ShopScreen
 import kotlinx.coroutines.delay
 
@@ -54,8 +56,8 @@ private const val TICK_POLLS_PER_TICK = 10L
  * actually picked.
  *
  * Layout: a full-size [Surface] with an [AnimatedContent] that cross-fades between
- * [MainScreen], [ShopScreen], [InventoryScreen], [BudgetScreen], [LogScreen] and the
- * [PlaceholderScreen] instances for the yet-unspecified sections (quests, options), based on
+ * [MainScreen], [ShopScreen], [InventoryScreen], [QuestsScreen], [BudgetScreen], [LogScreen] and
+ * the [PlaceholderScreen] for the yet-unspecified options section, based on
  * [GameUiState.screen].
  *
  * While there is a pet to look after, this is also where its life goes on: a loop asks
@@ -75,7 +77,11 @@ fun FinGameApp(
     modifier: Modifier = Modifier,
     vm: GameViewModel = viewModel(
         factory = with(LocalContext.current.applicationContext as FinGameApplication) {
-            GameViewModel.factory(store = playerPreferences, catalog = itemRegistry)
+            GameViewModel.factory(
+                store = playerPreferences,
+                catalog = itemRegistry,
+                questCatalog = questRegistry
+            )
         }
     )
 ) {
@@ -83,6 +89,7 @@ fun FinGameApp(
     val application = LocalContext.current.applicationContext as FinGameApplication
     val animalRegistry = application.animalRegistry
     val itemRegistry = application.itemRegistry
+    val questRegistry = application.questRegistry
 
     val savedSelection = state.selection
     val pet = savedSelection?.takeIf { animalRegistry.hasVariant(it.animalId, it.variantId) }
@@ -176,7 +183,17 @@ fun FinGameApp(
                         onClose = vm::closeScreen
                     )
 
-                    Screen.QUESTS -> PlaceholderScreen("Квесты", Sprites.QUESTS, vm::closeScreen)
+                    Screen.QUESTS -> QuestsScreen(
+                        entries = QuestBoard.entriesOf(questRegistry, state.quests),
+                        currentMillis = vm::nowMillis,
+                        onStart = { questId -> vm.startQuest(questId) },
+                        onChoose = { questId, index -> vm.chooseQuestOption(questId, index) },
+                        onAdvance = { questId -> vm.advanceQuest(questId) },
+                        onRestart = { questId -> vm.restartQuest(questId) },
+                        onClose = vm::closeScreen,
+                        balance = state.balance,
+                        depositAmount = state.depositAmount
+                    )
 
                     Screen.BUDGET -> BudgetScreen(
                         state = state,
