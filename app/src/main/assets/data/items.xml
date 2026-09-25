@@ -1,15 +1,119 @@
 <?xml version="1.0" encoding="utf-8"?>
 <items>
     <item
+        id="apple"
+        name="Яблоко"
+        price="15"
+        category="food"
+    >
+        <variants>
+            <variant id="default" />
+        </variants>
+        <effects>
+            <effect stat="hunger" value="20" />
+            <effect stat="health" value="5" />
+        </effects>
+    </item>
+    <item
+        id="fish"
+        name="Рыбка"
+        price="25"
+        category="food"
+    >
+        <variants>
+            <variant id="default" />
+        </variants>
+        <effects>
+            <effect stat="hunger" value="35" />
+            <effect stat="pleasure" value="5" />
+        </effects>
+    </item>
+    <item
+        id="cake"
+        name="Пирожное"
+        price="40"
+        category="food"
+    >
+        <variants>
+            <variant id="default" />
+        </variants>
+        <effects>
+            <effect stat="hunger" value="30" />
+            <effect stat="pleasure" value="15" />
+            <effect stat="health" value="-5" />
+        </effects>
+    </item>
+    <item
+        id="ball"
+        name="Мячик"
+        price="60"
+        category="toys"
+    >
+        <variants>
+            <variant id="red" />
+            <variant id="blue" />
+        </variants>
+        <effects>
+            <effect stat="pleasure" value="20" />
+            <effect stat="hunger" value="-5" />
+        </effects>
+    </item>
+    <item
+        id="teddy"
+        name="Мишка"
+        price="120"
+        category="toys"
+    >
+        <variants>
+            <variant id="default" />
+        </variants>
+        <effects>
+            <effect stat="pleasure" value="30" />
+        </effects>
+    </item>
+    <item
         id="hat"
         price="100"
-        type="single"
+        name="Шляпа"
         category="clothes"
     >
-        <variants path="items/hat/">
+        <variants>
             <variant id="black" />
             <variant id="white" />
             <variant id="violet" />
+        </variants>
+    </item>
+    <item
+        id="scarf"
+        name="Шарф"
+        price="80"
+        category="clothes"
+    >
+        <variants>
+            <variant id="red" />
+            <variant id="green" />
+        </variants>
+    </item>
+    <item
+        id="lamp"
+        name="Лампа"
+        price="150"
+        category="decor"
+        layer="environment-front"
+    >
+        <variants>
+            <variant id="default" />
+        </variants>
+    </item>
+    <item
+        id="rug"
+        name="Коврик"
+        price="90"
+        category="decor"
+    >
+        <variants>
+            <variant id="beige" />
+            <variant id="blue" />
         </variants>
     </item>
 </items>

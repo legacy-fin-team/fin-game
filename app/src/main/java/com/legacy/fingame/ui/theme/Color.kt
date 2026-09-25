@@ -43,8 +43,22 @@ object GameColors {
     val disabledContent: Color
         @Composable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
 
+    /**
+     * Background of a control that is there but has nothing to do right now.
+     *
+     * Tinted from the text color rather than from [MaterialTheme.colorScheme.surfaceVariant]: the
+     * game sits on a cream background a muted surface is all but indistinguishable from, so a
+     * disabled button drawn in it read as no button at all.
+     */
     val disabledContainer: Color
-        @Composable get() = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+        @Composable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+
+    /**
+     * Line between the rows of a list: visible enough to separate them, faint enough not to cut the
+     * card it is drawn in half.
+     */
+    val divider: Color
+        @Composable get() = MaterialTheme.colorScheme.outline.copy(alpha = 0.20f)
 }
 
 /** @return whether the system is currently in dark theme. */
