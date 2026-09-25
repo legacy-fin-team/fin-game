@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
@@ -49,7 +50,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Devices
@@ -460,71 +463,225 @@ fun BalanceChip(
 }
 
 /**
- * Current-goal card: title, progress bar and percentage text.
+ * Карточка цели: имя товара, на который копит игрок, полоска накопленного с процентами и под ней —
+ * сколько монет уже есть из цены, а когда хватает — «Можно купить».
  *
- * [progress] is supplied by the caller; the only computation performed here is clamping it to
- * `0f..1f` and formatting it as a rounded percentage string.
+ * Карточка ничего не считает сама: проценты, суммы и подписи ей дают готовыми
+ * ([com.legacy.fingame.ui.screens.GoalsCarousel]), здесь прогресс только зажимается в `0f..1f`.
  *
- * @param progress fraction of the goal completed, in the `0f..1f` range; values outside that range
- *   are clamped before being used.
- * @param modifier modifier applied to the outer [Surface].
- * @param title label displayed above the progress bar, wrapped onto a second line when it does not
- *   fit on one — the card is cut to the width of the chips above it, and on a narrow phone with the
- *   system text turned up "Текущая цель" is wider than that — and only cut with an ellipsis if even
- *   two lines are not enough. Stated by the caller rather than defaulted here: a card that names the goal
- *   out of its own pocket says the same thing whatever the player is actually saving for.
+ * Высота карточки не зависит от того, что в ней написано: имя всегда в одну строку и при нехватке
+ * места ужимается (`autoSize`), а не переносится; числа не переносятся никогда; подпись «Можно
+ * купить» стоит в той же строке, что и сумма. Поэтому все карточки карусели одной высоты, и угол с
+ * вещами игрока не прыгает, когда цели листают. Строки не срезаются ([fullLine]): каждая ровно
+ * своего `lineHeight`, и при обычном размере шрифта карточка 10 + 22 + 4 + 20 + 16 + 10 = 82 — столько
+ * же, сколько раскладка главного экрана отводит карточке цели. [GoalHintCard] держит ту же высоту.
+ *
+ * Тени нет: карусель обрезает всё, что выходит за её границы, и тень карточки была бы срезана
+ * снизу. Край карточки держит рамка.
+ *
+ * @param title имя товара.
+ * @param progress доля накопленного, `0f..1f`; значения за краями зажимаются.
+ * @param percentText проценты справа от полоски, например `40%`.
+ * @param amountText сколько накоплено из цены, например `80 / 200`.
+ * @param modifier модификатор карточки; ширину задаёт вызывающий.
+ * @param readyText подпись справа в нижней строке, когда денег хватает, или null.
+ * @param counterText какая это цель из скольких, например `1/3`, — справа от имени; null, когда
+ *   цель одна.
+ * @param onClick нажатие на карточку, или null, когда карточка не нажимается.
  */
 @Composable
 fun GoalCard(
+    title: String,
     progress: Float,
+    percentText: String,
+    amountText: String,
     modifier: Modifier = Modifier,
-    title: String
+    readyText: String? = null,
+    counterText: String? = null,
+    onClick: (() -> Unit)? = null
 ) {
     val clampedProgress = progress.coerceIn(0f, 1f)
-    val percentText = "${(clampedProgress * 100).roundToInt()}%"
 
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(20.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, GameColors.cardStroke),
-        shadowElevation = 2.dp
-    ) {
-        Box(modifier = Modifier.padding(16.dp)) {
-            Column(modifier = Modifier.wrapContentSize()) {
+    GoalCardFrame(onClick = onClick, modifier = modifier) {
+        GoalTitleRow(title = title, counterText = counterText)
+        Spacer(modifier = Modifier.height(GoalRowGap))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // Stripped down to a plain bar: the round cap, the gap before it and the dot
+            // Material puts at the end are the one thing on this screen drawn in a
+            // different language from the pixel art standing next to it.
+            LinearProgressIndicator(
+                progress = { clampedProgress },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(GoalProgressHeight),
+                color = GameColors.goalProgress,
+                trackColor = GameColors.goalProgressTrack,
+                strokeCap = StrokeCap.Butt,
+                gapSize = 0.dp,
+                // Material takes a drawing of the stop indicator, not a way of
+                // saying there is none; drawing nothing is how it is left out.
+                drawStopIndicator = {}
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = percentText,
+                style = MaterialTheme.typography.labelLarge.fullLine(),
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                softWrap = false
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = amountText,
+                style = MaterialTheme.typography.labelSmall.fullLine(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false
+            )
+            if (readyText != null) {
                 Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = GoalTitleMaxLines,
-                    overflow = TextOverflow.Ellipsis
+                    text = readyText,
+                    style = MaterialTheme.typography.labelSmall.fullLine(),
+                    color = GameColors.success,
+                    maxLines = 1,
+                    softWrap = false
                 )
-                Spacer(modifier = Modifier.padding(top = 8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Stripped down to a plain bar: the round cap, the gap before it and the dot
-                    // Material puts at the end are the one thing on this screen drawn in a
-                    // different language from the pixel art standing next to it.
-                    LinearProgressIndicator(
-                        progress = { clampedProgress },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(GoalProgressHeight),
-                        color = GameColors.goalProgress,
-                        trackColor = GameColors.goalProgressTrack,
-                        strokeCap = StrokeCap.Butt,
-                        gapSize = 0.dp,
-                        // Material takes a drawing of the stop indicator, not a way of
-                        // saying there is none; drawing nothing is how it is left out.
-                        drawStopIndicator = {}
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = percentText,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
             }
+        }
+    }
+}
+
+/**
+ * Карточка на месте целей, пока у игрока их нет: говорит, откуда они берутся.
+ *
+ * Той же высоты, что [GoalCard]: строка имени, строка текста вместо полоски (у `bodyMedium` и
+ * `labelLarge` одна высота строки, и обе не срезаются — [fullLine]) и пустая строка того же стиля на
+ * месте строки сумм. Первая отмеченная цель встаёт на
+ * место подсказки, и угол с вещами игрока не прыгает.
+ *
+ * @param title заголовок, например «Цели».
+ * @param text подсказка в одну строку, при нехватке места ужимается.
+ * @param modifier модификатор карточки; ширину задаёт вызывающий.
+ * @param onClick нажатие на карточку, или null, когда карточка не нажимается.
+ */
+@Composable
+fun GoalHintCard(
+    title: String,
+    text: String,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null
+) {
+    val textStyle = MaterialTheme.typography.bodyMedium.fullLine()
+    val (minFontSize, maxFontSize) = pillButtonAutoSizeRange(
+        minLabelSize = PillButtonMinLabelSize,
+        styleFontSize = textStyle.fontSize,
+        density = LocalDensity.current
+    )
+
+    GoalCardFrame(onClick = onClick, modifier = modifier) {
+        GoalTitleRow(title = title, counterText = null)
+        Spacer(modifier = Modifier.height(GoalRowGap))
+        Text(
+            text = text,
+            style = textStyle,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            autoSize = TextAutoSize.StepBased(minFontSize = minFontSize, maxFontSize = maxFontSize)
+        )
+        // Строка сумм обычной карточки здесь пустая, но место под неё держит такая же строка
+        // текста, только без букв: той же высоты при любом шрифте и плотности вплоть до пикселя —
+        // отступ, посчитанный отдельно, мог бы округлиться иначе, чем строка текста. Пробел, а не
+        // пустая строка: у пустого текста не к чему прицепить стиль высоты строки.
+        Text(
+            text = " ",
+            modifier = Modifier.clearAndSetSemantics {},
+            style = MaterialTheme.typography.labelSmall.fullLine(),
+            maxLines = 1
+        )
+    }
+}
+
+/**
+ * Общая рамка [GoalCard] и [GoalHintCard]: карточка проекта без тени, с полями и столбцом строк.
+ *
+ * @param onClick нажатие на карточку, или null — тогда карточка не нажимается.
+ * @param modifier модификатор карточки.
+ * @param content строки карточки сверху вниз.
+ */
+@Composable
+private fun GoalCardFrame(
+    onClick: (() -> Unit)?,
+    modifier: Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val shape = RoundedCornerShape(20.dp)
+    val color = MaterialTheme.colorScheme.surface
+    val border = BorderStroke(1.dp, GameColors.cardStroke)
+    val body: @Composable () -> Unit = {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = GoalCardHorizontalPadding, vertical = GoalCardVerticalPadding),
+            content = content
+        )
+    }
+
+    if (onClick == null) {
+        Surface(modifier = modifier, shape = shape, color = color, border = border, content = body)
+    } else {
+        Surface(
+            onClick = onClick,
+            modifier = modifier,
+            shape = shape,
+            color = color,
+            border = border,
+            content = body
+        )
+    }
+}
+
+/**
+ * Верхняя строка карточки цели: имя в одну строку, ужимаемое по ширине, и справа — счётчик.
+ *
+ * @param title имя товара или заголовок подсказки.
+ * @param counterText счётчик вида `1/3`, или null, когда его нет.
+ */
+@Composable
+private fun GoalTitleRow(title: String, counterText: String?) {
+    val titleStyle = MaterialTheme.typography.titleMedium.fullLine()
+    val (minFontSize, maxFontSize) = pillButtonAutoSizeRange(
+        minLabelSize = PillButtonMinLabelSize,
+        styleFontSize = titleStyle.fontSize,
+        density = LocalDensity.current
+    )
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        // Перенос не выключен: с `softWrap = false` текст меряется против бесконечной ширины, и
+        // `autoSize` не узнал бы, что имя не влезло (см. то же в [SpriteButton]).
+        Text(
+            text = title,
+            modifier = Modifier.weight(1f),
+            style = titleStyle,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            autoSize = TextAutoSize.StepBased(minFontSize = minFontSize, maxFontSize = maxFontSize)
+        )
+        if (counterText != null) {
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = counterText,
+                style = MaterialTheme.typography.labelSmall.fullLine(),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false
+            )
         }
     }
 }
@@ -535,8 +692,37 @@ fun GoalCard(
  */
 private val GoalProgressHeight = 8.dp
 
-/** How many lines the goal card's title may take before it is cut; see [GoalCard]. */
-private const val GoalTitleMaxLines = 2
+/** Поля карточки цели по бокам. */
+private val GoalCardHorizontalPadding = 12.dp
+
+/**
+ * Поля карточки цели сверху и снизу. 10, а не 16, как было у двухстрочной карточки: третья строка
+ * (суммы) занимает ровно освободившиеся 12 и 4 от прежнего зазора, и при обычном шрифте карточка
+ * той же высоты, что прежняя, — 82.
+ */
+private val GoalCardVerticalPadding = 10.dp
+
+/** Зазор между строкой имени и строкой полоски. */
+private val GoalRowGap = 4.dp
+
+/**
+ * Стиль строки карточки цели: строка всегда ровно [TextStyle.lineHeight] высотой.
+ *
+ * По умолчанию у одной строки текста Compose срезает запас межстрочия сверху и снизу
+ * (`LineHeightStyle.Trim.Both`), и строка выходит высотой в сам шрифт. Тогда имя, ужатое
+ * `autoSize`, стало бы ниже обычного — и карточка с длинным именем ниже соседних, а угол с вещами
+ * игрока прыгал бы при листании; подсказка тоже разошлась бы с карточкой цели по высоте. Без среза
+ * высота строки задаётся только `lineHeight` в sp — от длины имени и подобранного кегля она не
+ * зависит, и все карточки целей и подсказка выходят одной высоты.
+ *
+ * @return Тот же стиль, строка которого не срезается.
+ */
+private fun TextStyle.fullLine(): TextStyle = copy(
+    lineHeightStyle = LineHeightStyle(
+        alignment = LineHeightStyle.Alignment.Center,
+        trim = LineHeightStyle.Trim.None
+    )
+)
 
 /** Padding around the label of a [PillButton] on a phone; enlarged on tablets. */
 private val PillHorizontalPadding = 20.dp
@@ -1218,7 +1404,21 @@ private fun PreviewContent() {
                 label = "Нет арта"
             )
         }
-        GoalCard(title = "Велосипед", progress = 0.64f)
+        GoalCard(
+            title = "Велосипед",
+            progress = 0.64f,
+            percentText = "64%",
+            amountText = "128 / 200",
+            counterText = "2/3"
+        )
+        GoalCard(
+            title = "Мячик",
+            progress = 1f,
+            percentText = "100%",
+            amountText = "60 / 60",
+            readyText = "Можно купить"
+        )
+        GoalHintCard(title = "Цели", text = "Отметь ★ в магазине")
         val stats = PetStats(
             mapOf(
                 StatKind.HEALTH to 80,

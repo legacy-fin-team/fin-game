@@ -205,7 +205,10 @@ class MainScreenLayoutTest {
      * block and the line the goal card under it is cut to: a chip is an icon of 16, a gap of 4, the
      * room of "100%" — four glyphs of `labelSmall` — whatever the stat says, and 8 of padding on
      * either side, and three of them stand 8 apart. The height is the balance chip, that strip and
-     * the goal card, with a gap between each.
+     * the goal card, with a gap between each. The goal card holds three lines — the name, the bar
+     * with its percentage and the amount saved — inside 10 of padding above and below: 82 at the
+     * ordinary text size, the same as the two-line card before it, and 5 more than that card with
+     * the text turned up by 1.3, where the third line grows with the text — hence 181, not 176.
      *
      * @param large whether the system text is turned up, which is what makes every one of them
      *   wider and taller.
@@ -213,7 +216,7 @@ class MainScreenLayoutTest {
      */
     private fun playerCorner(large: Boolean = false): CornerBlock = CornerBlock(
         width = if (large) 304 else 262,
-        height = if (large) 176 else 158
+        height = if (large) 181 else 158
     )
 
     /**

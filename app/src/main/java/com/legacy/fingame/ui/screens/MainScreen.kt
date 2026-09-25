@@ -57,7 +57,9 @@ import com.legacy.fingame.DemoMode
 import com.legacy.fingame.game.GameUiState
 import com.legacy.fingame.game.Screen
 import com.legacy.fingame.game.economy.Economy
+import com.legacy.fingame.game.items.GoalLine
 import com.legacy.fingame.game.items.ItemCatalog
+import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.scene.GameLayer
 import com.legacy.fingame.game.scene.GameScene
 import com.legacy.fingame.game.scene.SceneOffset
@@ -67,7 +69,6 @@ import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.game.stats.StatKind
 import com.legacy.fingame.ui.DemoContent
 import com.legacy.fingame.ui.components.BalanceChip
-import com.legacy.fingame.ui.components.GoalCard
 import com.legacy.fingame.ui.components.PillButton
 import com.legacy.fingame.ui.components.PillStyle
 import com.legacy.fingame.ui.components.Sprite
@@ -196,15 +197,6 @@ internal val SceneOffsetSaver: Saver<SceneOffset, Any> = listSaver(
         if (moved.size == 2) SceneOffset(x = moved[0], y = moved[1]) else null
     }
 )
-
-// TODO: DemoGoalProgress is a hardcoded placeholder for the goal card progress bar. Replace with the real progress value once goal data is exposed from app logic.
-private const val DemoGoalProgress = 0.4f
-
-/**
- * Title the goal card carries until the goal itself is part of the game state.
- * TODO: replace with the player's own goal once app logic exposes one.
- */
-private const val DemoGoalTitle = "Текущая цель"
 
 /**
  * Stats shown beside the balance, in the order they are laid out: every stat the pet has, health
@@ -420,8 +412,9 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
  * [MainScreenStage] from the sizes the blocks actually come out at rather than from guesses about
  * them — a screen that has to say more, because the text is set larger or the pet has a long name,
  * hands the pet less room instead of running one thing over another.
- * - Top-start: the balance chip, the pet's stats ([PlayerStats]) in one strip under it and the goal
- *   progress card under them, the card exactly as wide as the chips above it ([PlayerCorner]).
+ * - Top-start: the balance chip, the pet's stats ([PlayerStats]) in one strip under it and the
+ *   player's goals under them — a row of cards scrolled sideways ([GoalsCarousel]), exactly as wide
+ *   as the chips above it ([PlayerCorner]).
  *   Every stat is a compact [StatChip] — an icon and a percentage — so the stats take a corner
  *   instead of half the screen.
  * - Top-end: the button for opening settings, and under it — in a demo build only — the button
@@ -455,6 +448,9 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
  *   to know how the assets are laid out. Defaults to the demo content pet alone.
  * @param subLocationTitles titles for each sub-location, indexed by
  *   [GameUiState.subLocationIndex]; defaults to the demo content titles.
+ * @param goals цели игрока в том порядке, в каком он их отмечал, уже сведённые с каталогом
+ *   ([com.legacy.fingame.game.items.Goals.linesOf]); пустой список — карточка-подсказка на их месте.
+ * @param onOpenGoal вызывается с целью, по карточке которой нажали.
  */
 @Composable
 fun MainScreen(
@@ -466,7 +462,9 @@ fun MainScreen(
     // TODO: default pulls from demo content; replace with the real scene of the player's pet.
     scene: GameScene = DemoScene,
     // TODO: default pulls from demo content; replace with real sub-location names for the current location.
-    subLocationTitles: List<String> = DemoContent.subLocationTitles
+    subLocationTitles: List<String> = DemoContent.subLocationTitles,
+    goals: List<GoalLine> = emptyList(),
+    onOpenGoal: (ItemSelection) -> Unit = {}
 ) {
     BoxWithConstraints(
         modifier = modifier
@@ -502,6 +500,9 @@ fun MainScreen(
             topStart = {
                 PlayerCorner(
                     state = state,
+                    goals = goals,
+                    onOpenGoal = onOpenGoal,
+                    onOpenShop = { onOpenScreen(Screen.SHOP) },
                     clearance = if (controlsInRow) {
                         DpSize.Zero
                     } else {
@@ -723,6 +724,9 @@ private val Placeable.block: CornerBlock get() = CornerBlock(width = width, heig
  * was offered, most of it empty.
  *
  * @param state game state the chips and the card are filled from.
+ * @param goals цели игрока для ряда карточек под чипами ([GoalsCarousel]).
+ * @param onOpenGoal нажатие на карточку цели.
+ * @param onOpenShop нажатие на карточку-подсказку, пока целей нет.
  * @param clearance the room the settings button takes in the top end corner of the space the corner
  *   is given, gaps included; [DpSize.Zero] when there is nothing there to keep clear of.
  * @param modifier modifier applied to the corner.
@@ -730,6 +734,9 @@ private val Placeable.block: CornerBlock get() = CornerBlock(width = width, heig
 @Composable
 private fun PlayerCorner(
     state: GameUiState,
+    goals: List<GoalLine>,
+    onOpenGoal: (ItemSelection) -> Unit,
+    onOpenShop: () -> Unit,
     clearance: DpSize,
     modifier: Modifier = Modifier
 ) {
@@ -749,8 +756,15 @@ private fun PlayerCorner(
             }
         }
     }
+    // Ряд целей меряется ниже так же, как мерилась одна карточка, — ровно в ширину чипов; высоту
+    // он берёт у карточки, сколько бы целей в нём ни было.
     val goal: @Composable () -> Unit = {
-        GoalCard(progress = DemoGoalProgress, title = DemoGoalTitle)
+        GoalsCarousel(
+            goals = goals,
+            balance = state.balance,
+            onOpenGoal = onOpenGoal,
+            onOpenShop = onOpenShop
+        )
     }
 
     Layout(contents = listOf(balance, stats, goal), modifier = modifier) { measurables, constraints ->
@@ -1332,7 +1346,8 @@ private fun MainScreenLightPreview() {
             MainScreen(
                 state = PreviewState,
                 onOpenScreen = {},
-                onClaimDailyBonus = {}
+                onClaimDailyBonus = {},
+                goals = PreviewGoalLines
             )
         }
     }
@@ -1375,7 +1390,8 @@ private fun MainScreenDarkPreview() {
                     )
                 ),
                 onOpenScreen = {},
-                onClaimDailyBonus = {}
+                onClaimDailyBonus = {},
+                goals = PreviewGoalLines.drop(1).take(1)
             )
         }
     }
@@ -1442,7 +1458,8 @@ private fun MainScreenLargeTextPreview() {
                 state = PreviewState,
                 onOpenScreen = {},
                 onClaimDailyBonus = {},
-                onFastForward = {}
+                onFastForward = {},
+                goals = PreviewGoalLines
             )
         }
     }
@@ -1484,7 +1501,8 @@ private fun MainScreenNarrowLandscapePreview() {
                 state = PreviewState,
                 onOpenScreen = {},
                 onClaimDailyBonus = {},
-                onFastForward = {}
+                onFastForward = {},
+                goals = PreviewGoalLines
             )
         }
     }
@@ -1504,7 +1522,8 @@ private fun MainScreenTabletPreview() {
                 state = PreviewState,
                 onOpenScreen = {},
                 onClaimDailyBonus = {},
-                onFastForward = {}
+                onFastForward = {},
+                goals = PreviewGoalLines
             )
         }
     }
