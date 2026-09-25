@@ -10,6 +10,12 @@ const val GoalsHintTitle = "Цели"
 const val GoalsHintText = "Отметь ★ в магазине"
 
 /**
+ * Карточка-подсказка вслух, для TalkBack: звезда словами, а не «чёрная звезда», как прочёл бы
+ * символ из [GoalsHintText].
+ */
+const val GoalsHintSpoken = "Цели. Отметь звёздочкой в магазине"
+
+/**
  * Сколько накоплено из цены — строка под полоской цели.
  *
  * Накопленное не бывает больше цены: лишние монеты к этой цели уже не относятся, и `500 / 200`
@@ -39,6 +45,37 @@ fun goalPercentText(balance: Int, price: Int): String {
     val percent = if (cost == 0) 100L else balance.coerceIn(0, cost).toLong() * 100 / cost
     return "$percent%"
 }
+
+/**
+ * Хватает ли уже денег на цель.
+ *
+ * Ровно тогда же, когда [goalPercentText] говорит «100%»: считается в целых, а не по доле
+ * [com.legacy.fingame.game.economy.goalProgress], которую `Float` на больших ценах мог бы округлить
+ * до единицы раньше времени.
+ *
+ * @param balance текущие деньги игрока.
+ * @param price цена товара-цели.
+ * @return true, когда денег не меньше цены, и для бесплатного товара.
+ */
+fun goalIsReady(balance: Int, price: Int): Boolean = price <= 0 || balance >= price
+
+/**
+ * Нижняя строка карточки цели: сколько накоплено из цены, а когда денег хватает — «Можно купить»
+ * вместо суммы.
+ *
+ * Одно из двух, а не оба рядом: «150 / 150» и «Можно купить» в одну строку не влезают на узком
+ * телефоне с крупным шрифтом, а сумма рядом со «100%» ничего не добавляет.
+ *
+ * @param balance текущие деньги игрока.
+ * @param price цена товара-цели.
+ * @return [GoalReadyText] или строка вида `120 / 200` ([goalAmountText]).
+ */
+fun goalFooterText(balance: Int, price: Int): String =
+    if (goalIsReady(balance = balance, price = price)) {
+        GoalReadyText
+    } else {
+        goalAmountText(balance = balance, price = price)
+    }
 
 /**
  * Какая это цель из скольких — счётчик справа от имени, когда целей несколько.

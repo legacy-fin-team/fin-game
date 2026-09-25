@@ -464,14 +464,15 @@ fun BalanceChip(
 
 /**
  * Карточка цели: имя товара, на который копит игрок, полоска накопленного с процентами и под ней —
- * сколько монет уже есть из цены, а когда хватает — «Можно купить».
+ * сколько монет уже есть из цены, а когда хватает — «Можно купить» вместо суммы.
  *
  * Карточка ничего не считает сама: проценты, суммы и подписи ей дают готовыми
  * ([com.legacy.fingame.ui.screens.GoalsCarousel]), здесь прогресс только зажимается в `0f..1f`.
  *
  * Высота карточки не зависит от того, что в ней написано: имя всегда в одну строку и при нехватке
- * места ужимается (`autoSize`), а не переносится; числа не переносятся никогда; подпись «Можно
- * купить» стоит в той же строке, что и сумма. Поэтому все карточки карусели одной высоты, и угол с
+ * места ужимается (`autoSize`), а не переносится; числа не переносятся никогда; «Можно купить»
+ * встаёт на место суммы, а не рядом с ней — вдвоём они не влезли бы в строку на узком телефоне с
+ * крупным шрифтом. Поэтому все карточки карусели одной высоты, и угол с
  * вещами игрока не прыгает, когда цели листают. Строки не срезаются ([fullLine]): каждая ровно
  * своего `lineHeight`, и при обычном размере шрифта карточка 10 + 22 + 4 + 20 + 16 + 10 = 82 — столько
  * же, сколько раскладка главного экрана отводит карточке цели. [GoalHintCard] держит ту же высоту.
@@ -482,9 +483,10 @@ fun BalanceChip(
  * @param title имя товара.
  * @param progress доля накопленного, `0f..1f`; значения за краями зажимаются.
  * @param percentText проценты справа от полоски, например `40%`.
- * @param amountText сколько накоплено из цены, например `80 / 200`.
+ * @param footerText нижняя строка: сколько накоплено из цены, например `80 / 200`, или «Можно
+ *   купить» ([com.legacy.fingame.ui.screens.goalFooterText]).
  * @param modifier модификатор карточки; ширину задаёт вызывающий.
- * @param readyText подпись справа в нижней строке, когда денег хватает, или null.
+ * @param footerIsReady денег на цель хватает — нижняя строка выделяется цветом успеха.
  * @param counterText какая это цель из скольких, например `1/3`, — справа от имени; null, когда
  *   цель одна.
  * @param onClick нажатие на карточку, или null, когда карточка не нажимается.
@@ -494,9 +496,9 @@ fun GoalCard(
     title: String,
     progress: Float,
     percentText: String,
-    amountText: String,
+    footerText: String,
     modifier: Modifier = Modifier,
-    readyText: String? = null,
+    footerIsReady: Boolean = false,
     counterText: String? = null,
     onClick: (() -> Unit)? = null
 ) {
@@ -531,28 +533,17 @@ fun GoalCard(
                 softWrap = false
             )
         }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = amountText,
-                style = MaterialTheme.typography.labelSmall.fullLine(),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                softWrap = false
-            )
-            if (readyText != null) {
-                Text(
-                    text = readyText,
-                    style = MaterialTheme.typography.labelSmall.fullLine(),
-                    color = GameColors.success,
-                    maxLines = 1,
-                    softWrap = false
-                )
-            }
-        }
+        Text(
+            text = footerText,
+            style = MaterialTheme.typography.labelSmall.fullLine(),
+            color = if (footerIsReady) {
+                GameColors.success
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            maxLines = 1,
+            softWrap = false
+        )
     }
 }
 
@@ -567,6 +558,8 @@ fun GoalCard(
  * @param title заголовок, например «Цели».
  * @param text подсказка в одну строку, при нехватке места ужимается.
  * @param modifier модификатор карточки; ширину задаёт вызывающий.
+ * @param contentDescription что прочесть вслух вместо заголовка и текста — когда в тексте есть
+ *   символ, который TalkBack назвал бы не так (★ — «чёрная звезда»); null — читать как написано.
  * @param onClick нажатие на карточку, или null, когда карточка не нажимается.
  */
 @Composable
@@ -574,6 +567,7 @@ fun GoalHintCard(
     title: String,
     text: String,
     modifier: Modifier = Modifier,
+    contentDescription: String? = null,
     onClick: (() -> Unit)? = null
 ) {
     val textStyle = MaterialTheme.typography.bodyMedium.fullLine()
@@ -583,7 +577,15 @@ fun GoalHintCard(
         density = LocalDensity.current
     )
 
-    GoalCardFrame(onClick = onClick, modifier = modifier) {
+    // Заголовок и текст внутри замолкают, карточка читается одной фразой; нажатие остаётся —
+    // оно на той же карточке, а не внутри неё.
+    val spokenModifier = if (contentDescription == null) {
+        modifier
+    } else {
+        modifier.clearAndSetSemantics { this.contentDescription = contentDescription }
+    }
+
+    GoalCardFrame(onClick = onClick, modifier = spokenModifier) {
         GoalTitleRow(title = title, counterText = null)
         Spacer(modifier = Modifier.height(GoalRowGap))
         Text(
@@ -696,9 +698,10 @@ private val GoalProgressHeight = 8.dp
 private val GoalCardHorizontalPadding = 12.dp
 
 /**
- * Поля карточки цели сверху и снизу. 10, а не 16, как было у двухстрочной карточки: третья строка
- * (суммы) занимает ровно освободившиеся 12 и 4 от прежнего зазора, и при обычном шрифте карточка
- * той же высоты, что прежняя, — 82.
+ * Поля карточки цели сверху и снизу. 10, а не 16, как было у двухстрочной карточки: с третьей
+ * строкой (суммы) и несрезанными строками ([fullLine]) карточка при обычном шрифте выходит 82 —
+ * ровно столько, сколько модель угла с вещами игрока (`MainScreenLayoutTest`) и раньше отводила
+ * карточке цели. Прежняя карточка на экране была ниже, около 70: её строки срезались до кегля.
  */
 private val GoalCardVerticalPadding = 10.dp
 
@@ -1408,17 +1411,21 @@ private fun PreviewContent() {
             title = "Велосипед",
             progress = 0.64f,
             percentText = "64%",
-            amountText = "128 / 200",
+            footerText = "128 / 200",
             counterText = "2/3"
         )
         GoalCard(
             title = "Мячик",
             progress = 1f,
             percentText = "100%",
-            amountText = "60 / 60",
-            readyText = "Можно купить"
+            footerText = "Можно купить",
+            footerIsReady = true
         )
-        GoalHintCard(title = "Цели", text = "Отметь ★ в магазине")
+        GoalHintCard(
+            title = "Цели",
+            text = "Отметь ★ в магазине",
+            contentDescription = "Цели. Отметь звёздочкой в магазине"
+        )
         val stats = PetStats(
             mapOf(
                 StatKind.HEALTH to 80,

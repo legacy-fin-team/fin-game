@@ -59,6 +59,7 @@ fun GoalsCarousel(
         GoalHintCard(
             title = GoalsHintTitle,
             text = GoalsHintText,
+            contentDescription = GoalsHintSpoken,
             onClick = onOpenShop,
             modifier = modifier.fillMaxWidth()
         )
@@ -83,8 +84,8 @@ fun GoalsCarousel(
                     title = goal.item.name,
                     progress = progress,
                     percentText = goalPercentText(balance = balance, price = price),
-                    amountText = goalAmountText(balance = balance, price = price),
-                    readyText = if (progress >= 1f) GoalReadyText else null,
+                    footerText = goalFooterText(balance = balance, price = price),
+                    footerIsReady = goalIsReady(balance = balance, price = price),
                     counterText = if (goals.size > 1) {
                         goalCounterText(index = index, count = goals.size)
                     } else {

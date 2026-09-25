@@ -206,9 +206,11 @@ class MainScreenLayoutTest {
      * room of "100%" — four glyphs of `labelSmall` — whatever the stat says, and 8 of padding on
      * either side, and three of them stand 8 apart. The height is the balance chip, that strip and
      * the goal card, with a gap between each. The goal card holds three lines — the name, the bar
-     * with its percentage and the amount saved — inside 10 of padding above and below: 82 at the
-     * ordinary text size, the same as the two-line card before it, and 5 more than that card with
-     * the text turned up by 1.3, where the third line grows with the text — hence 181, not 176.
+     * with its percentage and the amount saved — each exactly its line height tall, inside 10 of
+     * padding above and below: 82 at the ordinary text size, which is what this model has always
+     * given the goal card (the two-line card before it was nearer 70 on the screen, its lines cut
+     * down to the size of the font), and 99.4 with the text turned up by 1.3, 5 more than the model
+     * had for the old card there, where the third line grows with the text — hence 181, not 176.
      *
      * @param large whether the system text is turned up, which is what makes every one of them
      *   wider and taller.
