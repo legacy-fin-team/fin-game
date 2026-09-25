@@ -38,6 +38,10 @@ import com.legacy.fingame.game.stats.PetStats
  * over, so its counter grows; everything else is owned once.
  * @property worn which of the owned items are put on the pet right now, so a pet dressed up before
  * the app was closed is still dressed up when the player comes back.
+ * @property goals цели игрока — товары в варианте, отмеченные звёздочкой в магазине, в том
+ * порядке, в каком он их отмечал: в нём карточки целей и стоят на главном экране. Каждая цель —
+ * один раз. Купленное из целей уходит, а цели на товар, которого больше нет, [GameViewModel]
+ * отбрасывает при восстановлении.
  * @property stats the pet's stat bars as they were when the game was last saved. They keep falling
  * while the app is closed, which is why [statsUpdatedAtMillis] is saved next to them.
  * @property statsUpdatedAtMillis moment [stats] were last brought up to date, in milliseconds, or
@@ -82,6 +86,7 @@ data class PlayerState(
     val lastDailyBonusDay: Long = Economy.NEVER_CLAIMED,
     val owned: Map<ItemSelection, Int> = emptyMap(),
     val worn: Set<ItemSelection> = emptySet(),
+    val goals: List<ItemSelection> = emptyList(),
     val stats: PetStats = PetStats.FULL,
     val statsUpdatedAtMillis: Long = NEVER_UPDATED,
     val petBornAtMillis: Long = Growth.NOT_BORN,
