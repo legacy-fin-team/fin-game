@@ -9,6 +9,8 @@ import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.screens.advanceButtonText
 import com.legacy.fingame.ui.screens.coinsText
 import com.legacy.fingame.ui.screens.countdownText
+import com.legacy.fingame.ui.screens.expandedQuestStatusText
+import com.legacy.fingame.ui.screens.hasWaitingStep
 import com.legacy.fingame.ui.screens.minBalanceNoteText
 import com.legacy.fingame.ui.screens.needCoinsText
 import com.legacy.fingame.ui.screens.nextExpandedQuest
@@ -16,7 +18,9 @@ import com.legacy.fingame.ui.screens.progressChangeText
 import com.legacy.fingame.ui.screens.questImageOf
 import com.legacy.fingame.ui.screens.questStatusText
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Что написано на карточке квеста: статус, отсчёт, суммы и надписи кнопок. */
@@ -127,6 +131,44 @@ class QuestFormatTest {
         assertEquals(Sprites.QUESTS, questImageOf(null) { true })
         assertEquals(Sprites.QUESTS, questImageOf("quests/picnic.webp") { false })
         assertEquals("quests/picnic.webp", questImageOf("quests/picnic.webp") { true })
+    }
+
+    @Test
+    fun `an open card names the step instead of repeating the countdown or the finish`() {
+        val waiting = QuestEntry(
+            TestQuests.PICNIC,
+            QuestProgress("picnic", "food", now + 42_000L, lastChoice = toGames)
+        )
+        val choosing = QuestEntry(TestQuests.PICNIC, QuestProgress("picnic", "games", now))
+        val finished = QuestEntry(
+            TestQuests.PICNIC,
+            QuestProgress("picnic", Quest.END_NODE, now, progress = 80, status = QuestStatus.FINISHED)
+        )
+        val untaken = QuestEntry(TestQuests.PICNIC, null)
+
+        assertEquals("Шаг 1 из 2", expandedQuestStatusText(waiting, 0, now))
+        assertEquals("Шаг 2 из 2", expandedQuestStatusText(choosing, 0, now))
+        assertNull(expandedQuestStatusText(finished, 0, now))
+        assertEquals("Нужно 100${nbsp}монет", expandedQuestStatusText(untaken, 99, now))
+    }
+
+    @Test
+    fun `the screen waits only while an active quest has a step ahead`() {
+        val waiting = QuestEntry(
+            TestQuests.PICNIC,
+            QuestProgress("picnic", "food", now + 42_000L, lastChoice = toGames)
+        )
+        val ready = QuestEntry(TestQuests.PICNIC, QuestProgress("picnic", "food", now, lastChoice = toGames))
+        val finished = QuestEntry(
+            TestQuests.PICNIC,
+            QuestProgress("picnic", Quest.END_NODE, now + 42_000L, status = QuestStatus.FINISHED)
+        )
+        val untaken = QuestEntry(TestQuests.PIGGY_BANK, null)
+
+        assertTrue(hasWaitingStep(listOf(untaken, waiting), now))
+        assertFalse(hasWaitingStep(listOf(waiting), now + 42_000L))
+        assertFalse(hasWaitingStep(listOf(ready, finished, untaken), now))
+        assertFalse(hasWaitingStep(emptyList(), now))
     }
 
     @Test

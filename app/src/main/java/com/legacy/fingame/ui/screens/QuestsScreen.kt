@@ -29,10 +29,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -106,7 +105,8 @@ private const val CountdownStepMillis = 1_000L
  * или кнопкой «Дальше»/«Завершить». Результат и изменения видны только после выбора.
  *
  * Раскрытая карточка переживает поворот экрана ([rememberSaveable]). Отсчёт обновляется раз в
- * секунду по игровым часам ([currentMillis]), так что перемотка демо-сборки его ускоряет.
+ * секунду по игровым часам ([currentMillis]), так что перемотка демо-сборки его ускоряет; когда ни
+ * один квест не ждёт шага, часы не перечитываются.
  *
  * @param entries карточки по порядку, см. [com.legacy.fingame.game.quests.QuestBoard.entriesOf].
  * @param currentMillis момент по игровым часам (в приложении — `GameViewModel::nowMillis`).
@@ -135,12 +135,16 @@ fun QuestsScreen(
     initiallyExpanded: String? = null
 ) {
     var expandedId by rememberSaveable { mutableStateOf(initiallyExpanded) }
-    val latestClock by rememberUpdatedState(currentMillis)
-    var nowMillis by remember { mutableLongStateOf(currentMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            nowMillis = latestClock()
+    // Момент берётся прямо из часов, когда меняются карточки (выбор, «Дальше») или приходит тик, —
+    // так выбор без ожидания не покажет отсчёт от давно прочитанного времени. Тик идёт раз в
+    // секунду, только пока какой-то квест ждёт шага; дождались — ключ меняется и тик стихает.
+    var tick by remember { mutableIntStateOf(0) }
+    val nowMillis = remember(tick, entries) { currentMillis() }
+    val hasWaiting = hasWaitingStep(entries, nowMillis)
+    LaunchedEffect(hasWaiting) {
+        while (hasWaiting) {
             delay(CountdownStepMillis)
+            tick++
         }
     }
 
@@ -274,13 +278,21 @@ private fun QuestCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Text(
-                        text = questStatusText(entry, balance, nowMillis),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    // У раскрытой карточки отсчёт и «завершён» уже внизу — шапка их не повторяет.
+                    val status = if (expanded) {
+                        expandedQuestStatusText(entry, balance, nowMillis)
+                    } else {
+                        questStatusText(entry, balance, nowMillis)
+                    }
+                    if (status != null) {
+                        Text(
+                            text = status,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
 
@@ -353,8 +365,11 @@ private fun StartBlock(quest: Quest, balance: Int, onStart: () -> Unit) {
         PillButton(
             text = "Взять",
             onClick = onStart,
+            modifier = Modifier.fillMaxWidth(),
             style = PillStyle.Primary,
-            enabled = affordable
+            enabled = affordable,
+            // compact — иначе PillButton сжимается по надписи и fillMaxWidth не растягивает его.
+            compact = true
         )
         if (quest.minBalance > 0) {
             MinBalanceNote(amount = quest.minBalance, affordable = affordable)
@@ -376,8 +391,10 @@ private fun FinishedBlock(quest: Quest, balance: Int, onRestart: () -> Unit) {
             PillButton(
                 text = "Ещё раз",
                 onClick = onRestart,
+                modifier = Modifier.fillMaxWidth(),
                 style = PillStyle.Outlined,
-                enabled = affordable
+                enabled = affordable,
+                compact = true
             )
             if (quest.minBalance > 0) {
                 MinBalanceNote(amount = quest.minBalance, affordable = affordable)
@@ -402,7 +419,7 @@ private fun MinBalanceNote(amount: Int, affordable: Boolean) {
 
 /**
  * Текущая ситуация: картинка (если есть файл), текст и кнопки вариантов столбиком на всю ширину —
- * длинная надпись не сжимает кнопку в точку. Первая кнопка — главная, остальные тише.
+ * длинная надпись не сжимает кнопку в точку. Все варианты одного вида, ни один не выделен.
  */
 @Composable
 private fun NodeBlock(node: QuestNode, onChoose: (Int) -> Unit) {
@@ -422,7 +439,8 @@ private fun NodeBlock(node: QuestNode, onChoose: (Int) -> Unit) {
                     text = option.label,
                     onClick = { onChoose(index) },
                     modifier = Modifier.fillMaxWidth(),
-                    style = if (index == 0) PillStyle.Primary else PillStyle.Tonal,
+                    // Все варианты одного вида: выделенный первый подсказывал бы «правильный» ответ.
+                    style = PillStyle.Tonal,
                     compact = true
                 )
             }
@@ -487,7 +505,9 @@ private fun OutcomeBlock(
             PillButton(
                 text = advanceButtonText(outcome),
                 onClick = onAdvance,
-                style = PillStyle.Primary
+                modifier = Modifier.fillMaxWidth(),
+                style = PillStyle.Primary,
+                compact = true
             )
         }
     }

@@ -11,6 +11,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -184,7 +185,9 @@ fun FinGameApp(
                     )
 
                     Screen.QUESTS -> QuestsScreen(
-                        entries = QuestBoard.entriesOf(questRegistry, state.quests),
+                        entries = remember(state.quests) {
+                            QuestBoard.entriesOf(questRegistry, state.quests)
+                        },
                         currentMillis = vm::nowMillis,
                         onStart = { questId -> vm.startQuest(questId) },
                         onChoose = { questId, index -> vm.chooseQuestOption(questId, index) },

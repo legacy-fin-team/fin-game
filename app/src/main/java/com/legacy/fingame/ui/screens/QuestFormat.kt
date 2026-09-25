@@ -90,6 +90,34 @@ fun questStatusText(entry: QuestEntry, balance: Int, nowMillis: Long): String {
     }
 }
 
+/**
+ * Статус под названием раскрытой карточки. Низ раскрытой карточки сам показывает отсчёт и что квест
+ * завершён, так что шапка их не повторяет.
+ *
+ * @param entry карточка.
+ * @param balance текущий счёт игрока — для «Нужно N монет».
+ * @param nowMillis момент по игровым часам.
+ * @return «Шаг 2 из 3» у взятого квеста, null у пройденного, у невзятого — как [questStatusText].
+ */
+fun expandedQuestStatusText(entry: QuestEntry, balance: Int, nowMillis: Long): String? {
+    val progress = entry.progress ?: return questStatusText(entry, balance, nowMillis)
+    if (progress.isFinished) return null
+    return stepText(
+        entry.quest.stepNumberOf(progress.nodeId).coerceAtLeast(1),
+        entry.quest.stepCount.coerceAtLeast(1)
+    )
+}
+
+/**
+ * @param entries карточки экрана.
+ * @param nowMillis момент по игровым часам.
+ * @return Ждёт ли хоть один идущий квест следующего шага — только тогда экрану нужен отсчёт.
+ */
+fun hasWaitingStep(entries: List<QuestEntry>, nowMillis: Long): Boolean =
+    entries.any { entry ->
+        entry.progress?.let { it.isActive && it.availableAtMillis > nowMillis } == true
+    }
+
 /** @return Надпись кнопки под результатом: «Завершить» после последнего выбора, иначе «Дальше». */
 fun advanceButtonText(outcome: QuestOutcome): String =
     if (outcome.isFinal) "Завершить" else "Дальше"

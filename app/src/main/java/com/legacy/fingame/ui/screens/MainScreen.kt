@@ -19,8 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -938,10 +938,12 @@ private fun MoneyActions(
 }
 
 /**
- * Точка на кнопке квестов: есть шаг, который игрок ещё не видел. Кольцо цвета фона отделяет её от
- * картинки кнопки, а сама она стоит в углу кнопки и размер кнопки не меняет.
+ * Размер точки на кнопке квестов: есть шаг, который игрок ещё не видел. Точка стоит в углу кнопки и
+ * размер кнопки не меняет.
  */
 private val QuestBadgeSize = 12.dp
+
+/** Толщина кольца цвета фона вокруг точки [QuestBadgeSize]: оно отделяет точку от картинки кнопки. */
 private val QuestBadgeRing = 2.dp
 
 /**
