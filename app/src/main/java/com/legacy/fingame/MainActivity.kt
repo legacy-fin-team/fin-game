@@ -7,13 +7,13 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.legacy.fingame.game.GameViewModel
 import com.legacy.fingame.game.settings.AudioManager
 import com.legacy.fingame.game.settings.GameSettingsRepository
 import com.legacy.fingame.game.settings.ThemeMode
+import com.legacy.fingame.ui.ClickSound
 import com.legacy.fingame.ui.FinGameApp
 import com.legacy.fingame.ui.theme.FinGameTheme
 
@@ -41,7 +41,8 @@ class MainActivity : ComponentActivity() {
         audio.startMusic()
         audioManager = audio
 
-        window.decorView.isSoundEffectsEnabled = savedSettings.soundEnabled
+        // Щелчок кнопок слушается настройки «Звуки» с самого первого нажатия.
+        ClickSound.enabled = savedSettings.soundEnabled
 
         setContent {
             val vm: GameViewModel = viewModel(
@@ -51,19 +52,17 @@ class MainActivity : ComponentActivity() {
             )
             val state by vm.state.collectAsStateWithLifecycle()
             val currentSettings = state.settings
-            val view = LocalView.current
 
             // Загружаем сохранённые настройки в ViewModel при первом запуске
             LaunchedEffect(Unit) {
                 vm.updateSettings(savedSettings)
             }
 
-            // Сохраняем настройки и обновляем аудио/звуки кнопок при каждом изменении
+            // Сохраняем настройки и обновляем аудио и щелчок кнопок при каждом изменении
             LaunchedEffect(currentSettings) {
                 settingsRepository.save(currentSettings)
                 audioManager?.applySettings(currentSettings)
-                window.decorView.isSoundEffectsEnabled = currentSettings.soundEnabled
-                view.isSoundEffectsEnabled = currentSettings.soundEnabled
+                ClickSound.enabled = currentSettings.soundEnabled
             }
 
             val isDark = when (currentSettings.themeMode) {
