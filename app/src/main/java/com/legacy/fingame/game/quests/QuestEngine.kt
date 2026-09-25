@@ -123,15 +123,29 @@ object QuestEngine {
 
     /**
      * «Дальше» или «Завершить» после показанного результата. Узел, которого в данных больше нет,
-     * завершает квест, а не оставляет игрока в тупике.
+     * завершает квест, а не оставляет игрока в тупике — это касается и следующего узла (после
+     * выбора), и текущего: если квест ждёт выбора на узле, которого больше нет в данных, он тоже
+     * завершается, а не виснет активным навсегда.
      *
-     * @return Новое состояние, или null, когда идти дальше пока нельзя: выбор не сделан или
-     * задержка ещё не прошла.
+     * @return Новое состояние, или null, когда идти дальше пока нельзя: выбор ещё не сделан (а
+     * текущий узел при этом есть в данных) или задержка после выбора ещё не прошла.
      */
     fun advance(quest: Quest, quests: List<QuestProgress>, nowMillis: Long): List<QuestProgress>? {
         val current = progressOf(quests, quest.id) ?: return null
-        val choice = current.lastChoice ?: return null
-        if (!current.isActive || nowMillis < current.availableAtMillis) return null
+        if (!current.isActive) return null
+
+        val choice = current.lastChoice
+        if (choice == null) {
+            if (quest.node(current.nodeId) != null) return null
+            val updated = current.copy(
+                nodeId = Quest.END_NODE,
+                status = QuestStatus.FINISHED,
+                availableAtMillis = nowMillis,
+                lastChoice = null
+            )
+            return quests.replaced(updated)
+        }
+        if (nowMillis < current.availableAtMillis) return null
 
         val next = quest.node(choice.nextNodeId)
         val updated = if (choice.isFinal || next == null) {

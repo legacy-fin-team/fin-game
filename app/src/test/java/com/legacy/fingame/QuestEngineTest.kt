@@ -174,6 +174,21 @@ class QuestEngineTest {
     }
 
     @Test
+    fun `a final choice in a delayed step needs no wait`() {
+        val delayedGames = TestQuests.PICNIC.nodes.getValue("games").copy(delayMinutes = 5)
+        val quest = TestQuests.PICNIC.copy(nodes = TestQuests.PICNIC.nodes + ("games" to delayedGames))
+
+        var quests = QuestEngine.choose(quest, started(quest), 0, 150, now)!!.quests
+        quests = QuestEngine.advance(quest, quests, now + minute)!!
+
+        val choice = QuestEngine.choose(quest, quests, 0, 150, now + minute)!!
+        assertEquals(now + minute, choice.quests.single().availableAtMillis)
+
+        val finished = QuestEngine.advance(quest, choice.quests, now + minute)!!.single()
+        assertEquals(QuestStatus.FINISHED, finished.status)
+    }
+
+    @Test
     fun `a step the data no longer has finishes the quest instead of getting stuck`() {
         val quests = QuestEngine.choose(TestQuests.PICNIC, started(TestQuests.PICNIC), 0, 150, now)!!.quests
         val trimmed = TestQuests.PICNIC.copy(nodes = TestQuests.PICNIC.nodes - "games")
@@ -182,6 +197,25 @@ class QuestEngineTest {
 
         assertEquals(QuestStatus.FINISHED, finished.status)
         assertEquals(60, finished.progress)
+    }
+
+    @Test
+    fun `a quest whose current step vanished from the data finishes on advance`() {
+        val quests = started(TestQuests.PICNIC)
+        val trimmed = TestQuests.PICNIC.copy(nodes = TestQuests.PICNIC.nodes - "food")
+
+        val finished = QuestEngine.advance(trimmed, quests, now)!!.single()
+
+        assertEquals(QuestStatus.FINISHED, finished.status)
+        assertEquals(Quest.END_NODE, finished.nodeId)
+        assertNull(finished.lastChoice)
+
+        // Пройденный квест, даже так, не должен держать случайные квесты заблокированными.
+        val spawn = QuestEngine.maybeSpawnRandom(
+            TestQuests.CATALOG, listOf(finished), 0, now, now + sixHours, ScriptedRandom(0, 1)
+        )!!
+
+        assertEquals(TestQuests.GUESTS, spawn.quest)
     }
 
     // --- Случайные квесты ---
