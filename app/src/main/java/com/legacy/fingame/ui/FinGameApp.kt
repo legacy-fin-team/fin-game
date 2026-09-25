@@ -23,6 +23,7 @@ import com.legacy.fingame.game.items.Cart
 import com.legacy.fingame.game.items.Inventory
 import com.legacy.fingame.game.scene.GameScene
 import com.legacy.fingame.game.scene.SceneSprite
+import com.legacy.fingame.game.settings.AudioManager
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.screens.AnimalSelectScreen
@@ -70,6 +71,9 @@ private const val TICK_POLLS_PER_TICK = 10L
  *   to each screen; defaults to a [GameViewModel] scoped to this composable, restoring the
  *   player's game from [FinGameApplication.playerPreferences] and pricing the shop out of
  *   [FinGameApplication.itemRegistry].
+ * @param onPlaySound plays a sound effect by its key (see [AudioManager.playSound]); the app's
+ *   audio lives in the activity, so it is handed in rather than looked up. Silent by default, e.g.
+ *   in previews.
  */
 @Composable
 fun FinGameApp(
@@ -78,7 +82,8 @@ fun FinGameApp(
         factory = with(LocalContext.current.applicationContext as FinGameApplication) {
             GameViewModel.factory(store = playerPreferences, catalog = itemRegistry)
         }
-    )
+    ),
+    onPlaySound: (String) -> Unit = {}
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val application = LocalContext.current.applicationContext as FinGameApplication
@@ -146,7 +151,10 @@ fun FinGameApp(
                             worn = state.worn,
                             catalog = itemRegistry,
                             animalAge = state.petAge
-                        )
+                        ),
+                        // Patting the pet only makes it happy to see: hearts on the screen and a
+                        // sound, no stats and no money.
+                        onPetTap = { onPlaySound(AudioManager.SOUND_PAT) }
                     )
 
                     Screen.SHOP -> ShopScreen(

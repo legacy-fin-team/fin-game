@@ -72,7 +72,10 @@ class MainActivity : ComponentActivity() {
             }
 
             FinGameTheme(darkTheme = isDark) {
-                FinGameApp(vm = vm)
+                FinGameApp(
+                    vm = vm,
+                    onPlaySound = { soundKey -> audioManager?.playSound(soundKey) }
+                )
             }
         }
     }
