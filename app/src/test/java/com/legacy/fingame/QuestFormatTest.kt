@@ -1,0 +1,138 @@
+package com.legacy.fingame
+
+import com.legacy.fingame.game.quests.Quest
+import com.legacy.fingame.game.quests.QuestEntry
+import com.legacy.fingame.game.quests.QuestOutcome
+import com.legacy.fingame.game.quests.QuestProgress
+import com.legacy.fingame.game.quests.QuestStatus
+import com.legacy.fingame.ui.components.Sprites
+import com.legacy.fingame.ui.screens.advanceButtonText
+import com.legacy.fingame.ui.screens.coinsText
+import com.legacy.fingame.ui.screens.countdownText
+import com.legacy.fingame.ui.screens.minBalanceNoteText
+import com.legacy.fingame.ui.screens.needCoinsText
+import com.legacy.fingame.ui.screens.nextExpandedQuest
+import com.legacy.fingame.ui.screens.progressChangeText
+import com.legacy.fingame.ui.screens.questImageOf
+import com.legacy.fingame.ui.screens.questStatusText
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Test
+
+/** Что написано на карточке квеста: статус, отсчёт, суммы и надписи кнопок. */
+class QuestFormatTest {
+
+    private val now = FakeGameClock.DEFAULT_MILLIS
+    private val nbsp = " "
+
+    private val toGames = QuestOutcome("Фрукты", "Вкусно.", "games")
+    private val toEnd = QuestOutcome("Мяч", "Играли!", Quest.END_NODE)
+
+    @Test
+    fun `coins are counted the Russian way`() {
+        assertEquals("1${nbsp}монета", coinsText(1))
+        assertEquals("2${nbsp}монеты", coinsText(2))
+        assertEquals("4${nbsp}монеты", coinsText(4))
+        assertEquals("5${nbsp}монет", coinsText(5))
+        assertEquals("11${nbsp}монет", coinsText(11))
+        assertEquals("14${nbsp}монет", coinsText(14))
+        assertEquals("21${nbsp}монета", coinsText(21))
+        assertEquals("22${nbsp}монеты", coinsText(22))
+        assertEquals("100${nbsp}монет", coinsText(100))
+        assertEquals("111${nbsp}монет", coinsText(111))
+        assertEquals("Нужно 100${nbsp}монет", needCoinsText(100))
+        assertEquals(
+            "Нужно 100${nbsp}монет в запасе${nbsp}— они не тратятся",
+            minBalanceNoteText(100)
+        )
+    }
+
+    @Test
+    fun `the countdown rounds up to whole seconds`() {
+        assertEquals("0:42", countdownText(42_000L))
+        assertEquals("0:42", countdownText(41_001L))
+        assertEquals("1:00", countdownText(60_000L))
+        assertEquals("1:59", countdownText(119_000L))
+        assertEquals("0:01", countdownText(1L))
+        assertEquals("0:00", countdownText(0L))
+        assertEquals("0:00", countdownText(-5L))
+        assertEquals("1:02:03", countdownText(3_723_000L))
+    }
+
+    @Test
+    fun `a quest nobody took says whether it can be taken`() {
+        val entry = QuestEntry(TestQuests.PICNIC, null)
+
+        assertEquals("Нужно 100${nbsp}монет", questStatusText(entry, balance = 99, nowMillis = now))
+        assertEquals("Можно взять", questStatusText(entry, balance = 100, nowMillis = now))
+    }
+
+    @Test
+    fun `a quest at a choice names the step`() {
+        val first = QuestEntry(TestQuests.PICNIC, QuestProgress("picnic", "food", now))
+        val second = QuestEntry(TestQuests.PICNIC, QuestProgress("picnic", "games", now))
+
+        assertEquals("Шаг 1 из 2", questStatusText(first, 0, now))
+        assertEquals("Шаг 2 из 2", questStatusText(second, 0, now))
+    }
+
+    @Test
+    fun `a waiting quest counts down`() {
+        val entry = QuestEntry(
+            TestQuests.PICNIC,
+            QuestProgress("picnic", "food", now + 42_000L, lastChoice = toGames)
+        )
+
+        assertEquals("Следующий шаг через 0:42", questStatusText(entry, 0, now))
+    }
+
+    @Test
+    fun `once the wait is over the card says what can be done`() {
+        val next = QuestEntry(TestQuests.PICNIC, QuestProgress("picnic", "food", now, lastChoice = toGames))
+        val last = QuestEntry(TestQuests.PICNIC, QuestProgress("picnic", "games", now, lastChoice = toEnd))
+
+        assertEquals("Следующий шаг готов", questStatusText(next, 0, now))
+        assertEquals("Можно завершить", questStatusText(last, 0, now))
+    }
+
+    @Test
+    fun `a finished quest shows its final progress when it has one`() {
+        val picnic = QuestEntry(
+            TestQuests.PICNIC,
+            QuestProgress("picnic", Quest.END_NODE, now, progress = 80, status = QuestStatus.FINISHED)
+        )
+        val piggy = QuestEntry(
+            TestQuests.PIGGY_BANK,
+            QuestProgress("piggy_bank", Quest.END_NODE, now, status = QuestStatus.FINISHED)
+        )
+
+        assertEquals("Завершён${nbsp}· 80%", questStatusText(picnic, 0, now))
+        assertEquals("Завершён", questStatusText(piggy, 0, now))
+    }
+
+    @Test
+    fun `the button under a result says where it leads`() {
+        assertEquals("Дальше", advanceButtonText(toGames))
+        assertEquals("Завершить", advanceButtonText(toEnd))
+    }
+
+    @Test
+    fun `the progress change is signed`() {
+        assertEquals("Прогресс +30%", progressChangeText(30))
+        assertEquals("Прогресс -10%", progressChangeText(-10))
+    }
+
+    @Test
+    fun `a missing picture falls back to the quests icon`() {
+        assertEquals(Sprites.QUESTS, questImageOf(null) { true })
+        assertEquals(Sprites.QUESTS, questImageOf("quests/picnic.webp") { false })
+        assertEquals("quests/picnic.webp", questImageOf("quests/picnic.webp") { true })
+    }
+
+    @Test
+    fun `tapping a card opens it, again closes it, another switches`() {
+        assertEquals("picnic", nextExpandedQuest(null, "picnic"))
+        assertNull(nextExpandedQuest("picnic", "picnic"))
+        assertEquals("guests", nextExpandedQuest("picnic", "guests"))
+    }
+}
