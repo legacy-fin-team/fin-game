@@ -96,23 +96,23 @@ class HeartBurstTest {
     }
 
     @Test
-    fun `a heart comes out over the pet's head, rises 24 pixels and fades out`() {
+    fun `a heart comes out over the pet's head, rises 14 pixels and fades out`() {
         val burst = HeartBurst(id = 0, startMillis = start, spreads = listOf(-5, 0, 5))
 
         val born = burst.heartAt(index = 0, elapsedMillis = 0)!!
         assertEquals(-5f, born.x, 0.001f)
-        assertEquals(-19f, born.y, 0.001f)
+        assertEquals(-10f, born.y, 0.001f)
         assertEquals(0f, born.alpha, 0.001f)
 
-        val halfway = burst.heartAt(index = 0, elapsedMillis = 450)!!
-        assertEquals(-31f, halfway.y, 0.001f)
+        val halfway = burst.heartAt(index = 0, elapsedMillis = 350)!!
+        assertEquals(-17f, halfway.y, 0.001f)
         assertEquals(1f, halfway.alpha, 0.001f)
 
-        val nearlyGone = burst.heartAt(index = 0, elapsedMillis = 855)!!
-        assertEquals(-19f - 24f * 0.95f, nearlyGone.y, 0.001f)
+        val nearlyGone = burst.heartAt(index = 0, elapsedMillis = 665)!!
+        assertEquals(-10f - 14f * 0.95f, nearlyGone.y, 0.001f)
         assertEquals(0.1f, nearlyGone.alpha, 0.001f)
 
-        assertNull(burst.heartAt(index = 0, elapsedMillis = 900))
+        assertNull(burst.heartAt(index = 0, elapsedMillis = 700))
     }
 
     @Test
@@ -120,17 +120,17 @@ class HeartBurstTest {
         val burst = HeartBurst(id = 0, startMillis = start, spreads = listOf(0, 0, 0))
 
         assertEquals(0f, burst.heartAt(index = 0, elapsedMillis = 0)!!.alpha, 0.001f)
-        assertEquals(0.5f, burst.heartAt(index = 0, elapsedMillis = 45)!!.alpha, 0.01f)
-        assertEquals(1f, burst.heartAt(index = 0, elapsedMillis = 90)!!.alpha, 0.01f)
+        assertEquals(0.5f, burst.heartAt(index = 0, elapsedMillis = 35)!!.alpha, 0.01f)
+        assertEquals(1f, burst.heartAt(index = 0, elapsedMillis = 70)!!.alpha, 0.01f)
     }
 
     @Test
     fun `the hearts of a wave come out one after another`() {
         val burst = HeartBurst(id = 0, startMillis = start, spreads = listOf(0, 0, 0))
 
-        assertNull(burst.heartAt(index = 1, elapsedMillis = 299))
-        assertNotNull(burst.heartAt(index = 1, elapsedMillis = 300))
-        assertNull(burst.heartAt(index = 2, elapsedMillis = 599))
+        assertNull(burst.heartAt(index = 1, elapsedMillis = 399))
+        assertNotNull(burst.heartAt(index = 1, elapsedMillis = 400))
+        assertNull(burst.heartAt(index = 2, elapsedMillis = 799))
         assertNotNull(burst.heartAt(index = 2, elapsedMillis = 1499))
         assertNull(burst.heartAt(index = 2, elapsedMillis = 1500))
     }
@@ -139,7 +139,7 @@ class HeartBurstTest {
     fun `a heart sways no further than a pixel and a half from where it started`() {
         val burst = HeartBurst(id = 0, startMillis = start, spreads = listOf(3, 3, 3))
 
-        (0 until 900 step 10).forEach { t ->
+        (0 until 700 step 10).forEach { t ->
             val heart = burst.heartAt(index = 0, elapsedMillis = t.toLong())!!
             assertTrue(heart.x in 1.5f..4.5f)
         }

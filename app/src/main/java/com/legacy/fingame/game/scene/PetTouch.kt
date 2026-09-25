@@ -72,28 +72,36 @@ data class HeartBurst(val id: Long, val startMillis: Long, val spreads: List<Int
         const val HEART_PIXELS = 8
 
         /**
-         * How much later each heart of a wave comes out than the one before it: 300 ms is exactly
-         * [HEART_PIXELS] of the 24-pixel rise ([HEART_RISE_PX] over [HEART_RISE_MILLIS]), so by the
-         * time a heart is born the one before it has already risen a whole sprite's height further
-         * up — the two can never overlap, whatever their lanes happen to land on sideways.
+         * How much later each heart of a wave comes out than the one before it: 400 ms is exactly
+         * a sprite's height of the rise — 14·(400/700) = [HEART_PIXELS] pixels ([HEART_RISE_PX]
+         * over [HEART_RISE_MILLIS]) — so by the time a heart is born the one before it has
+         * already risen a whole sprite's height further up — the two can never overlap, whatever
+         * their lanes happen to land on sideways.
          */
-        const val HEART_STAGGER_MILLIS = 300L
+        const val HEART_STAGGER_MILLIS = 400L
 
         /** How long one heart takes to rise and fade out. */
-        const val HEART_RISE_MILLIS = 900L
+        const val HEART_RISE_MILLIS = 700L
 
         /** How long a whole wave lasts: until its last heart is gone. */
         const val LIFE_MILLIS = (HEARTS - 1) * HEART_STAGGER_MILLIS + HEART_RISE_MILLIS
 
         /**
          * Where a heart comes out, in pixels of the artwork from the middle of the pet: its middle
-         * 19 pixels up, i.e. 3 pixels above the top edge of the 32-pixel pet sprite, so the bottom
-         * of the heart sits at the level of the ears rather than landing right on top of them.
+         * 10 pixels up, so its bottom edge (half of [HEART_PIXELS] below that) sits at -6 — the
+         * level of the ears, given the roughly 11 empty rows of the pet sprite above the cat
+         * itself.
          */
-        const val HEART_START_Y_PX = -19f
+        const val HEART_START_Y_PX = -10f
 
-        /** How far a heart rises before it is gone, in pixels of the artwork. */
-        const val HEART_RISE_PX = 24f
+        /**
+         * How far a heart rises before it is gone, in pixels of the artwork: 14, so even a heart
+         * risen the whole way — its top edge half of [HEART_PIXELS] above its middle — stays
+         * within the 14 to 17 pixels of art the scenery leaves above a full-grown pet, landscape
+         * screens with a larger font included, instead of being cut off by the card around the
+         * scene.
+         */
+        const val HEART_RISE_PX = 14f
 
         /** How far a heart sways either way on the way up, in pixels of the artwork. */
         const val HEART_SWAY_PX = 1.5f
