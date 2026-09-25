@@ -29,7 +29,8 @@ data class HeartFrame(val x: Float, val y: Float, val alpha: Float)
  * one [PetTouchController].
  * @property startMillis when the wave was set off, on the clock the taps were counted on.
  * @property spreads where each heart starts sideways, in pixels of the artwork from the middle of
- * the pet: one entry per heart, each within [PetTouchController.SPREAD_PX] either way.
+ * the pet: one entry per heart, each on its own lane ([PetTouchController.LANES_PX]) so neighbours
+ * never start on top of each other, and each within [PetTouchController.SPREAD_PX] either way.
  */
 data class HeartBurst(val id: Long, val startMillis: Long, val spreads: List<Int>) {
 
@@ -49,8 +50,14 @@ data class HeartBurst(val id: Long, val startMillis: Long, val spreads: List<Int
         return HeartFrame(
             x = spreads[index] + sway,
             y = HEART_START_Y_PX - HEART_RISE_PX * progress,
-            // Fully visible for the first half of the way up, then fading out to nothing.
-            alpha = ((1f - progress) * 2f).coerceIn(0f, 1f)
+            alpha = if (progress < HEART_FADE_IN_FRACTION) {
+                // Grown from nothing rather than popping in at full strength, so the heart does
+                // not flash into view right on the pet's ears.
+                progress / HEART_FADE_IN_FRACTION
+            } else {
+                // Fully visible for the first half of the way up, then fading out to nothing.
+                ((1f - progress) * 2f).coerceIn(0f, 1f)
+            }
         )
     }
 
@@ -62,8 +69,12 @@ data class HeartBurst(val id: Long, val startMillis: Long, val spreads: List<Int
         /** Side of the heart sprite, in pixels of the artwork. */
         const val HEART_PIXELS = 8
 
-        /** How much later each heart of a wave comes out than the one before it. */
-        const val HEART_STAGGER_MILLIS = 150L
+        /**
+         * How much later each heart of a wave comes out than the one before it: 220 ms is just
+         * over 6 pixels of the 24-pixel rise ([HEART_RISE_PX] over [HEART_RISE_MILLIS]), so two
+         * neighbouring hearts are never at the same height and never read as one blob.
+         */
+        const val HEART_STAGGER_MILLIS = 220L
 
         /** How long one heart takes to rise and fade out. */
         const val HEART_RISE_MILLIS = 900L
@@ -73,10 +84,10 @@ data class HeartBurst(val id: Long, val startMillis: Long, val spreads: List<Int
 
         /**
          * Where a heart comes out, in pixels of the artwork from the middle of the pet: its middle
-         * 14 pixels up, i.e. 2 pixels under the top edge of the 32-pixel pet sprite, so it overlaps
-         * the ears of a grown-up pet a little and hangs just over the head of a younger, smaller one.
+         * 19 pixels up, i.e. 3 pixels above the top edge of the 32-pixel pet sprite, so the bottom
+         * of the heart sits at the level of the ears rather than landing right on top of them.
          */
-        const val HEART_START_Y_PX = -14f
+        const val HEART_START_Y_PX = -19f
 
         /** How far a heart rises before it is gone, in pixels of the artwork. */
         const val HEART_RISE_PX = 24f
@@ -86,6 +97,12 @@ data class HeartBurst(val id: Long, val startMillis: Long, val spreads: List<Int
 
         /** How many times a heart sways back and forth on the way up. */
         const val HEART_SWAYS = 1.5f
+
+        /**
+         * Part of the rise a heart spends growing in rather than popping into view at once, so it
+         * fades into the room instead of appearing right on the pet's ears at full strength.
+         */
+        const val HEART_FADE_IN_FRACTION = 0.1f
     }
 }
 
@@ -97,7 +114,8 @@ data class HeartBurst(val id: Long, val startMillis: Long, val spreads: List<Int
  * Knows nothing about Compose or any clock: every call is told what time it is, on whatever
  * monotonic clock the caller counts in, so the whole of it is checked by plain unit tests.
  *
- * @param random where the hearts' sideways spread comes from.
+ * @param random where the hearts' sideways spread comes from, i.e. the jitter within a lane
+ * (see [LANES_PX]).
  * @param minIntervalMillis the shortest time between two waves; a tap sooner than that after the
  * last wave is ignored.
  */
@@ -129,7 +147,12 @@ class PetTouchController(
         val burst = HeartBurst(
             id = nextId++,
             startMillis = nowMillis,
-            spreads = List(HeartBurst.HEARTS) { random.nextInt(-SPREAD_PX, SPREAD_PX + 1) }
+            // Each heart keeps to its own lane instead of an independent random spread, so two of
+            // them landing on top of each other and reading as one blob is not just unlikely — it
+            // cannot happen: the widest jitter still leaves a gap between neighbouring lanes.
+            spreads = LANES_PX.map { lane ->
+                lane + random.nextInt(-LANE_JITTER_PX, LANE_JITTER_PX + 1)
+            }
         )
         bursts += burst
         return burst
@@ -152,5 +175,15 @@ class PetTouchController(
 
         /** How far a heart may start from the middle of the pet sideways, in pixels of the art. */
         const val SPREAD_PX = 8
+
+        /**
+         * Where each heart of a wave starts sideways before jitter, in pixels of the artwork from
+         * the middle of the pet: heart 0 to the left, heart 1 to the right, heart 2 in the middle,
+         * so the three never crowd the same spot.
+         */
+        internal val LANES_PX = listOf(-7, 7, 0)
+
+        /** How far a heart's lane may jitter either way, in pixels of the artwork. */
+        private const val LANE_JITTER_PX = 1
     }
 }
