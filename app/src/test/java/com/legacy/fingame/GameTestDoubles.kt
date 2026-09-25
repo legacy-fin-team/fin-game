@@ -164,13 +164,25 @@ internal class FakeGameClock(
  * @param store where the player's state is restored from and saved to.
  * @param catalog what is on sale.
  * @param clock which day the game is played on.
+ * @param questCatalog which quests exist; none by default, so tests about something else never
+ * meet a quest.
+ * @param random dice for random quests; by default dice that fail the test the moment they are
+ * rolled, so a test that does not script them proves they were never needed.
  * @return A view model backed by the given doubles.
  */
 internal fun testGameViewModel(
     store: PlayerStateStore = FakePlayerStateStore(),
     catalog: ItemCatalog = FakeItemCatalog(),
-    clock: GameClock = FakeGameClock()
-): GameViewModel = GameViewModel(store = store, catalog = catalog, clock = clock)
+    clock: GameClock = FakeGameClock(),
+    questCatalog: QuestCatalog = QuestCatalog.EMPTY,
+    random: Random = ScriptedRandom()
+): GameViewModel = GameViewModel(
+    store = store,
+    catalog = catalog,
+    clock = clock,
+    questCatalog = questCatalog,
+    random = random
+)
 
 /**
  * Квесты, на которых проверяются правила: квест игрока с прогрессом, минимумом и задержкой,

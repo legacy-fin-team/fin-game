@@ -88,5 +88,12 @@ data class MoneyLog(val entries: List<MoneyEntry> = emptyList()) {
          * @return Причина покупки так, как она пишется в журнале: «Яблоко x4».
          */
         fun purchaseReason(name: String, quantity: Int): String = "$name x$quantity"
+
+        /**
+         * @param title название квеста.
+         * @return Причина начисления или списания по квесту так, как она пишется в журнале:
+         * «Квест: Пикник».
+         */
+        fun questReason(title: String): String = "Квест: $title"
     }
 }
