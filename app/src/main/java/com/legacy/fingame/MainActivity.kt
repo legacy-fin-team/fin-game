@@ -45,18 +45,20 @@ class MainActivity : ComponentActivity() {
         ClickSound.enabled = savedSettings.soundEnabled
 
         setContent {
+            // Сохранённые настройки попадают в состояние сразу при создании ViewModel, поэтому
+            // эффект ниже с первого кадра видит их, а не значения по умолчанию: музыка не
+            // вспыхивает, а сохранённое не перезаписывается дефолтом.
             val vm: GameViewModel = viewModel(
                 factory = with(application as FinGameApplication) {
-                    GameViewModel.factory(store = playerPreferences, catalog = itemRegistry)
+                    GameViewModel.factory(
+                        store = playerPreferences,
+                        catalog = itemRegistry,
+                        settings = savedSettings
+                    )
                 }
             )
             val state by vm.state.collectAsStateWithLifecycle()
             val currentSettings = state.settings
-
-            // Загружаем сохранённые настройки в ViewModel при первом запуске
-            LaunchedEffect(Unit) {
-                vm.updateSettings(savedSettings)
-            }
 
             // Сохраняем настройки и обновляем аудио и щелчок кнопок при каждом изменении
             LaunchedEffect(currentSettings) {

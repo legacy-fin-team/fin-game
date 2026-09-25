@@ -212,11 +212,15 @@ data class GameUiState(
  * for the pet's stats and its growth. The view model reads it through a [FastForwardClock], so a
  * demo build can push the game's time forward (see [fastForward]) without the rest of the game
  * knowing about it.
+ * @param settings the settings the app starts with, as they were saved: they are in the state from
+ * its very first value, so nothing that follows the state — the music, the click sound, the theme —
+ * ever sees the defaults for a frame.
  */
 class GameViewModel(
     private val store: PlayerStateStore,
     private val catalog: ItemCatalog,
-    clock: GameClock = GameClock.DEVICE
+    clock: GameClock = GameClock.DEVICE,
+    settings: GameSettings = GameSettings()
 ) : ViewModel() {
 
     /**
@@ -249,18 +253,20 @@ class GameViewModel(
          * @param store where the player's state is restored from and saved to.
          * @param catalog what is on sale.
          * @param clock where the current day comes from; defaults to the device's calendar day.
+         * @param settings the saved settings the app starts with.
          * @return A factory creating a [GameViewModel] backed by [store] and [catalog].
          */
         fun factory(
             store: PlayerStateStore,
             catalog: ItemCatalog,
-            clock: GameClock = GameClock.DEVICE
+            clock: GameClock = GameClock.DEVICE,
+            settings: GameSettings = GameSettings()
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { GameViewModel(store, catalog, clock) }
+            initializer { GameViewModel(store, catalog, clock, settings) }
         }
     }
 
-    private val _state = MutableStateFlow(restoredState())
+    private val _state = MutableStateFlow(restoredState(settings))
 
     /** Current [GameUiState], observed by the UI. */
     val state: StateFlow<GameUiState> = _state.asStateFlow()
@@ -858,9 +864,10 @@ class GameViewModel(
     /**
      * Builds the state the app starts with out of the [PlayerState] the previous run left behind.
      *
+     * @param settings the saved settings the app starts with.
      * @return The initial [GameUiState]: the player's game as it was saved, everything else fresh.
      */
-    private fun restoredState(): GameUiState {
+    private fun restoredState(settings: GameSettings): GameUiState {
         val saved = store.load()
         // The time a demo skipped outlives a restart as a shift, not as a moment reached: the
         // real time that passed while the app was closed runs on top of the skipped hours instead
@@ -902,7 +909,8 @@ class GameViewModel(
             petAge = Growth.ageAt(bornAt, now),
             petBornAtMillis = bornAt,
             subLocationIndex = existingSubLocation(saved.subLocationIndex),
-            todayDay = clock.today()
+            todayDay = clock.today(),
+            settings = settings
         )
     }
 
@@ -975,11 +983,24 @@ class GameViewModel(
     }
 
     /**
-     * Resets the player's progress. Currently resets all UI state to defaults.
+     * Starts the game over: the pet, the money, the budget, the items and everything else the
+     * player has done is dropped — from the screen and from [store] alike, so a restart does not
+     * bring it back — and the player is taken back to picking a pet, as on the very first launch.
      *
-     * TODO: wire this up to the actual save/progress data layer once it exists.
+     * The settings stay as they are: they are the player's, not the game's. The clock stays as it
+     * is as well: the game never goes back behind a moment the player was already shown (see
+     * [PlayerState.gameNowMillis]), so a demo that skipped ahead stays skipped ahead.
      */
     fun resetProgress() {
-        _state.value = GameUiState(settings = _state.value.settings)
+        val today = clock.today()
+        _state.value = GameUiState(
+            dailyBonusAvailable = Economy.isDailyBonusAvailable(
+                lastClaimedDay = Economy.NEVER_CLAIMED,
+                today = today
+            ),
+            todayDay = today,
+            settings = _state.value.settings
+        )
+        persist()
     }
 }
