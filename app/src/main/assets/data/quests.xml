@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Квесты игры.
+
+    <quest id kind="player|random" title progress="true|false" min-balance="N" start="<id узла>" image>
+        <description>Описание квеста</description>
+        <node id delay-minutes="N" image>
+            <text>Описание ситуации</text>
+            <option label="Надпись на кнопке" next="<id узла>|end" money="±N" progress="±N">
+                <result>Что случилось после выбора</result>
+                <effect stat="health|hunger|pleasure" value="±N" />
+            </option>
+        </node>
+    </quest>
+
+    min-balance не тратится при взятии квеста. delay-minutes — через сколько игровых минут
+    после выбора станет доступен следующий узел. image — путь относительно assets/textures/,
+    необязателен. Надпись на кнопке — не длиннее 16 символов.
+-->
+<quests>
+    <quest id="picnic" title="Пикник" kind="player" progress="true" min-balance="100"
+           start="food" image="quests/picnic.webp">
+        <description>Позови друзей на пикник. Чем лучше подготовка, тем веселее праздник.</description>
+        <node id="food" delay-minutes="1">
+            <text>Что возьмём из еды?</text>
+            <option label="Фрукты и сок" next="place" money="-40" progress="40">
+                <result>Вкусно и полезно. Все сыты и довольны.</result>
+                <effect stat="hunger" value="20" />
+                <effect stat="health" value="5" />
+            </option>
+            <option label="Чипсы" next="place" money="-15" progress="20">
+                <result>Дёшево и хрустит, но пользы мало.</result>
+                <effect stat="hunger" value="10" />
+                <effect stat="health" value="-5" />
+            </option>
+            <option label="Ничего" next="place">
+                <result>Монеты целы, но на пикнике все голодные.</result>
+                <effect stat="hunger" value="-10" />
+            </option>
+        </node>
+        <node id="place" delay-minutes="1">
+            <text>Где устроим пикник?</text>
+            <option label="В парке" next="games" progress="30">
+                <result>Тенистая поляна и свежий воздух.</result>
+                <effect stat="pleasure" value="15" />
+            </option>
+            <option label="Во дворе" next="games" progress="15">
+                <result>Близко и бесплатно, но шумно.</result>
+                <effect stat="pleasure" value="5" />
+            </option>
+        </node>
+        <node id="games">
+            <text>Чем займёмся на пикнике?</text>
+            <option label="Играть в мяч" next="end" progress="30">
+                <result>Играли до заката! Мяч свой, так что бесплатно.</result>
+                <effect stat="pleasure" value="20" />
+                <effect stat="hunger" value="-10" />
+            </option>
+            <option label="Бадминтон" next="end" money="-20" progress="30">
+                <result>Прокат стоил 20 монет, зато было весело.</result>
+                <effect stat="pleasure" value="25" />
+            </option>
+        </node>
+    </quest>
+
+    <quest id="piggy_bank" title="Копилка" kind="player" start="gift"
+           image="quests/piggy_bank.webp">
+        <description>Научись откладывать: терпение приносит монеты.</description>
+        <node id="gift">
+            <text>Бабушка подарила монетки. Потратить сразу или отложить?</text>
+            <option label="В копилку" next="wait">
+                <result>Монетки звякнули в копилке. Подождём!</result>
+            </option>
+            <option label="На мороженое" next="end">
+                <result>Вкусно! Но подарок уже съеден.</result>
+                <effect stat="pleasure" value="10" />
+                <effect stat="hunger" value="5" />
+            </option>
+        </node>
+        <node id="wait">
+            <text>Копилка потяжелела. Что дальше?</text>
+            <option label="Открыть" next="end" money="20">
+                <result>Внутри 20 монет. Отложенное не пропало!</result>
+            </option>
+            <option label="Копить дальше" next="end" money="40">
+                <result>Бабушка похвалила и добавила. Всего 40 монет!</result>
+                <effect stat="pleasure" value="10" />
+            </option>
+        </node>
+    </quest>
+
+    <quest id="lost_wallet" title="Потерянный кошелёк" kind="random" start="found"
+           image="quests/lost_wallet.webp">
+        <description>На дорожке лежит чужой кошелёк.</description>
+        <node id="found">
+            <text>Внутри 30 монет и визитка хозяина. Как поступить?</text>
+            <option label="Вернуть" next="end" money="10">
+                <result>Хозяин обрадовался и дал 10 монет в награду.</result>
+                <effect stat="pleasure" value="15" />
+            </option>
+            <option label="Оставить себе" next="end" money="30">
+                <result>Монеты твои, но на душе неспокойно.</result>
+                <effect stat="pleasure" value="-15" />
+            </option>
+        </node>
+    </quest>
+
+    <quest id="guests" title="Гости" kind="random" progress="true" start="treat"
+           image="quests/guests.webp">
+        <description>Скоро придут гости. Подготовься к встрече!</description>
+        <node id="treat" delay-minutes="2">
+            <text>Чем угостим гостей?</text>
+            <option label="Испечь пирог" next="tidy" money="-10" progress="50">
+                <result>Пирог удался, дома пахнет выпечкой.</result>
+                <effect stat="hunger" value="10" />
+            </option>
+            <option label="Купить торт" next="tidy" money="-30" progress="40">
+                <result>Торт красивый, но дорогой.</result>
+                <effect stat="pleasure" value="5" />
+            </option>
+        </node>
+        <node id="tidy">
+            <text>Гости уже в пути. Дома порядок?</text>
+            <option label="Прибраться" next="end" progress="50">
+                <result>Чисто и уютно. Гостям понравилось!</result>
+                <effect stat="health" value="5" />
+            </option>
+            <option label="И так сойдёт" next="end" progress="10">
+                <result>Гость споткнулся об игрушку. Неловко вышло.</result>
+                <effect stat="pleasure" value="-10" />
+            </option>
+        </node>
+    </quest>
+</quests>
