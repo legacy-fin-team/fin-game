@@ -1,0 +1,41 @@
+package com.legacy.fingame
+
+import com.legacy.fingame.game.stats.StatKind
+import com.legacy.fingame.utils.PlayerPreferences
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Имена, под которыми состояние игрока лежит в настройках. Сами настройки в JVM-тестах не
+ * работают, но списки ключей — обычные строки, и их можно держать в узде здесь.
+ */
+class PlayerPreferencesKeysTest {
+
+    @Test
+    fun `no key is both written and retired`() {
+        // Отставные ключи снимаются в той же транзакции, в которой пишутся живые, и снимаются
+        // последними. Ключ, попавший в оба списка, не пережил бы ни одного запуска: его бы
+        // записали и тут же стёрли, а игрок увидел бы ноль там, где были его деньги.
+        val both = PlayerPreferences.LIVE_KEYS.intersect(PlayerPreferences.RETIRED_KEYS.toSet())
+
+        assertEquals(emptySet<String>(), both)
+    }
+
+    @Test
+    fun `a key is written under one name only`() {
+        assertEquals(PlayerPreferences.LIVE_KEYS.size, PlayerPreferences.LIVE_KEYS.toSet().size)
+        assertEquals(
+            PlayerPreferences.RETIRED_KEYS.size,
+            PlayerPreferences.RETIRED_KEYS.toSet().size
+        )
+    }
+
+    @Test
+    fun `no key collides with the ones the stat bars take`() {
+        val statKeys = StatKind.entries.map { PlayerPreferences.KEY_STAT_PREFIX + it.xmlName }
+
+        assertTrue(PlayerPreferences.LIVE_KEYS.none { it in statKeys })
+        assertTrue(PlayerPreferences.RETIRED_KEYS.none { it in statKeys })
+    }
+}

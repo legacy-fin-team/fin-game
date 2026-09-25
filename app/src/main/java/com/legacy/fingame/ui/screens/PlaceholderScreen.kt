@@ -60,7 +60,7 @@ fun PlaceholderScreen(
                 contentDescription = title,
                 modifier = Modifier.size(140.dp)
             )
-            Text(text = title, style = MaterialTheme.typography.headlineMedium)
+            Text(text = title, style = MaterialTheme.typography.headlineSmall)
             // TODO: "Раздел в разработке" is a temporary placeholder caption; replace once the customer provides requirements for this section.
             Text(
                 text = "Раздел в разработке",

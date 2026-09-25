@@ -44,7 +44,11 @@ class MainActivity : ComponentActivity() {
         window.decorView.isSoundEffectsEnabled = savedSettings.soundEnabled
 
         setContent {
-            val vm: GameViewModel = viewModel()
+            val vm: GameViewModel = viewModel(
+                factory = with(application as FinGameApplication) {
+                    GameViewModel.factory(store = playerPreferences, catalog = itemRegistry)
+                }
+            )
             val state by vm.state.collectAsStateWithLifecycle()
             val currentSettings = state.settings
             val view = LocalView.current
