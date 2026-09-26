@@ -1252,9 +1252,12 @@ private fun SceneLayers(
     var bursts by remember { mutableStateOf(emptyList<HeartBurst>()) }
     var nowMillis by remember { mutableLongStateOf(0L) }
     val currentOnPetTap by rememberUpdatedState(onPetTap)
+    // Read through a state rather than straight off [scene]: the pet's tap handler is set up once
+    // and outlives the pet growing up, and the hearts have to find the head the pet has now.
+    val currentAge by rememberUpdatedState(scene.animalAge)
     val pat: () -> Unit = {
         val now = SystemClock.uptimeMillis()
-        if (touch.onTap(now) != null) {
+        if (touch.onTap(now, age = currentAge) != null) {
             nowMillis = now
             bursts = touch.alive(now)
             currentOnPetTap()

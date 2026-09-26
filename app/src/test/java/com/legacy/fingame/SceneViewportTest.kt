@@ -123,9 +123,9 @@ class SceneViewportTest {
         val window = viewport(availableWidth = 700f)
         val dragged = window.clamp(window.initialOffset + SceneOffset(x = 0f, y = 120f))
 
-        // The scene starts 128 pixels up (the pet is on the floor, see below), so 120 down leaves
-        // it 8 pixels up.
-        assertEquals(-8f, dragged.y, 0f)
+        // The scene starts 64 pixels up (the pet is on the floor, see below), so 120 down leaves
+        // it 56 pixels down.
+        assertEquals(56f, dragged.y, 0f)
         assertEquals(window.free, window.clamp(dragged + SceneOffset(x = 0f, y = 9000f)).y, 0f)
     }
 
@@ -134,10 +134,12 @@ class SceneViewportTest {
         val window = viewport(availableWidth = 700f)
 
         // 128 * 8 = 1024 of scene in a window of 700: 162 of slack. The pet stands on the floor,
-        // 16 pixels of the art (16 * 8 = 128 screen pixels) below the middle of the scene, so the
-        // scene starts pulled up by exactly that much and not at all sideways.
+        // 16 pixels of the art below the middle of the scene, and is framed 8 pixels of the art
+        // higher to leave room for the hearts over its head, so the scene starts pulled up by
+        // (16 - 8) * 8 = 64 screen pixels and not at all sideways.
         assertEquals(162f, window.free, 0f)
-        assertEquals(SceneOffset(x = 0f, y = -128f), window.initialOffset)
+        assertEquals(8, SceneViewport.PET_HEAD_ROOM_PX)
+        assertEquals(SceneOffset(x = 0f, y = -64f), window.initialOffset)
     }
 
     @Test
@@ -152,8 +154,8 @@ class SceneViewportTest {
 
     @Test
     fun `a pet on the floor near the edge of a scene is shown as close to the middle as it allows`() {
-        // 128 * 8 = 1024 of scene in a window of 1000: only 12 of slack, less than the 128 the
-        // pet is lowered by, so the scene goes up no further than its own bottom edge.
+        // 128 * 8 = 1024 of scene in a window of 1000: only 12 of slack, less than the 64 the
+        // pet is framed by, so the scene goes up no further than its own bottom edge.
         val window = viewport(availableWidth = 1000f)
 
         assertEquals(12f, window.free, 0f)

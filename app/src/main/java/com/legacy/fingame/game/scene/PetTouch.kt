@@ -21,9 +21,9 @@ data class HeartFrame(val x: Float, val y: Float, val alpha: Float)
  * One wave of hearts rising over the pet after the player patted it.
  *
  * The wave is [HEARTS] hearts, each starting a little later than the one before it
- * ([HEART_STAGGER_MILLIS]) just over the pet's head, rising [HEART_RISE_PX] pixels of the artwork
- * over [HEART_RISE_MILLIS], swaying slightly sideways and fading out on the way up. The whole wave
- * is over [LIFE_MILLIS] after it was set off.
+ * ([HEART_STAGGER_MILLIS]) right on top of the pet's head ([startY]), rising [HEART_RISE_PX] pixels
+ * of the artwork over [HEART_RISE_MILLIS], swaying slightly sideways and fading out on the way up.
+ * The whole wave is over [LIFE_MILLIS] after it was set off.
  *
  * @property id tells waves apart, e.g. as a key of the list the UI draws them from; unique within
  * one [PetTouchController].
@@ -33,8 +33,16 @@ data class HeartFrame(val x: Float, val y: Float, val alpha: Float)
  * reads as three hearts rather than one repeated in the same spot, and each within
  * [PetTouchController.SPREAD_PX] either way. Neighbours never overlap regardless of the lanes they
  * land on, since [HEART_STAGGER_MILLIS] keeps them a whole sprite's height apart (see [heartAt]).
+ * @property startY where the middle of each heart comes out, in pixels of the artwork below the
+ * middle of the pet (negative is above it): on top of the head of the pet at the age it has grown
+ * to, see [heartStartY]. Defaults to the youngest pet.
  */
-data class HeartBurst(val id: Long, val startMillis: Long, val spreads: List<Int>) {
+data class HeartBurst(
+    val id: Long,
+    val startMillis: Long,
+    val spreads: List<Int>,
+    val startY: Float = heartStartY(age = 0)
+) {
 
     /**
      * @param index which heart of the wave, from 0 to [HEARTS] - 1.
@@ -51,7 +59,7 @@ data class HeartBurst(val id: Long, val startMillis: Long, val spreads: List<Int
         val sway = side * HEART_SWAY_PX * sin(progress * HEART_SWAYS * 2f * PI.toFloat())
         return HeartFrame(
             x = spreads[index] + sway,
-            y = HEART_START_Y_PX - HEART_RISE_PX * progress,
+            y = startY - HEART_RISE_PX * progress,
             alpha = if (progress < HEART_FADE_IN_FRACTION) {
                 // Grown from nothing rather than popping in at full strength, so the heart does
                 // not flash into view right on the pet's ears.
@@ -71,9 +79,32 @@ data class HeartBurst(val id: Long, val startMillis: Long, val spreads: List<Int
         /** Side of the heart sprite, in pixels of the artwork. */
         const val HEART_PIXELS = 8
 
+        /** Side of the pet sprite, in pixels of the artwork. */
+        private const val PET_PIXELS = 32
+
+        /**
+         * Top row of the pet's own pixels in its 32×32 sprite, one entry per age stage from the
+         * youngest: the kitten's head is 11 rows down the sprite, the grown-up cat's is at the very
+         * top of it. Measured on the cat's sprites; once other animals are drawn, move this into
+         * animals.xml next to the rest of what each animal is.
+         */
+        private val HEAD_TOP_ROWS = intArrayOf(11, 3, 0)
+
+        /**
+         * @param age age stage the pet has grown to, counted from 0; a stage past the last one
+         * known to [HEAD_TOP_ROWS] is taken as the last one, as the pet's own sprite is.
+         * @return Where the middle of a heart comes out for a pet of that age, in pixels of the
+         * artwork below the middle of the pet: half of [HEART_PIXELS] above the top of its head,
+         * so the heart's bottom edge sits right on the head.
+         */
+        fun heartStartY(age: Int): Float {
+            val headTop = HEAD_TOP_ROWS[age.coerceIn(0, HEAD_TOP_ROWS.lastIndex)]
+            return (-PET_PIXELS / 2 + headTop - HEART_PIXELS / 2).toFloat()
+        }
+
         /**
          * How much later each heart of a wave comes out than the one before it: 400 ms is exactly
-         * a sprite's height of the rise — 14·(400/700) = [HEART_PIXELS] pixels ([HEART_RISE_PX]
+         * a sprite's height of the rise — 12·(400/600) = [HEART_PIXELS] pixels ([HEART_RISE_PX]
          * over [HEART_RISE_MILLIS]) — so by the time a heart is born the one before it has
          * already risen a whole sprite's height further up — the two can never overlap, whatever
          * their lanes happen to land on sideways.
@@ -81,27 +112,18 @@ data class HeartBurst(val id: Long, val startMillis: Long, val spreads: List<Int
         const val HEART_STAGGER_MILLIS = 400L
 
         /** How long one heart takes to rise and fade out. */
-        const val HEART_RISE_MILLIS = 700L
+        const val HEART_RISE_MILLIS = 600L
 
         /** How long a whole wave lasts: until its last heart is gone. */
         const val LIFE_MILLIS = (HEARTS - 1) * HEART_STAGGER_MILLIS + HEART_RISE_MILLIS
 
         /**
-         * Where a heart comes out, in pixels of the artwork from the middle of the pet: its middle
-         * 10 pixels up, so its bottom edge (half of [HEART_PIXELS] below that) sits at -6 — the
-         * level of the ears, given the roughly 11 empty rows of the pet sprite above the cat
-         * itself.
+         * How far a heart rises before it is gone, in pixels of the artwork: 12, so a heart risen
+         * the whole way tops out 20 pixels over the head of a full-grown pet ([HEART_PIXELS] of
+         * its own and the rise), which stays within the room the card shows over it once the
+         * scene is framed [SceneViewport.PET_HEAD_ROOM_PX] higher, instead of being cut off.
          */
-        const val HEART_START_Y_PX = -10f
-
-        /**
-         * How far a heart rises before it is gone, in pixels of the artwork: 14, so even a heart
-         * risen the whole way — its top edge half of [HEART_PIXELS] above its middle — stays
-         * within the 14 to 17 pixels of art the scenery leaves above a full-grown pet, landscape
-         * screens with a larger font included, instead of being cut off by the card around the
-         * scene.
-         */
-        const val HEART_RISE_PX = 14f
+        const val HEART_RISE_PX = 12f
 
         /** How far a heart sways either way on the way up, in pixels of the artwork. */
         const val HEART_SWAY_PX = 1.5f
@@ -148,10 +170,12 @@ class PetTouchController(
      * The player patted the pet.
      *
      * @param nowMillis what time it is.
+     * @param age age stage the pet has grown to, so the hearts come out on top of its head
+     *   ([HeartBurst.heartStartY]).
      * @return The new wave of hearts, or `null` when the tap came sooner than [minIntervalMillis]
      * after the last wave and is ignored — then there is no sound to play either.
      */
-    fun onTap(nowMillis: Long): HeartBurst? {
+    fun onTap(nowMillis: Long, age: Int = 0): HeartBurst? {
         val last = lastBurstMillis
         if (last != null && nowMillis - last < minIntervalMillis) return null
         lastBurstMillis = nowMillis
@@ -163,7 +187,8 @@ class PetTouchController(
             // is [HeartBurst.HEART_STAGGER_MILLIS] separating them vertically instead.
             spreads = LANES_PX.map { lane ->
                 lane + random.nextInt(-LANE_JITTER_PX, LANE_JITTER_PX + 1)
-            }
+            },
+            startY = HeartBurst.heartStartY(age)
         )
         bursts += burst
         return burst
@@ -181,8 +206,12 @@ class PetTouchController(
 
     companion object {
 
-        /** Shortest time between two waves of hearts, i.e. between two pats that count. */
-        const val MIN_TAP_INTERVAL_MILLIS = 250L
+        /**
+         * Shortest time between two waves of hearts, i.e. between two pats that count: as long as
+         * [HeartBurst.HEART_STAGGER_MILLIS], so by the time a new wave comes out the heart of the
+         * last wave in the same lane has risen a whole sprite's height out of its way.
+         */
+        const val MIN_TAP_INTERVAL_MILLIS = 400L
 
         /** How far a heart may start from the middle of the pet sideways, in pixels of the art. */
         const val SPREAD_PX = 8

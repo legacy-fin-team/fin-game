@@ -158,8 +158,10 @@ class SceneGesturesTest {
         assertTrue(sceneSide() > windowSide())
         assertTrue(free() > 0f)
         // It starts with the pet in the middle of the window: not moved sideways, and pulled up by
-        // as much as the pet is lowered onto the floor, as far as the edge of the scene allows.
-        val lowered = SceneViewport.PET_FLOOR_SHIFT_PX * scale()
+        // as much as the pet is lowered onto the floor less the room left over its head, as far as
+        // the edge of the scene allows.
+        val lowered =
+            (SceneViewport.PET_FLOOR_SHIFT_PX - SceneViewport.PET_HEAD_ROOM_PX) * scale()
         assertEquals(0f, moved().x, 0f)
         assertEquals(-minOf(lowered, free()), moved().y, 0.5f)
 

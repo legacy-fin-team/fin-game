@@ -136,12 +136,13 @@ data class SceneViewport(
 
     /**
      * Where the scene stands when the game area is first shown: with the pet — standing on the
-     * floor, [petFloorShift] below the middle of the scene — in the middle of the window, as far as
-     * the edges of the scene allow.
+     * floor, [petFloorShift] below the middle of the scene — in the middle of the window, framed
+     * [PET_HEAD_ROOM_PX] pixels of the artwork higher to leave room for the hearts over its head,
+     * as far as the edges of the scene allow.
      */
     val initialOffset: SceneOffset = focusedOn(
         sceneX = sceneSide * PET_PLACE_IN_SCENE,
-        sceneY = sceneSide * PET_PLACE_IN_SCENE + petFloorShift
+        sceneY = sceneSide * PET_PLACE_IN_SCENE + petFloorShift - PET_HEAD_ROOM_PX * scale
     )
 
     /**
@@ -250,6 +251,15 @@ data class SceneViewport(
          * it stands in the middle.
          */
         const val PET_FLOOR_SHIFT_PX = 16
+
+        /**
+         * How many pixels of the artwork above the middle of the pet the game area is first
+         * centred on: a heart rises up to 20 pixels over the head of a full-grown pet (see
+         * [HeartBurst.HEART_RISE_PX]), and framing the pet this much higher keeps the whole of it
+         * inside the card on the smallest windows, while the paws still stay well clear of the
+         * bottom edge — the pet is 32 pixels tall, so its paws end up 24 below the middle.
+         */
+        const val PET_HEAD_ROOM_PX = 8
 
         /**
          * Builds the viewport of a measured game area, picking how big the scene is drawn to begin
