@@ -36,6 +36,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.IntrinsicMeasurable
+import androidx.compose.ui.layout.IntrinsicMeasureScope
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.layout.MultiContentMeasurePolicy
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
@@ -767,43 +773,75 @@ private fun PlayerCorner(
         )
     }
 
-    Layout(contents = listOf(balance, stats, goal), modifier = modifier) { measurables, constraints ->
-        val gapPx = ChipGap.roundToPx()
-        val loose = constraints.copy(minWidth = 0, minHeight = 0)
-        val roomBeside = (constraints.maxWidth - clearance.width.roundToPx()).coerceAtLeast(0)
-        val clearanceBottom = clearance.height.roundToPx()
+    // Сцена спрашивает у угла его наименьшую/наибольшую ширину (intrinsic), а ряд целей — это
+    // LazyRow, который на такой вопрос падает. Ширину угла задают деньги и чипы (цели берут ровно
+    // их ширину), поэтому ответ собирается только из них, а ряд целей не спрашивается вовсе.
+    // Intrinsic-высоту угла не спрашивает никто ([MainScreenStage] меряет его обычным measure),
+    // и честно ответить на неё без ряда целей нельзя: высоту слоту даёт карточка внутри LazyRow.
+    // Поэтому высота не переопределена — если её когда-нибудь спросят, падение укажет сюда.
+    val measurePolicy = remember(clearance) {
+        object : MultiContentMeasurePolicy {
+            override fun MeasureScope.measure(
+                measurables: List<List<Measurable>>,
+                constraints: Constraints
+            ): MeasureResult {
+                val gapPx = ChipGap.roundToPx()
+                val loose = constraints.copy(minWidth = 0, minHeight = 0)
+                val roomBeside =
+                    (constraints.maxWidth - clearance.width.roundToPx()).coerceAtLeast(0)
+                val clearanceBottom = clearance.height.roundToPx()
 
-        // The money always fits beside the button: it is measured against what the button leaves.
-        val balancePlaced = measurables[0].first().measure(loose.copy(maxWidth = roomBeside))
-        val statsPlaced = measurables[1].first().measure(loose)
-        val chipsWidth = max(balancePlaced.width, statsPlaced.width)
-        // The card is handed the width the chips came out at, and no choice about it.
-        val goalPlaced = measurables[2].first().measure(
-            loose.copy(minWidth = chipsWidth, maxWidth = chipsWidth)
-        )
+                // The money always fits beside the button: it is measured against what the button
+                // leaves.
+                val balancePlaced =
+                    measurables[0].first().measure(loose.copy(maxWidth = roomBeside))
+                val statsPlaced = measurables[1].first().measure(loose)
+                val chipsWidth = max(balancePlaced.width, statsPlaced.width)
+                // The card is handed the width the chips came out at, and no choice about it.
+                val goalPlaced = measurables[2].first().measure(
+                    loose.copy(minWidth = chipsWidth, maxWidth = chipsWidth)
+                )
 
-        val statsTop = clearedTopOf(
-            top = balancePlaced.height + gapPx,
-            width = statsPlaced.width,
-            roomBeside = roomBeside,
-            clearanceBottom = clearanceBottom
-        )
-        val goalTop = clearedTopOf(
-            top = statsTop + statsPlaced.height + gapPx,
-            width = goalPlaced.width,
-            roomBeside = roomBeside,
-            clearanceBottom = clearanceBottom
-        )
+                val statsTop = clearedTopOf(
+                    top = balancePlaced.height + gapPx,
+                    width = statsPlaced.width,
+                    roomBeside = roomBeside,
+                    clearanceBottom = clearanceBottom
+                )
+                val goalTop = clearedTopOf(
+                    top = statsTop + statsPlaced.height + gapPx,
+                    width = goalPlaced.width,
+                    roomBeside = roomBeside,
+                    clearanceBottom = clearanceBottom
+                )
 
-        layout(
-            width = max(chipsWidth, goalPlaced.width),
-            height = goalTop + goalPlaced.height
-        ) {
-            balancePlaced.place(x = 0, y = 0)
-            statsPlaced.place(x = 0, y = statsTop)
-            goalPlaced.place(x = 0, y = goalTop)
+                return layout(
+                    width = max(chipsWidth, goalPlaced.width),
+                    height = goalTop + goalPlaced.height
+                ) {
+                    balancePlaced.place(x = 0, y = 0)
+                    statsPlaced.place(x = 0, y = statsTop)
+                    goalPlaced.place(x = 0, y = goalTop)
+                }
+            }
+
+            override fun IntrinsicMeasureScope.minIntrinsicWidth(
+                measurables: List<List<IntrinsicMeasurable>>,
+                height: Int
+            ): Int = measurables.take(2).maxOf { it.first().minIntrinsicWidth(height) }
+
+            override fun IntrinsicMeasureScope.maxIntrinsicWidth(
+                measurables: List<List<IntrinsicMeasurable>>,
+                height: Int
+            ): Int = measurables.take(2).maxOf { it.first().maxIntrinsicWidth(height) }
         }
     }
+
+    Layout(
+        contents = listOf(balance, stats, goal),
+        modifier = modifier,
+        measurePolicy = measurePolicy
+    )
 }
 
 /**
