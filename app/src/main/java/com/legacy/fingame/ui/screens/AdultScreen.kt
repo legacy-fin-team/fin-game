@@ -1,10 +1,15 @@
 package com.legacy.fingame.ui.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -56,6 +61,7 @@ import com.legacy.fingame.game.economy.MoneyEntry
 import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.economy.SpendKind
 import com.legacy.fingame.game.economy.goalProgress
+import com.legacy.fingame.game.items.CustomItemDraft
 import com.legacy.fingame.game.items.Goals
 import com.legacy.fingame.game.items.Inventory
 import com.legacy.fingame.game.items.Item
@@ -95,9 +101,6 @@ private val TitleMinSize = 16.dp
 /** Мельче этого подписи в карточках не ужимаются. */
 private val LabelMinSize = 9.dp
 
-/** Сколько вкладок в строке стоя: шесть вкладок — две строки. */
-private const val TabsPerRow = 3
-
 /** Поля кнопки вкладки в «буквах» — добавка к длине подписи, когда делится ширина строки. */
 private const val TabPaddingChars = 3
 
@@ -113,9 +116,10 @@ enum class AdultTab(val title: String) {
     DAYS("Дни"),
     PURCHASES("Покупки"),
     QUESTS("Квесты"),
-    INVENTORY("Инвентарь"),
     GOALS("Цели"),
-    LOG("Журнал")
+    INVENTORY("Инвентарь"),
+    LOG("Журнал"),
+    ITEMS("Предметы")
 }
 
 /**
@@ -129,10 +133,13 @@ enum class AdultTab(val title: String) {
  * @param state состояние игры ребёнка.
  * @param itemCatalog товары — для имён и иконок покупок, инвентаря и целей.
  * @param questCatalog квесты — для названий и шагов в истории квестов.
+ * @param onAddItem сохранить свой предмет из формы; false — не сохранён.
+ * @param onRemoveItem убрать свой предмет из магазина.
  * @param onClose крестик — назад в настройки, режим взрослого выключается.
  * @param modifier модификатор корня экрана.
  * @param initialTab вкладка, с которой хаб открывается (для превью).
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AdultScreen(
     state: GameUiState,
@@ -140,6 +147,8 @@ fun AdultScreen(
     questCatalog: QuestCatalog,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    onAddItem: (CustomItemDraft) -> Boolean = { false },
+    onRemoveItem: (String) -> Boolean = { false },
     initialTab: AdultTab = AdultTab.DAYS
 ) {
     var tab by rememberSaveable { mutableStateOf(initialTab) }
@@ -158,14 +167,27 @@ fun AdultScreen(
         val headerModifier = Modifier
             .widthIn(max = contentMaxWidth)
             .fillMaxWidth()
-        if (short) {
+        // Лёжа клавиатура телефона оставляет над собой узкую полосу: шапка на это время уходит,
+        // чтобы поле ввода формы «Новый предмет» осталось видно.
+        val imeVisible = WindowInsets.isImeVisible
+        // Прокрутка ряда вкладок живёт здесь: шапка, ушедшая на время клавиатуры, возвращается
+        // с той же видимой вкладкой.
+        val tabsScroll = rememberScrollState()
+        if (short && imeVisible) {
+            // Шапки нет — только поле формы.
+        } else if (short) {
             Row(
                 modifier = headerModifier,
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 AdultTitle(style = MaterialTheme.typography.titleLarge)
-                AdultTabs(tab = tab, onSelect = { tab = it }, modifier = Modifier.weight(1f))
+                AdultTabs(
+                    tab = tab,
+                    onSelect = { tab = it },
+                    modifier = Modifier.weight(1f),
+                    scrollState = tabsScroll
+                )
                 AdultClose(onClose)
             }
         } else {
@@ -186,7 +208,7 @@ fun AdultScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        if (!(short && imeVisible)) Spacer(modifier = Modifier.height(12.dp))
 
         Box(
             modifier = Modifier
@@ -211,6 +233,11 @@ fun AdultScreen(
                     readOnly = true
                 )
                 AdultTab.GOALS -> GoalsTab(state, itemCatalog)
+                AdultTab.ITEMS -> CustomItemsTab(
+                    items = state.customItems,
+                    onAdd = onAddItem,
+                    onRemove = onRemoveItem
+                )
                 AdultTab.LOG -> LogScreen(
                     log = state.moneyLog,
                     onOpenBudget = null,
@@ -240,7 +267,7 @@ private fun AdultTitle(style: TextStyle, modifier: Modifier = Modifier) {
  * как названия в журнале. Мельче [minSize] (физический размер) не становится.
  */
 @Composable
-private fun ShrinkText(
+internal fun ShrinkText(
     text: String,
     style: TextStyle,
     color: Color,
@@ -275,16 +302,17 @@ private fun AdultClose(onClose: () -> Unit) {
 }
 
 /**
- * Вкладки. Стоя — две строки по три кнопки, ширина каждой по длине подписи: все шесть видны сразу,
- * а при крупном шрифте подписи ужимаются целиком (как во всех кнопках игры), а не режутся. Лёжа высоты
- * нет, и вкладки стоят одним рядом, который прокручивается вбок.
+ * Вкладки. Стоя — строки по ширине подписей (на телефоне 4 + 3, на узком с крупным шрифтом — сколько
+ * влезет): все семь видны сразу, подписи целиком, без многоточий. Лёжа высоты нет, и вкладки стоят
+ * одним рядом, который прокручивается вбок.
  */
 @Composable
 private fun AdultTabs(
     tab: AdultTab,
     onSelect: (AdultTab) -> Unit,
     modifier: Modifier = Modifier,
-    wrap: Boolean = false
+    wrap: Boolean = false,
+    scrollState: ScrollState = rememberScrollState()
 ) {
     @Composable
     fun TabButton(entry: AdultTab, buttonModifier: Modifier = Modifier) {
@@ -293,25 +321,27 @@ private fun AdultTabs(
             onClick = { onSelect(entry) },
             selected = entry == tab,
             compact = true,
-            autoShrink = wrap,
+            autoShrink = false,
             modifier = buttonModifier
         )
     }
     if (wrap) {
-        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            AdultTab.entries.chunked(TabsPerRow).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Ширина — по длине подписи: так при крупном шрифте все подписи ужимаются
-                    // одинаково, а не одна «Инвентарь» до многоточия.
-                    row.forEach { entry ->
-                        TabButton(entry, Modifier.weight((entry.title.length + TabPaddingChars).toFloat()))
-                    }
-                }
+        // Строки собираются по ширине подписей: на обычном телефоне — 4 + 3, на узком с крупным
+        // шрифтом — сколько поместится, но подпись целиком. Остаток строки делится между кнопками.
+        FlowRow(
+            modifier = modifier,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Вес — по длине подписи: остаток строки достаётся длинным подписям, «Инвентарь» не
+            // режется рядом с «Журналом».
+            AdultTab.entries.forEach { entry ->
+                TabButton(entry, Modifier.weight((entry.title.length + TabPaddingChars).toFloat()))
             }
         }
     } else {
         Row(
-            modifier = modifier.horizontalScroll(rememberScrollState()),
+            modifier = modifier.horizontalScroll(scrollState),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             AdultTab.entries.forEach { entry -> TabButton(entry) }
@@ -321,7 +351,7 @@ private fun AdultTabs(
 
 /** Пустая вкладка: одна строка посередине. */
 @Composable
-private fun EmptyText(text: String) {
+internal fun EmptyText(text: String) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             text = text,
@@ -334,7 +364,7 @@ private fun EmptyText(text: String) {
 
 /** Колонки карточек: одна на телефоне стоя, две в альбоме, если ширины хватает. */
 @Composable
-private fun <T> CardGrid(
+internal fun <T> CardGrid(
     items: List<T>,
     key: (T) -> Any,
     content: @Composable (T) -> Unit
@@ -352,7 +382,7 @@ private fun <T> CardGrid(
 
 /** Карточка хаба — та же, что на экране бюджета: 20 dp, рамка, лёгкая тень. */
 @Composable
-private fun AdultCard(content: @Composable ColumnScope.() -> Unit) {
+internal fun AdultCard(content: @Composable ColumnScope.() -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),

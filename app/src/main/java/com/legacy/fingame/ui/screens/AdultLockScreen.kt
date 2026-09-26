@@ -317,7 +317,7 @@ private fun TaskRow(task: LockTask, answer: String, active: Boolean, onClick: ()
  * @param onErase нажато «Стереть».
  */
 @Composable
-private fun Keypad(onDigit: (Int) -> Unit, onErase: () -> Unit) {
+internal fun Keypad(onDigit: (Int) -> Unit, onErase: () -> Unit) {
     val rows = listOf(listOf(1, 2, 3), listOf(4, 5, 6), listOf(7, 8, 9))
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         rows.forEach { row ->

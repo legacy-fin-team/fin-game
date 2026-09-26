@@ -23,6 +23,7 @@ import com.legacy.fingame.game.Screen
 import com.legacy.fingame.game.items.Cart
 import com.legacy.fingame.game.items.Goals
 import com.legacy.fingame.game.items.Inventory
+import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.quests.QuestBoard
 import com.legacy.fingame.game.scene.GameScene
 import com.legacy.fingame.game.scene.SceneSprite
@@ -98,7 +99,8 @@ fun FinGameApp(
     val state by vm.state.collectAsStateWithLifecycle()
     val application = LocalContext.current.applicationContext as FinGameApplication
     val animalRegistry = application.animalRegistry
-    val itemRegistry = application.itemRegistry
+    // Предметы игры и свои предметы взрослого вместе (см. [GameViewModel.catalog]).
+    val itemRegistry = vm.catalog
     val questRegistry = application.questRegistry
 
     val savedSelection = state.selection
@@ -174,6 +176,11 @@ fun FinGameApp(
                     Screen.SHOP -> ShopScreen(
                         state = state,
                         items = itemRegistry.getItemsByCategory(state.selectedCategory),
+                        // Пустой раздел — «Другое» без своих предметов — в магазине не показывается.
+                        categories = ItemCategory.entries.filter { category ->
+                            category == state.selectedCategory ||
+                                itemRegistry.getItemsByCategory(category).isNotEmpty()
+                        },
                         cartLines = Cart.linesOf(
                             quantities = state.quantities,
                             pickedVariants = state.pickedVariants,
@@ -249,6 +256,8 @@ fun FinGameApp(
                         state = state,
                         itemCatalog = itemRegistry,
                         questCatalog = questRegistry,
+                        onAddItem = vm::addCustomItem,
+                        onRemoveItem = vm::removeCustomItem,
                         onClose = vm::exitAdultMode
                     )
                 }
