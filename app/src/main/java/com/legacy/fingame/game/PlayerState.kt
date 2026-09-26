@@ -10,6 +10,7 @@ import com.legacy.fingame.game.economy.Economy
 import com.legacy.fingame.game.economy.FastForwardClock
 import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.items.ItemSelection
+import com.legacy.fingame.game.quests.QuestLog
 import com.legacy.fingame.game.quests.QuestProgress
 import com.legacy.fingame.game.stats.PetStats
 
@@ -67,6 +68,9 @@ import com.legacy.fingame.game.stats.PetStats
  * начинался — до самого первого планирования или пока идёт планирование следующего.
  * @property previousBudgetResult итог прошлого периода, который показывается при планировании,
  * или null, когда ни один период ещё не закрывался.
+ * @property budgetHistory итоги закрытых периодов, новейший первым, не больше
+ * [com.legacy.fingame.game.economy.BudgetHistory.MAX]; последний из них — [previousBudgetResult].
+ * Её смотрит взрослый.
  * @property budgetDraft раскладка, которую игрок набрал, но не подтвердил, или null, когда он к
  * ней не притрагивался. Хранится, чтобы экран планирования можно было закрыть и вернуться к нему.
  * @property planningOpen открыто ли планирование: становится true при получении бонуса дня и
@@ -79,6 +83,7 @@ import com.legacy.fingame.game.stats.PetStats
  * квестов горит точка.
  * @property lastRandomQuestAtMillis момент, когда выпал последний случайный квест, или
  * [NO_RANDOM_QUEST]; следующий выпадает не раньше, чем через шесть игровых часов.
+ * @property questLog выборы игрока в квестах, новейший первым, — история квестов для взрослого.
  */
 data class PlayerState(
     val selection: AnimalSelection? = null,
@@ -88,6 +93,7 @@ data class PlayerState(
     val deposit: Deposit? = null,
     val budget: BudgetState? = null,
     val previousBudgetResult: BudgetResult? = null,
+    val budgetHistory: List<BudgetResult> = emptyList(),
     val budgetDraft: BudgetDraft? = null,
     val planningOpen: Boolean = false,
     val moneyLog: MoneyLog = MoneyLog.EMPTY,
@@ -102,7 +108,8 @@ data class PlayerState(
     val clockShiftMillis: Long = FastForwardClock.NO_SHIFT,
     val quests: List<QuestProgress> = emptyList(),
     val questsSeenAtMillis: Long = QUESTS_NEVER_SEEN,
-    val lastRandomQuestAtMillis: Long = NO_RANDOM_QUEST
+    val lastRandomQuestAtMillis: Long = NO_RANDOM_QUEST,
+    val questLog: QuestLog = QuestLog.EMPTY
 ) {
     companion object {
         /**

@@ -75,6 +75,8 @@ data class BudgetState(
  * @property plannedSavings сколько собирался сохранить.
  * @property actualSavings сколько денег реально осталось на текущем счёте к концу периода.
  * @property plannedDeposit сколько ушло на вклад при подтверждении.
+ * @property startDay день, в который план периода был подтверждён ([BudgetState.startDay]); по
+ * нему итог стоит в истории бюджета. Итог из сохранения версии, которая день не писала, — ноль.
  */
 data class BudgetResult(
     val plannedMust: Int,
@@ -83,7 +85,8 @@ data class BudgetResult(
     val actualWant: Int,
     val plannedSavings: Int,
     val actualSavings: Int,
-    val plannedDeposit: Int
+    val plannedDeposit: Int,
+    val startDay: Long = 0L
 ) {
     /** Плюс — не дотратил, минус — перерасход. */
     val mustDiff: Int get() = plannedMust - actualMust

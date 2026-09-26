@@ -19,10 +19,11 @@ import com.legacy.fingame.game.stats.StatKind
  *
  * Every value is stored under a key of its own rather than as one blob, so a state that grew a
  * new field still reads back on a device that saved it before the field existed. The exceptions
- * are [PlayerState.moneyLog], [PlayerState.quests] and [PlayerState.goals]: all are lists of
- * variable length, and a key per record would turn the preferences into a file of thousands of
- * lines, so each is written as a single string, by [MoneyLogCodec], [QuestStateCodec] and
- * [GoalsCodec] respectively. The goals are a string rather than a string set because their order
+ * are [PlayerState.moneyLog], [PlayerState.quests], [PlayerState.goals],
+ * [PlayerState.budgetHistory] and [PlayerState.questLog]: all are lists of variable length, and a
+ * key per record would turn the preferences into a file of thousands of lines, so each is written
+ * as a single string, by [MoneyLogCodec], [QuestStateCodec], [GoalsCodec], [BudgetHistoryCodec]
+ * and [QuestLogCodec] respectively. The goals are a string rather than a string set because their order
  * is the player's own, and a set would lose it.
  *
  * @param context current local application context. Used to get access to SharedPreferences.
@@ -66,6 +67,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             "previous_budget_planned_savings_left"
         private const val KEY_PREVIOUS_BUDGET_ACTUAL_SAVINGS = "previous_budget_actual_savings"
         private const val KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT = "previous_budget_planned_deposit"
+        private const val KEY_PREVIOUS_BUDGET_START_DAY = "previous_budget_start_day"
         private const val KEY_BUDGET_DRAFT_PRESENT = "budget_draft_present"
         private const val KEY_BUDGET_DRAFT_MUST = "budget_draft_must"
         private const val KEY_BUDGET_DRAFT_WANT = "budget_draft_want"
@@ -83,6 +85,12 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
 
         /** Момент, когда выпал последний случайный квест. */
         internal const val KEY_LAST_RANDOM_QUEST_AT = "last_random_quest_at"
+
+        /** История бюджета одной строкой, см. [BudgetHistoryCodec]. */
+        internal const val KEY_BUDGET_HISTORY = "budget_history"
+
+        /** Журнал выборов в квестах одной строкой, см. [QuestLogCodec]. */
+        internal const val KEY_QUEST_LOG = "quest_log"
 
         /** Key the savings account was stored under, read once more to hand the money back. */
         private const val KEY_RETIRED_SAVINGS = "savings"
@@ -145,6 +153,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS_LEFT,
             KEY_PREVIOUS_BUDGET_ACTUAL_SAVINGS,
             KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT,
+            KEY_PREVIOUS_BUDGET_START_DAY,
+            KEY_BUDGET_HISTORY,
             KEY_BUDGET_DRAFT_PRESENT,
             KEY_BUDGET_DRAFT_MUST,
             KEY_BUDGET_DRAFT_WANT,
@@ -155,6 +165,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             KEY_QUESTS,
             KEY_QUESTS_SEEN_AT,
             KEY_LAST_RANDOM_QUEST_AT,
+            KEY_QUEST_LOG,
             KEY_GOALS
         )
 
@@ -199,6 +210,9 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             deposit = readDeposit(),
             budget = readBudget(),
             previousBudgetResult = readPreviousBudgetResult(),
+            budgetHistory = BudgetHistoryCodec.decode(
+                preferences.getString(KEY_BUDGET_HISTORY, null)
+            ),
             budgetDraft = readBudgetDraft(),
             planningOpen = preferences.getBoolean(KEY_PLANNING_OPEN, defaults.planningOpen),
             moneyLog = MoneyLogCodec.decode(preferences.getString(KEY_MONEY_LOG, null)),
@@ -225,7 +239,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             lastRandomQuestAtMillis = preferences.getLong(
                 KEY_LAST_RANDOM_QUEST_AT,
                 defaults.lastRandomQuestAtMillis
-            )
+            ),
+            questLog = QuestLogCodec.decode(preferences.getString(KEY_QUEST_LOG, null))
         )
     }
 
@@ -277,6 +292,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
                 KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT,
                 state.previousBudgetResult?.plannedDeposit ?: 0
             )
+            .putLong(KEY_PREVIOUS_BUDGET_START_DAY, state.previousBudgetResult?.startDay ?: 0L)
+            .putString(KEY_BUDGET_HISTORY, BudgetHistoryCodec.encode(state.budgetHistory))
             .putBoolean(KEY_BUDGET_DRAFT_PRESENT, state.budgetDraft != null)
             .putInt(KEY_BUDGET_DRAFT_MUST, state.budgetDraft?.mustSpend ?: 0)
             .putInt(KEY_BUDGET_DRAFT_WANT, state.budgetDraft?.wantSpend ?: 0)
@@ -291,6 +308,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             .putLong(KEY_QUESTS_SEEN_AT, state.questsSeenAtMillis)
             .putLong(KEY_LAST_RANDOM_QUEST_AT, state.lastRandomQuestAtMillis)
             .putString(KEY_GOALS, GoalsCodec.encode(state.goals))
+            .putString(KEY_QUEST_LOG, QuestLogCodec.encode(state.questLog))
 
         StatKind.entries.forEach { stat ->
             editor.putInt(KEY_STAT_PREFIX + stat.xmlName, state.stats[stat])
@@ -434,7 +452,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             actualWant = preferences.getInt(KEY_PREVIOUS_BUDGET_ACTUAL_WANT, 0),
             plannedSavings = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS_LEFT, 0),
             actualSavings = preferences.getInt(KEY_PREVIOUS_BUDGET_ACTUAL_SAVINGS, 0),
-            plannedDeposit = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT, 0)
+            plannedDeposit = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT, 0),
+            startDay = preferences.getLong(KEY_PREVIOUS_BUDGET_START_DAY, 0L)
         )
     }
 

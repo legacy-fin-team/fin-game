@@ -10,13 +10,25 @@ package com.legacy.fingame.game.economy
  * потому что игрок смотрит журнал ради своих трат.
  * @property gameDay игровой день, в который это случилось, как его называет [GameClock.today].
  * @property timestampMillis момент по часам игры, в миллисекундах.
+ * @property itemId для покупки — id купленного товара, для всего остального — null. Записи,
+ * сделанные до истории покупок, его не знают, поэтому и старая покупка читается с null.
+ * @property variantId для покупки — вариант товара, в котором его купили, иначе null.
+ * @property quantity для покупки — сколько штук куплено одной позицией корзины, иначе ноль.
+ * @property spendKind для покупки — в какую категорию плана она легла, иначе null.
  */
 data class MoneyEntry(
     val reason: String,
     val delta: Int,
     val gameDay: Long,
-    val timestampMillis: Long
-)
+    val timestampMillis: Long,
+    val itemId: String? = null,
+    val variantId: String? = null,
+    val quantity: Int = 0,
+    val spendKind: SpendKind? = null
+) {
+    /** Покупка ли это товара — то есть запись, по которой видно, что именно купили. */
+    val isPurchase: Boolean get() = itemId != null
+}
 
 /**
  * Журнал изменений денег: всё, что случилось с текущим счётом игрока, новейшее первым.

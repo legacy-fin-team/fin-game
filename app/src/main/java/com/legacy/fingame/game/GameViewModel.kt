@@ -11,6 +11,7 @@ import com.legacy.fingame.game.animals.Growth
 import com.legacy.fingame.game.economy.Budget
 import com.legacy.fingame.game.economy.BudgetDraft
 import com.legacy.fingame.game.economy.BudgetResult
+import com.legacy.fingame.game.economy.BudgetHistory
 import com.legacy.fingame.game.economy.BudgetState
 import com.legacy.fingame.game.economy.Deposit
 import com.legacy.fingame.game.economy.Economy
@@ -26,8 +27,10 @@ import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.items.ItemUse
 import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestCatalog
+import com.legacy.fingame.game.quests.QuestChoice
 import com.legacy.fingame.game.quests.QuestEngine
 import com.legacy.fingame.game.quests.QuestKind
+import com.legacy.fingame.game.quests.QuestLog
 import com.legacy.fingame.game.quests.QuestOutcome
 import com.legacy.fingame.game.quests.QuestProgress
 import com.legacy.fingame.game.settings.GameSettings
@@ -88,6 +91,10 @@ enum class Screen {
  * [PlayerState.planningOpen]; becomes true when the daily bonus is claimed and false once a budget
  * is confirmed. See [canPlanBudget] for whether the planning screen may actually be opened.
  * @property moneyLog the player's money log, newest first, restored from [PlayerState.moneyLog].
+ * @property budgetHistory итоги закрытых периодов, новейший первым, из [PlayerState.budgetHistory];
+ * пополняется в [GameViewModel.claimDailyBonus].
+ * @property questLog выборы игрока в квестах, новейший первым, из [PlayerState.questLog];
+ * пополняется в [GameViewModel.chooseQuestOption].
  * @property dailyBonusAvailable whether the daily bonus is waiting to be claimed; recomputed
  * whenever the player comes back to [Screen.MAIN], so an app left open overnight offers it again.
  * @property lastDailyBonusDay day the bonus was last claimed on, kept here only so it can be saved
@@ -146,6 +153,8 @@ data class GameUiState(
     val budgetDraft: BudgetDraft? = null,
     val planningOpen: Boolean = false,
     val moneyLog: MoneyLog = MoneyLog.EMPTY,
+    val budgetHistory: List<BudgetResult> = emptyList(),
+    val questLog: QuestLog = QuestLog.EMPTY,
     val dailyBonusAvailable: Boolean = false,
     val lastDailyBonusDay: Long = Economy.NEVER_CLAIMED,
     val selectedCategory: ItemCategory = ItemCategory.entries.first(),
@@ -527,10 +536,20 @@ class GameViewModel(
         val quest = questCatalog.findQuestById(questId) ?: return false
         val current = _state.value
         val now = clock.nowMillis()
+        val nodeId = current.questProgressOf(questId)?.nodeId ?: return false
         val choice = QuestEngine.choose(quest, current.quests, optionIndex, current.balance, now)
             ?: return false
+        val logged = QuestChoice(
+            questId = questId,
+            nodeId = nodeId,
+            optionLabel = choice.outcome.optionLabel,
+            moneyDelta = choice.outcome.moneyDelta,
+            progressDelta = choice.outcome.progressDelta,
+            gameDay = clock.today(),
+            timestampMillis = now
+        )
 
-        _state.value = current.copy(quests = choice.quests)
+        _state.value = current.copy(quests = choice.quests, questLog = current.questLog.plus(logged))
             .applyQuestEffects(quest, choice.outcome)
             .withQuestsLookedAt(now)
         persist()
@@ -821,8 +840,16 @@ class GameViewModel(
                 SpendKind.WANT -> spentWant += cost
             }
             logged = logged.logged(
-                reason = MoneyLog.purchaseReason(item.name, quantity),
-                delta = -cost
+                MoneyEntry(
+                    reason = MoneyLog.purchaseReason(item.name, quantity),
+                    delta = -cost,
+                    gameDay = clock.today(),
+                    timestampMillis = clock.nowMillis(),
+                    itemId = item.id,
+                    variantId = key.variantId,
+                    quantity = quantity,
+                    spendKind = item.category.spendKind
+                )
             )
         }
 
@@ -903,16 +930,21 @@ class GameViewModel(
      * @param delta изменение текущего счёта, со знаком.
      * @return Это состояние с дописанной строкой журнала.
      */
-    private fun GameUiState.logged(reason: String, delta: Int): GameUiState = copy(
-        moneyLog = moneyLog.plus(
-            MoneyEntry(
-                reason = reason,
-                delta = delta,
-                gameDay = clock.today(),
-                timestampMillis = clock.nowMillis()
-            )
+    private fun GameUiState.logged(reason: String, delta: Int): GameUiState = logged(
+        MoneyEntry(
+            reason = reason,
+            delta = delta,
+            gameDay = clock.today(),
+            timestampMillis = clock.nowMillis()
         )
     )
+
+    /**
+     * @param entry готовая строка журнала — например, покупка с товаром и количеством.
+     * @return Это состояние с дописанной строкой журнала.
+     */
+    private fun GameUiState.logged(entry: MoneyEntry): GameUiState =
+        copy(moneyLog = moneyLog.plus(entry))
 
     /**
      * Adds coins the player earned to the balance and remembers them right away, so money is never
@@ -948,25 +980,28 @@ class GameViewModel(
         val today = clock.today()
         if (!Economy.isDailyBonusAvailable(current.lastDailyBonusDay, today)) return false
 
-        val running = current.budget
+        val closed = current.budget?.let {
+            BudgetResult(
+                plannedMust = it.plannedMust,
+                actualMust = it.spentMust,
+                plannedWant = it.plannedWant,
+                actualWant = it.spentWant,
+                plannedSavings = it.plannedSavings,
+                // Сколько реально осталось на счёте: считается до начисления бонуса, иначе
+                // деньги нового периода оказались бы сохранёнными в прошлом.
+                actualSavings = current.balance,
+                plannedDeposit = it.plannedDeposit,
+                startDay = it.startDay
+            )
+        }
         _state.value = current.copy(
             balance = current.balance + Economy.DAILY_BONUS,
             lastDailyBonusDay = today,
             dailyBonusAvailable = false,
             budget = null,
-            previousBudgetResult = running?.let {
-                BudgetResult(
-                    plannedMust = it.plannedMust,
-                    actualMust = it.spentMust,
-                    plannedWant = it.plannedWant,
-                    actualWant = it.spentWant,
-                    plannedSavings = it.plannedSavings,
-                    // Сколько реально осталось на счёте: считается до начисления бонуса, иначе
-                    // деньги нового периода оказались бы сохранёнными в прошлом.
-                    actualSavings = current.balance,
-                    plannedDeposit = it.plannedDeposit
-                )
-            } ?: current.previousBudgetResult,
+            previousBudgetResult = closed ?: current.previousBudgetResult,
+            budgetHistory = closed?.let { BudgetHistory.plus(current.budgetHistory, it) }
+                ?: current.budgetHistory,
             budgetDraft = null,
             planningOpen = true
         ).logged(MoneyLog.REASON_DAILY_BONUS, Economy.DAILY_BONUS)
@@ -1163,6 +1198,8 @@ class GameViewModel(
             budgetDraft = saved.budgetDraft,
             planningOpen = saved.planningOpen,
             moneyLog = saved.moneyLog,
+            budgetHistory = saved.budgetHistory,
+            questLog = saved.questLog,
             lastDailyBonusDay = saved.lastDailyBonusDay,
             dailyBonusAvailable = Economy.isDailyBonusAvailable(
                 lastClaimedDay = saved.lastDailyBonusDay,
@@ -1257,6 +1294,8 @@ class GameViewModel(
                 budgetDraft = current.budgetDraft,
                 planningOpen = current.planningOpen,
                 moneyLog = current.moneyLog,
+                budgetHistory = current.budgetHistory,
+                questLog = current.questLog,
                 lastDailyBonusDay = current.lastDailyBonusDay,
                 owned = current.owned,
                 worn = current.worn,

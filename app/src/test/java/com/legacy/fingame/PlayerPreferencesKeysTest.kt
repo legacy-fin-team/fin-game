@@ -52,4 +52,13 @@ class PlayerPreferencesKeysTest {
     fun `the goals are written under a key of their own`() {
         assertTrue("goals" in PlayerPreferences.LIVE_KEYS)
     }
+
+    @Test
+    fun `the adult mode histories are among the live keys`() {
+        // История бюджета и журнал квестов пишутся при каждом сохранении, как журнал денег.
+        assertTrue(PlayerPreferences.KEY_BUDGET_HISTORY in PlayerPreferences.LIVE_KEYS)
+        assertTrue(PlayerPreferences.KEY_QUEST_LOG in PlayerPreferences.LIVE_KEYS)
+        assertEquals("budget_history", PlayerPreferences.KEY_BUDGET_HISTORY)
+        assertEquals("quest_log", PlayerPreferences.KEY_QUEST_LOG)
+    }
 }
