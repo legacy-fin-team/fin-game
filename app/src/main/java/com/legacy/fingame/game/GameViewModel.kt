@@ -30,6 +30,9 @@ import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.items.ItemUse
 import com.legacy.fingame.game.items.customItemOf
 import com.legacy.fingame.game.quests.Quest
+import com.legacy.fingame.game.quests.CompositeQuestCatalog
+import com.legacy.fingame.game.quests.CustomQuestDraft
+import com.legacy.fingame.game.quests.CustomQuests
 import com.legacy.fingame.game.quests.QuestCatalog
 import com.legacy.fingame.game.quests.QuestChoice
 import com.legacy.fingame.game.quests.QuestEngine
@@ -152,6 +155,8 @@ enum class Screen {
  * у ребёнка.
  * @property customItems свои предметы взрослого, из [PlayerState.customItems]; продаются наравне с
  * предметами игры (см. [GameViewModel.catalog]).
+ * @property customQuests свои квесты взрослого, из [PlayerState.customQuests]; ребёнок берёт их
+ * наравне с квестами игры (см. [GameViewModel.questCatalog]).
  */
 data class GameUiState(
     val screen: Screen = Screen.MAIN,
@@ -187,6 +192,7 @@ data class GameUiState(
     val hasUnseenQuestStep: Boolean = false,
     val adultMode: Boolean = false,
     val customItems: List<Item> = emptyList(),
+    val customQuests: List<Quest> = emptyList(),
     val settings: GameSettings = GameSettings()
 ) {
     /**
@@ -284,7 +290,7 @@ class GameViewModel(
     private val store: PlayerStateStore,
     catalog: ItemCatalog,
     clock: GameClock = GameClock.DEVICE,
-    private val questCatalog: QuestCatalog = QuestCatalog.EMPTY,
+    questCatalog: QuestCatalog = QuestCatalog.EMPTY,
     private val random: Random = Random.Default,
     private val allowRestart: Boolean = DemoMode.ENABLED,
     settings: GameSettings = GameSettings()
@@ -307,6 +313,15 @@ class GameViewModel(
      * берут товары отсюда, а не из данных напрямую, так что добавленное взрослым сразу на полке.
      */
     val catalog: ItemCatalog = CompositeItemCatalog(catalog) { customItems }
+
+    /** Свои квесты взрослого, как их видит [questCatalog]; по той же причине, что [customItems]. */
+    private var customQuests: List<Quest> = emptyList()
+
+    /**
+     * Какие квесты есть: квесты игры и после них свои квесты взрослого. Экран квестов берёт их
+     * отсюда, так что добавленный взрослым квест ребёнок видит сразу.
+     */
+    val questCatalog: QuestCatalog = CompositeQuestCatalog(questCatalog) { customQuests }
 
     /**
      * Constant limits for [GameViewModel]'s UI state, and the way it is built outside of tests.
@@ -455,6 +470,59 @@ class GameViewModel(
         )
         persist()
         return true
+    }
+
+    /**
+     * Взрослый добавляет свой квест: ребёнок сразу видит его на экране квестов.
+     *
+     * @param draft что набрано в форме.
+     * @return True, когда квест добавлен; false вне режима взрослого, при ошибках в черновике
+     * (см. [CustomQuestDraft.validate]) и когда своих квестов уже [CustomQuests.MAX].
+     */
+    fun addCustomQuest(draft: CustomQuestDraft): Boolean {
+        val current = _state.value
+        if (!current.adultMode) return false
+        if (draft.validate(existingCount = current.customQuests.size).isNotEmpty()) return false
+        val quest = draft.toQuest(freshCustomQuestId())
+        customQuests = current.customQuests + quest
+        _state.value = current.copy(customQuests = customQuests)
+        persist()
+        return true
+    }
+
+    /**
+     * Взрослый убирает свой квест. Если ребёнок его проходит, прохождение снимается — квеста больше
+     * нет; выборы остаются в истории квестов.
+     *
+     * @param questId id своего квеста.
+     * @return True, когда квест убран; false вне режима взрослого и когда такого квеста нет.
+     */
+    fun removeCustomQuest(questId: String): Boolean {
+        val current = _state.value
+        if (!current.adultMode) return false
+        if (current.customQuests.none { it.id == questId }) return false
+        customQuests = current.customQuests.filterNot { it.id == questId }
+        val quests = current.quests.filterNot { it.questId == questId }
+        _state.value = current.copy(
+            customQuests = customQuests,
+            quests = quests,
+            hasUnseenQuestStep = QuestEngine.hasUnseenStep(
+                quests,
+                current.questsSeenAtMillis,
+                clock.nowMillis()
+            )
+        )
+        persist()
+        return true
+    }
+
+    /** @return Id для нового своего квеста: `custom-<момент>`, без повторов. */
+    private fun freshCustomQuestId(): String {
+        val base = CustomQuests.ID_PREFIX + clock.nowMillis()
+        var id = base
+        var suffix = 2
+        while (questCatalog.findQuestById(id) != null) id = "$base-${suffix++}"
+        return id
     }
 
     /** @return Id для нового своего предмета: `custom-<момент>`, без повторов. */
@@ -1273,6 +1341,7 @@ class GameViewModel(
     private fun restoredState(settings: GameSettings): GameUiState {
         val saved = store.load()
         customItems = saved.customItems.take(CustomItems.MAX)
+        customQuests = saved.customQuests.take(CustomQuests.MAX)
         // The time a demo skipped outlives a restart as a shift, not as a moment reached: the
         // real time that passed while the app was closed runs on top of the skipped hours instead
         // of eating them, so the bars keep falling and the day keeps counting in between.
@@ -1332,6 +1401,7 @@ class GameViewModel(
             lastRandomQuestAtMillis = saved.lastRandomQuestAtMillis,
             hasUnseenQuestStep = QuestEngine.hasUnseenStep(quests, saved.questsSeenAtMillis, now),
             customItems = customItems,
+            customQuests = customQuests,
             settings = settings
         )
     }
@@ -1422,7 +1492,8 @@ class GameViewModel(
                 quests = current.quests,
                 questsSeenAtMillis = current.questsSeenAtMillis,
                 lastRandomQuestAtMillis = current.lastRandomQuestAtMillis,
-                customItems = current.customItems
+                customItems = current.customItems,
+                customQuests = current.customQuests
             )
         )
     }
@@ -1453,8 +1524,9 @@ class GameViewModel(
                 today = today
             ),
             todayDay = today,
-            // Свои предметы — взрослого, а не игры ребёнка: они переживают новую игру.
+            // Свои предметы и квесты — взрослого, а не игры ребёнка: они переживают новую игру.
             customItems = _state.value.customItems,
+            customQuests = _state.value.customQuests,
             settings = _state.value.settings
         )
         persist()

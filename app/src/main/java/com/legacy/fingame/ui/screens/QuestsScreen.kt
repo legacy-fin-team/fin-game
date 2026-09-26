@@ -228,7 +228,7 @@ fun QuestsScreen(
  * Тап по заголовку раскрывает и сворачивает карточку.
  */
 @Composable
-private fun QuestCard(
+internal fun QuestCard(
     entry: QuestEntry,
     expanded: Boolean,
     balance: Int,

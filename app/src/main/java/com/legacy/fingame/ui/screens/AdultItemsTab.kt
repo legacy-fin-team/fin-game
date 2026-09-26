@@ -75,7 +75,7 @@ private fun StatKind.formTitle(): String = when (this) {
 }
 
 /** Со знаком: «+10», «−5», «0». */
-private fun signed(value: Int): String = when {
+internal fun signed(value: Int): String = when {
     value > 0 -> "+$value"
     value < 0 -> "−${-value}"
     else -> "0"
@@ -412,7 +412,7 @@ internal fun CustomItemForm(
 }
 
 @Composable
-private fun FormLabel(text: String) {
+internal fun FormLabel(text: String) {
     Text(
         text = text,
         modifier = Modifier.padding(top = 8.dp),
@@ -423,7 +423,7 @@ private fun FormLabel(text: String) {
 
 /** Набранная цена с монетой; пока ничего не набрано — «?». */
 @Composable
-private fun PriceBox(priceText: String) {
+internal fun PriceBox(priceText: String) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()

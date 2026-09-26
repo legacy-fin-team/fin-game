@@ -101,7 +101,8 @@ fun FinGameApp(
     val animalRegistry = application.animalRegistry
     // Предметы игры и свои предметы взрослого вместе (см. [GameViewModel.catalog]).
     val itemRegistry = vm.catalog
-    val questRegistry = application.questRegistry
+    // Квесты игры и свои квесты взрослого вместе (см. [GameViewModel.questCatalog]).
+    val questRegistry = vm.questCatalog
 
     val savedSelection = state.selection
     val pet = savedSelection?.takeIf { animalRegistry.hasVariant(it.animalId, it.variantId) }
@@ -208,7 +209,7 @@ fun FinGameApp(
                     )
 
                     Screen.QUESTS -> QuestsScreen(
-                        entries = remember(state.quests) {
+                        entries = remember(state.quests, state.customQuests) {
                             QuestBoard.entriesOf(questRegistry, state.quests)
                         },
                         currentMillis = vm::nowMillis,
@@ -258,6 +259,8 @@ fun FinGameApp(
                         questCatalog = questRegistry,
                         onAddItem = vm::addCustomItem,
                         onRemoveItem = vm::removeCustomItem,
+                        onAddQuest = vm::addCustomQuest,
+                        onRemoveQuest = vm::removeCustomQuest,
                         onClose = vm::exitAdultMode
                     )
                 }

@@ -68,4 +68,11 @@ class PlayerPreferencesKeysTest {
         assertTrue(PlayerPreferences.KEY_CUSTOM_ITEMS in PlayerPreferences.LIVE_KEYS)
         assertEquals("custom_items", PlayerPreferences.KEY_CUSTOM_ITEMS)
     }
+
+    @Test
+    fun `the custom quests are among the live keys`() {
+        // Свои квесты взрослого пишутся при каждом сохранении одной строкой.
+        assertTrue(PlayerPreferences.KEY_CUSTOM_QUESTS in PlayerPreferences.LIVE_KEYS)
+        assertEquals("custom_quests", PlayerPreferences.KEY_CUSTOM_QUESTS)
+    }
 }

@@ -1,6 +1,7 @@
 package com.legacy.fingame.utils
 
 import com.legacy.fingame.game.items.CustomItemsCodec
+import com.legacy.fingame.game.quests.CustomQuestsCodec
 import android.content.Context
 import android.util.Log
 import com.legacy.fingame.game.PlayerState
@@ -96,6 +97,9 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         /** Свои предметы взрослого одной строкой, см. [CustomItemsCodec]. */
         internal const val KEY_CUSTOM_ITEMS = "custom_items"
 
+        /** Свои квесты взрослого одной строкой, см. [CustomQuestsCodec]. */
+        internal const val KEY_CUSTOM_QUESTS = "custom_quests"
+
         /** Key the savings account was stored under, read once more to hand the money back. */
         private const val KEY_RETIRED_SAVINGS = "savings"
 
@@ -171,7 +175,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             KEY_LAST_RANDOM_QUEST_AT,
             KEY_QUEST_LOG,
             KEY_GOALS,
-            KEY_CUSTOM_ITEMS
+            KEY_CUSTOM_ITEMS,
+            KEY_CUSTOM_QUESTS
         )
 
         /** Prefix of the key one stat bar is stored under, completed by [StatKind.xmlName]. */
@@ -246,7 +251,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
                 defaults.lastRandomQuestAtMillis
             ),
             questLog = QuestLogCodec.decode(preferences.getString(KEY_QUEST_LOG, null)),
-            customItems = CustomItemsCodec.decode(preferences.getString(KEY_CUSTOM_ITEMS, null))
+            customItems = CustomItemsCodec.decode(preferences.getString(KEY_CUSTOM_ITEMS, null)),
+            customQuests = CustomQuestsCodec.decode(preferences.getString(KEY_CUSTOM_QUESTS, null))
         )
     }
 
@@ -316,6 +322,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             .putString(KEY_GOALS, GoalsCodec.encode(state.goals))
             .putString(KEY_QUEST_LOG, QuestLogCodec.encode(state.questLog))
             .putString(KEY_CUSTOM_ITEMS, CustomItemsCodec.encode(state.customItems))
+            .putString(KEY_CUSTOM_QUESTS, CustomQuestsCodec.encode(state.customQuests))
 
         StatKind.entries.forEach { stat ->
             editor.putInt(KEY_STAT_PREFIX + stat.xmlName, state.stats[stat])

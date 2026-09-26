@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan
 import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -69,6 +70,8 @@ import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.items.ItemSelection
+import com.legacy.fingame.game.quests.CustomQuestDraft
+import com.legacy.fingame.game.quests.CustomQuests
 import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestCatalog
 import com.legacy.fingame.game.quests.QuestChoice
@@ -79,6 +82,7 @@ import com.legacy.fingame.game.quests.QuestOption
 import com.legacy.fingame.game.quests.QuestProgress
 import com.legacy.fingame.ui.components.GoalCard
 import com.legacy.fingame.ui.components.PillButton
+import com.legacy.fingame.ui.components.PillStyle
 import com.legacy.fingame.ui.components.Sprite
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
@@ -145,6 +149,8 @@ enum class AdultTab(val title: String) {
  * @param questCatalog квесты — для названий и шагов в истории квестов.
  * @param onAddItem сохранить свой предмет из формы; false — не сохранён.
  * @param onRemoveItem убрать свой предмет из магазина.
+ * @param onAddQuest сохранить свой квест из формы; false — не сохранён.
+ * @param onRemoveQuest убрать свой квест.
  * @param onClose крестик — назад в настройки, режим взрослого выключается.
  * @param modifier модификатор корня экрана.
  * @param initialTab вкладка, с которой хаб открывается (для превью).
@@ -159,7 +165,10 @@ fun AdultScreen(
     modifier: Modifier = Modifier,
     onAddItem: (CustomItemDraft) -> Boolean = { false },
     onRemoveItem: (String) -> Boolean = { false },
-    initialTab: AdultTab = AdultTab.DAYS
+    onAddQuest: (CustomQuestDraft) -> Boolean = { false },
+    onRemoveQuest: (String) -> Boolean = { false },
+    initialTab: AdultTab = AdultTab.DAYS,
+    initialQuestFormOpen: Boolean = false
 ) {
     var tab by rememberSaveable { mutableStateOf(initialTab) }
     val short = GameDimens.isShortScreen
@@ -177,13 +186,13 @@ fun AdultScreen(
         val headerModifier = Modifier
             .widthIn(max = contentMaxWidth)
             .fillMaxWidth()
-        // Лёжа клавиатура телефона оставляет над собой узкую полосу: шапка на это время уходит,
-        // чтобы поле ввода формы «Новый предмет» осталось видно.
+        // Клавиатура телефона оставляет над собой мало места: шапка на это время уходит, чтобы
+        // поле ввода формы «Новый предмет» или «Новый квест» осталось видно.
         val imeVisible = WindowInsets.isImeVisible
         // Прокрутка ряда вкладок живёт здесь: шапка, ушедшая на время клавиатуры, возвращается
         // с той же видимой вкладкой.
         val tabsScroll = rememberScrollState()
-        if (short && imeVisible) {
+        if (imeVisible) {
             // Шапки нет — только поле формы.
         } else if (short) {
             Row(
@@ -218,7 +227,7 @@ fun AdultScreen(
             }
         }
 
-        if (!(short && imeVisible)) Spacer(modifier = Modifier.height(12.dp))
+        if (!imeVisible) Spacer(modifier = Modifier.height(12.dp))
 
         Box(
             modifier = Modifier
@@ -229,7 +238,14 @@ fun AdultScreen(
             when (tab) {
                 AdultTab.DAYS -> DaysTab(state, itemCatalog, firstDay)
                 AdultTab.PURCHASES -> PurchasesTab(state, itemCatalog, firstDay)
-                AdultTab.QUESTS -> QuestsTab(state, questCatalog, firstDay)
+                AdultTab.QUESTS -> QuestsTab(
+                    state = state,
+                    questCatalog = questCatalog,
+                    firstDay = firstDay,
+                    onAddQuest = onAddQuest,
+                    onRemoveQuest = onRemoveQuest,
+                    initialFormOpen = initialQuestFormOpen
+                )
                 AdultTab.INVENTORY -> InventoryScreen(
                     entries = Inventory.entriesOf(
                         owned = state.owned,
@@ -449,7 +465,7 @@ private fun DayTitle(gameDay: Long, firstDay: Long) {
 }
 
 @Composable
-private fun CardDivider() {
+internal fun CardDivider() {
     HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp), color = GameColors.divider)
 }
 
@@ -645,20 +661,96 @@ private fun PurchasesTab(state: GameUiState, itemCatalog: ItemCatalog, firstDay:
     }
 }
 
+/**
+ * Вкладка «Квесты»: сверху свои квесты взрослого с кнопкой «Добавить» (она открывает форму прямо
+ * здесь), ниже — история выборов ребёнка.
+ */
 @Composable
-private fun QuestsTab(state: GameUiState, questCatalog: QuestCatalog, firstDay: Long) {
-    val history = remember(state.questLog) { questHistoryOf(state.questLog, questCatalog) }
-    if (history.isEmpty()) {
-        EmptyText("Квестов пока не было")
+private fun QuestsTab(
+    state: GameUiState,
+    questCatalog: QuestCatalog,
+    firstDay: Long,
+    onAddQuest: (CustomQuestDraft) -> Boolean,
+    onRemoveQuest: (String) -> Boolean,
+    initialFormOpen: Boolean = false
+) {
+    var formOpen by rememberSaveable { mutableStateOf(initialFormOpen) }
+    var removingId by rememberSaveable { mutableStateOf<String?>(null) }
+    val custom = state.customQuests
+
+    if (formOpen) {
+        CustomQuestForm(
+            onSave = { draft -> onAddQuest(draft).also { saved -> if (saved) formOpen = false } },
+            onCancel = { formOpen = false },
+            existingCount = custom.size
+        )
         return
     }
-    CardGrid(items = history, key = { it.questId }) { entry ->
-        QuestCard(entry, state.questProgressOf(entry.questId), firstDay)
+
+    val history = remember(state.questLog, custom) { questHistoryOf(state.questLog, questCatalog) }
+    LazyVerticalStaggeredGrid(
+        columns = StaggeredGridCells.Adaptive(AdultCardMinWidth),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(CardGap),
+        verticalItemSpacing = CardGap
+    ) {
+        item(key = "custom-title", span = StaggeredGridItemSpan.FullLine) {
+            AdultSectionTitle("Свои квесты")
+        }
+        if (custom.isEmpty()) {
+            item(key = "custom-empty", span = StaggeredGridItemSpan.FullLine) {
+                Text(
+                    text = "Своих квестов пока нет. Добавь — и ребёнок увидит его на экране квестов.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        items(items = custom, key = { "custom:${it.id}" }) { quest ->
+            CustomQuestCard(quest = quest, onRemove = { removingId = quest.id })
+        }
+        item(key = "custom-add", span = StaggeredGridItemSpan.FullLine) {
+            PillButton(
+                text = "Добавить",
+                onClick = { formOpen = true },
+                style = PillStyle.Primary,
+                enabled = custom.size < CustomQuests.MAX,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        item(key = "history-title", span = StaggeredGridItemSpan.FullLine) {
+            AdultSectionTitle("История выборов")
+        }
+        if (history.isEmpty()) {
+            item(key = "history-empty", span = StaggeredGridItemSpan.FullLine) {
+                Text(
+                    text = "Квестов пока не было",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        items(items = history, key = { "history:${it.questId}" }) { entry ->
+            QuestHistoryCard(entry, state.questProgressOf(entry.questId), firstDay)
+        }
+    }
+
+    val removing = custom.find { it.id == removingId }
+    if (removing != null) {
+        RemoveCustomQuestDialog(
+            quest = removing,
+            onConfirm = {
+                onRemoveQuest(removing.id)
+                removingId = null
+            },
+            onDismiss = { removingId = null }
+        )
     }
 }
 
 @Composable
-private fun QuestCard(entry: QuestHistoryEntry, progress: QuestProgress?, firstDay: Long) {
+private fun QuestHistoryCard(entry: QuestHistoryEntry, progress: QuestProgress?, firstDay: Long) {
     AdultCard {
         Text(
             text = entry.quest?.title ?: "Квест удалён",
@@ -779,11 +871,17 @@ private val PreviewState = GameUiState(
     quests = listOf(QuestProgress("piggy", "next", 0L, progress = 70)),
     owned = mapOf(ItemSelection("apple", "red") to 2, ItemSelection("hat", "white") to 1),
     worn = setOf(ItemSelection("hat", "white")),
-    goals = listOf(ItemSelection("ball", "blue"), ItemSelection("hat", "white"))
+    goals = listOf(ItemSelection("ball", "blue"), ItemSelection("hat", "white")),
+    customQuests = listOf(PreviewCleaningDraft.toQuest("custom-1"))
 )
 
 @Composable
-private fun AdultPreview(dark: Boolean, state: GameUiState = PreviewState, tab: AdultTab = AdultTab.DAYS) {
+private fun AdultPreview(
+    dark: Boolean,
+    state: GameUiState = PreviewState,
+    tab: AdultTab = AdultTab.DAYS,
+    questFormOpen: Boolean = false
+) {
     FinGameTheme(darkTheme = dark) {
         Surface(color = MaterialTheme.colorScheme.background) {
             AdultScreen(
@@ -791,7 +889,8 @@ private fun AdultPreview(dark: Boolean, state: GameUiState = PreviewState, tab: 
                 itemCatalog = PreviewItems,
                 questCatalog = PreviewQuests,
                 onClose = {},
-                initialTab = tab
+                initialTab = tab,
+                initialQuestFormOpen = questFormOpen
             )
         }
     }
@@ -845,3 +944,7 @@ private fun AdultEmptyPreview() = AdultPreview(dark = false, state = GameUiState
 @Composable
 private fun AdultEmptyQuestsPreview() =
     AdultPreview(dark = true, state = GameUiState(todayDay = PreviewToday), tab = AdultTab.QUESTS)
+
+@Preview(name = "Adult — Quest form, 360dp font 1.3", widthDp = 360, heightDp = 800, fontScale = 1.3f)
+@Composable
+private fun AdultQuestFormPreview() = AdultPreview(dark = false, tab = AdultTab.QUESTS, questFormOpen = true)
