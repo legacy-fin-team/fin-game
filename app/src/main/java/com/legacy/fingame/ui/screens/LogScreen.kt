@@ -101,6 +101,8 @@ private val AmountColumnMinWidth = 72.dp
  * @param modifier модификатор корня экрана.
  * @param balance текущий баланс игрока, показываемый в шапке.
  * @param depositAmount сколько лежит на вкладе, или `0`, когда вклада нет.
+ * @param firstDay день, который называется «день 1», или null — самая старая запись журнала. Хаб
+ *   взрослого передаёт свой, чтобы номера дней совпадали во всех его вкладках.
  */
 @Composable
 fun LogScreen(
@@ -109,10 +111,11 @@ fun LogScreen(
     onClose: (() -> Unit)?,
     modifier: Modifier = Modifier,
     balance: Int = 0,
-    depositAmount: Int = 0
+    depositAmount: Int = 0,
+    firstDay: Long? = null
 ) {
     val entries = log.entries
-    val oldestGameDay = log.oldestGameDay ?: 0L
+    val oldestGameDay = firstDay ?: log.oldestGameDay ?: 0L
     // Записи уже лежат новейшими вперёд, так что и дни выходят из группировки в том же порядке.
     val byDay = entries.groupBy { it.gameDay }
 

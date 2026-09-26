@@ -5,13 +5,16 @@ import com.legacy.fingame.game.adult.dayReportsOf
 import com.legacy.fingame.game.adult.purchasesOf
 import com.legacy.fingame.game.adult.questHistoryOf
 import com.legacy.fingame.game.economy.BudgetResult
+import com.legacy.fingame.game.economy.BudgetState
 import com.legacy.fingame.game.economy.MoneyEntry
 import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.economy.SpendKind
 import com.legacy.fingame.game.quests.QuestChoice
 import com.legacy.fingame.game.quests.QuestLog
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Отчёты взрослого режима: дни, покупки и история квестов из сохранённых журналов. */
@@ -125,5 +128,52 @@ class AdultReportsTest {
         assertEquals(listOf(picnicFood, picnicGames), history[0].choices)
         assertEquals(listOf(wallet), history[1].choices)
         assertEquals("gone", history[2].questId)
+    }
+
+    @Test
+    fun `the open period shows as a day in progress`() {
+        val running = BudgetState(
+            plannedMust = 40,
+            plannedWant = 20,
+            plannedSavings = 90,
+            plannedDeposit = 0,
+            spentMust = 15,
+            spentWant = 30,
+            startDay = day + 1
+        )
+        val log = MoneyLog.of(listOf(bonus(day + 1, millis + 1), bonus(day, millis)))
+
+        val reports = dayReportsOf(listOf(plan(day)), log, current = running, balance = 105)
+
+        assertEquals(2, reports.size)
+        val today = reports[0]
+        assertEquals(day + 1, today.gameDay)
+        assertTrue(today.inProgress)
+        assertEquals(
+            BudgetResult(
+                plannedMust = 40,
+                actualMust = 15,
+                plannedWant = 20,
+                actualWant = 30,
+                plannedSavings = 90,
+                actualSavings = 105,
+                plannedDeposit = 0,
+                startDay = day + 1
+            ),
+            today.plan
+        )
+        assertFalse(reports[1].inProgress)
+        assertEquals(plan(day), reports[1].plan)
+    }
+
+    @Test
+    fun `a closed plan of the same day wins over the running one`() {
+        val running = BudgetState(40, 20, 90, 0, 0, 0, startDay = day)
+
+        val reports = dayReportsOf(listOf(plan(day)), MoneyLog.EMPTY, current = running, balance = 1)
+
+        assertEquals(1, reports.size)
+        assertEquals(plan(day), reports[0].plan)
+        assertFalse(reports[0].inProgress)
     }
 }

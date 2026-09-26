@@ -5,6 +5,7 @@ import com.legacy.fingame.game.economy.BudgetResult
 import com.legacy.fingame.game.economy.MoneyEntry
 import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.quests.QuestChoice
+import com.legacy.fingame.game.quests.QuestLog
 import com.legacy.fingame.game.quests.QuestProgress
 import com.legacy.fingame.game.quests.QuestStatus
 import com.legacy.fingame.ui.screens.DayVerdict
@@ -52,6 +53,18 @@ class AdultFormatTest {
         val report = day(plan(100 to 130, 50 to 60))
         assertEquals(DayVerdict.OVERSPENT, dayVerdictOf(report))
         assertEquals("Перерасход +40", dayVerdictText(report))
+    }
+
+    @Test
+    fun `a running plan is in progress until it is overspent`() {
+        assertEquals("План идёт", dayVerdictText(day(plan(100 to 40, 50 to 20)).copy(inProgress = true)))
+        assertEquals("Перерасход +10", dayVerdictText(day(plan(100 to 110, 50 to 20)).copy(inProgress = true)))
+    }
+
+    @Test
+    fun `quest choices count toward the first day too`() {
+        val quests = QuestLog(listOf(QuestChoice("q", "n", "Да", 0, 0, 18_990L, 1L)))
+        assertEquals(18_990L, adultFirstDayOf(MoneyLog.EMPTY, emptyList(), 19_005L, quests))
     }
 
     @Test

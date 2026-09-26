@@ -51,6 +51,7 @@ import com.legacy.fingame.game.adult.dayReportsOf
 import com.legacy.fingame.game.adult.purchasesOf
 import com.legacy.fingame.game.adult.questHistoryOf
 import com.legacy.fingame.game.economy.BudgetResult
+import com.legacy.fingame.game.economy.BudgetState
 import com.legacy.fingame.game.economy.MoneyEntry
 import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.economy.SpendKind
@@ -93,6 +94,12 @@ private val TitleMinSize = 16.dp
 
 /** Мельче этого подписи в карточках не ужимаются. */
 private val LabelMinSize = 9.dp
+
+/** Сколько вкладок в строке стоя: шесть вкладок — две строки. */
+private const val TabsPerRow = 3
+
+/** Поля кнопки вкладки в «буквах» — добавка к длине подписи, когда делится ширина строки. */
+private const val TabPaddingChars = 3
 
 /** Шаг между карточками. */
 private val CardGap = 12.dp
@@ -137,7 +144,7 @@ fun AdultScreen(
 ) {
     var tab by rememberSaveable { mutableStateOf(initialTab) }
     val short = GameDimens.isShortScreen
-    val firstDay = adultFirstDayOf(state.moneyLog, state.budgetHistory, state.todayDay)
+    val firstDay = adultFirstDayOf(state.moneyLog, state.budgetHistory, state.todayDay, state.questLog)
     // Две колонки карточек нужны только лёжа: стоя — и на планшете — одна колонка читается легче.
     val contentMaxWidth = if (short) GameDimens.ContentMaxWidth * 2 else GameDimens.ContentMaxWidth
 
@@ -170,7 +177,12 @@ fun AdultScreen(
                     )
                     AdultClose(onClose)
                 }
-                AdultTabs(tab = tab, onSelect = { tab = it }, modifier = Modifier.fillMaxWidth())
+                AdultTabs(
+                    tab = tab,
+                    onSelect = { tab = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    wrap = true
+                )
             }
         }
 
@@ -204,7 +216,8 @@ fun AdultScreen(
                     onOpenBudget = null,
                     onClose = null,
                     balance = state.balance,
-                    depositAmount = state.depositAmount
+                    depositAmount = state.depositAmount,
+                    firstDay = firstDay
                 )
             }
         }
@@ -261,21 +274,47 @@ private fun AdultClose(onClose: () -> Unit) {
     )
 }
 
-/** Ряд вкладок: прокручивается вбок, когда все не помещаются. */
+/**
+ * Вкладки. Стоя — две строки по три кнопки, ширина каждой по длине подписи: все шесть видны сразу,
+ * а при крупном шрифте подписи ужимаются целиком (как во всех кнопках игры), а не режутся. Лёжа высоты
+ * нет, и вкладки стоят одним рядом, который прокручивается вбок.
+ */
 @Composable
-private fun AdultTabs(tab: AdultTab, onSelect: (AdultTab) -> Unit, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        AdultTab.entries.forEach { entry ->
-            PillButton(
-                text = entry.title,
-                onClick = { onSelect(entry) },
-                selected = entry == tab,
-                compact = true,
-                autoShrink = false
-            )
+private fun AdultTabs(
+    tab: AdultTab,
+    onSelect: (AdultTab) -> Unit,
+    modifier: Modifier = Modifier,
+    wrap: Boolean = false
+) {
+    @Composable
+    fun TabButton(entry: AdultTab, buttonModifier: Modifier = Modifier) {
+        PillButton(
+            text = entry.title,
+            onClick = { onSelect(entry) },
+            selected = entry == tab,
+            compact = true,
+            autoShrink = wrap,
+            modifier = buttonModifier
+        )
+    }
+    if (wrap) {
+        Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            AdultTab.entries.chunked(TabsPerRow).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Ширина — по длине подписи: так при крупном шрифте все подписи ужимаются
+                    // одинаково, а не одна «Инвентарь» до многоточия.
+                    row.forEach { entry ->
+                        TabButton(entry, Modifier.weight((entry.title.length + TabPaddingChars).toFloat()))
+                    }
+                }
+            }
+        }
+    } else {
+        Row(
+            modifier = modifier.horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            AdultTab.entries.forEach { entry -> TabButton(entry) }
         }
     }
 }
@@ -433,6 +472,7 @@ private fun VerdictText(report: DayReport) {
         style = MaterialTheme.typography.titleSmall,
         color = when (dayVerdictOf(report)) {
             DayVerdict.DONE -> GameColors.success
+            DayVerdict.IN_PROGRESS -> MaterialTheme.colorScheme.onSurface
             DayVerdict.OVERSPENT -> MaterialTheme.colorScheme.error
             DayVerdict.NO_PLAN -> MaterialTheme.colorScheme.onSurfaceVariant
         },
@@ -481,8 +521,8 @@ private fun PurchaseRow(entry: MoneyEntry, itemCatalog: ItemCatalog) {
 
 @Composable
 private fun DaysTab(state: GameUiState, itemCatalog: ItemCatalog, firstDay: Long) {
-    val reports = remember(state.budgetHistory, state.moneyLog) {
-        dayReportsOf(state.budgetHistory, state.moneyLog)
+    val reports = remember(state.budgetHistory, state.moneyLog, state.budget, state.balance) {
+        dayReportsOf(state.budgetHistory, state.moneyLog, current = state.budget, balance = state.balance)
     }
     if (reports.isEmpty()) {
         EmptyText("Пока пусто")
@@ -666,6 +706,7 @@ private val PreviewState = GameUiState(
             MoneyEntry("Бонус дня", 50, PreviewToday - 2, 1_789_700_000_000L)
         )
     ),
+    budget = BudgetState(100, 60, 85, 0, 0, 120, startDay = PreviewToday),
     budgetHistory = listOf(
         BudgetResult(100, 45, 50, 120, 100, 80, 0, startDay = PreviewToday - 1),
         BudgetResult(100, 60, 100, 60, 50, 90, 0, startDay = PreviewToday - 2)

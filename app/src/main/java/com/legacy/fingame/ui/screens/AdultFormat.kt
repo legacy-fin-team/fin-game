@@ -5,6 +5,7 @@ import com.legacy.fingame.game.economy.BudgetResult
 import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestChoice
+import com.legacy.fingame.game.quests.QuestLog
 import com.legacy.fingame.game.quests.QuestProgress
 import com.legacy.fingame.ui.components.Sprites
 import java.time.LocalDate
@@ -35,6 +36,9 @@ enum class DayVerdict {
     /** План был, и траты вышли за него. */
     OVERSPENT,
 
+    /** План этого дня ещё идёт, и траты пока в него укладываются. */
+    IN_PROGRESS,
+
     /** В этот день плана не подтверждали. */
     NO_PLAN
 }
@@ -46,11 +50,18 @@ enum class DayVerdict {
  * @param log журнал денег.
  * @param history история бюджета.
  * @param todayDay сегодняшний игровой день — пока истории нет, счёт идёт от сегодня.
+ * @param questLog выборы в квестах — их дни тоже в счёте.
  * @return День, который называется первым.
  */
-fun adultFirstDayOf(log: MoneyLog, history: List<BudgetResult>, todayDay: Long): Long {
+fun adultFirstDayOf(
+    log: MoneyLog,
+    history: List<BudgetResult>,
+    todayDay: Long,
+    questLog: QuestLog = QuestLog.EMPTY
+): Long {
     val oldestPlan = history.map { it.startDay }.filter { it > 0L }.minOrNull()
-    return listOfNotNull(log.oldestGameDay, oldestPlan, todayDay).min()
+    val oldestChoice = questLog.entries.minOfOrNull { it.gameDay }
+    return listOfNotNull(log.oldestGameDay, oldestPlan, oldestChoice, todayDay).min()
 }
 
 /**
@@ -77,16 +88,18 @@ fun overspendOf(report: DayReport): Int {
 fun dayVerdictOf(report: DayReport): DayVerdict = when {
     report.plan == null -> DayVerdict.NO_PLAN
     overspendOf(report) > 0 -> DayVerdict.OVERSPENT
+    report.inProgress -> DayVerdict.IN_PROGRESS
     else -> DayVerdict.DONE
 }
 
 /**
  * @param report день.
- * @return Итог дня одной строкой: «План выполнен», «Перерасход +30» или «Без плана».
+ * @return Итог дня одной строкой: «План выполнен», «План идёт», «Перерасход +30» или «Без плана».
  */
 fun dayVerdictText(report: DayReport): String = when (dayVerdictOf(report)) {
     DayVerdict.DONE -> "План выполнен"
     DayVerdict.OVERSPENT -> "Перерасход +${overspendOf(report)}"
+    DayVerdict.IN_PROGRESS -> "План идёт"
     DayVerdict.NO_PLAN -> "Без плана"
 }
 

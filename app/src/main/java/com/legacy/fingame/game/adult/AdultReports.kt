@@ -1,6 +1,7 @@
 package com.legacy.fingame.game.adult
 
 import com.legacy.fingame.game.economy.BudgetResult
+import com.legacy.fingame.game.economy.BudgetState
 import com.legacy.fingame.game.economy.MoneyEntry
 import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.economy.SpendKind
@@ -20,6 +21,8 @@ import com.legacy.fingame.game.quests.QuestLog
  * Покупки из журнала версии до истории покупок категории не знают и сюда не попадают.
  * @property earned сколько в этот день пришло на текущий счёт: бонус, награды, вернувшийся вклад.
  * @property purchases покупки этого дня (записи с товаром), новейшая первой.
+ * @property inProgress план этого дня ещё идёт: период не закрыт, [plan] — предварительный итог
+ * (факт — сколько уже потрачено, сбережения — что сейчас на счёте).
  */
 data class DayReport(
     val gameDay: Long,
@@ -27,7 +30,8 @@ data class DayReport(
     val spentMust: Int,
     val spentWant: Int,
     val earned: Int,
-    val purchases: List<MoneyEntry>
+    val purchases: List<MoneyEntry>,
+    val inProgress: Boolean = false
 )
 
 /**
@@ -49,16 +53,29 @@ data class QuestHistoryEntry(
  * @param log журнал денег.
  * @return Дни от новых к старым — только те, в которые начинался период или двигались деньги.
  * Если в один день подтверждали несколько планов, берётся последний.
+ *
+ * @param current идущий, ещё не закрытый период ([com.legacy.fingame.game.GameUiState.budget]):
+ * его день показывается с предварительным итогом и [DayReport.inProgress]. Если на этот день в
+ * истории уже есть закрытый итог, главнее история.
+ * @param balance что сейчас на счёте — «факт» сбережений идущего периода.
  */
-fun dayReportsOf(history: List<BudgetResult>, log: MoneyLog): List<DayReport> {
+fun dayReportsOf(
+    history: List<BudgetResult>,
+    log: MoneyLog,
+    current: BudgetState? = null,
+    balance: Int = 0
+): List<DayReport> {
     // История — новейший первым, поэтому первый итог дня и есть последний подтверждённый.
-    val plans = history.groupBy { it.startDay }.mapValues { (_, results) -> results.first() }
+    val closed = history.groupBy { it.startDay }.mapValues { (_, results) -> results.first() }
+    val running = current?.takeIf { it.startDay !in closed }
+    val plans = if (running == null) closed else closed + (running.startDay to running.preliminaryResult(balance))
     val entriesByDay = log.entries.groupBy { it.gameDay }
     val days = (plans.keys + entriesByDay.keys).sortedDescending()
     return days.map { day ->
         val entries = entriesByDay[day].orEmpty()
         DayReport(
             gameDay = day,
+            inProgress = running != null && day == running.startDay,
             plan = plans[day],
             spentMust = spentOn(entries, SpendKind.MUST),
             spentWant = spentOn(entries, SpendKind.WANT),
@@ -88,6 +105,18 @@ fun questHistoryOf(log: QuestLog, catalog: QuestCatalog): List<QuestHistoryEntry
             choices = choices.sortedBy { it.timestampMillis }
         )
     }
+
+/** Итог идущего периода, каким он был бы, закройся период сейчас. */
+private fun BudgetState.preliminaryResult(balance: Int) = BudgetResult(
+    plannedMust = plannedMust,
+    actualMust = spentMust,
+    plannedWant = plannedWant,
+    actualWant = spentWant,
+    plannedSavings = plannedSavings,
+    actualSavings = balance,
+    plannedDeposit = plannedDeposit,
+    startDay = startDay
+)
 
 private fun spentOn(entries: List<MoneyEntry>, kind: SpendKind): Int =
     entries.filter { it.spendKind == kind && it.delta < 0 }.sumOf { -it.delta }
