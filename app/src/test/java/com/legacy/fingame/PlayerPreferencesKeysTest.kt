@@ -47,4 +47,9 @@ class PlayerPreferencesKeysTest {
         assertTrue(PlayerPreferences.KEY_QUESTS_SEEN_AT in PlayerPreferences.LIVE_KEYS)
         assertTrue(PlayerPreferences.KEY_LAST_RANDOM_QUEST_AT in PlayerPreferences.LIVE_KEYS)
     }
+
+    @Test
+    fun `the goals are written under a key of their own`() {
+        assertTrue("goals" in PlayerPreferences.LIVE_KEYS)
+    }
 }

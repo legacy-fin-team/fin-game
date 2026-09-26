@@ -108,6 +108,9 @@ enum class Screen {
  * @property worn which of the owned items are on the pet right now, restored from
  * [PlayerState.worn]. What is drawn on the game area's layers is built out of it (see
  * [com.legacy.fingame.game.scene.GameScene]).
+ * @property goals цели игрока — товары в варианте, отмеченные звёздочкой в магазине, в том
+ * порядке, в каком он их отмечал; восстанавливаются из [PlayerState.goals]. Купленное из них
+ * уходит само (см. [GameViewModel.buyCart]).
  * @property stats the pet's stat bars, restored from [PlayerState.stats] and brought up to date by
  * [GameViewModel.tick] as time passes.
  * @property statsUpdatedAtMillis moment [stats] were last brought up to date, kept here so it can be
@@ -151,6 +154,7 @@ data class GameUiState(
     val cartPrice: Int = 0,
     val owned: Map<ItemSelection, Int> = emptyMap(),
     val worn: Set<ItemSelection> = emptySet(),
+    val goals: List<ItemSelection> = emptyList(),
     val stats: PetStats = PetStats.FULL,
     val statsUpdatedAtMillis: Long = PlayerState.NEVER_UPDATED,
     val petAge: Int = Animal.FIRST_AGE,
@@ -219,6 +223,13 @@ data class GameUiState(
      */
     fun ownedCountOf(item: Item): Int =
         owned[ItemSelection(item.id, pickedVariantOf(item))] ?: 0
+
+    /**
+     * @param item товар на полке магазина.
+     * @return Отмечен ли звёздочкой именно тот вариант [item], который сейчас выбран: белая шляпа
+     * может быть целью, а чёрная — нет.
+     */
+    fun isGoal(item: Item): Boolean = ItemSelection(item.id, pickedVariantOf(item)) in goals
 }
 
 /**
@@ -671,6 +682,46 @@ class GameViewModel(
     }
 
     /**
+     * Отмечает товар целью или снимает отметку — это делает звёздочка на карточке магазина. Цель
+     * сохраняется сразу и переживает перезапуск; новая цель встаёт в конец, так что карточки на
+     * главном экране не меняются местами.
+     *
+     * Целью может быть только то, на что можно копить: товар, который есть в магазине, в варианте,
+     * который у него есть, и не уже купленная вещь (еду покупают снова и снова, поэтому она целью
+     * быть может). Снять отметку можно всегда.
+     *
+     * @param selection товар и вариант, выбранный на карточке.
+     * @return True, когда цель добавлена или снята, false, когда такой товар целью стать не может.
+     */
+    fun toggleGoal(selection: ItemSelection): Boolean {
+        val current = _state.value
+        val goals = if (selection in current.goals) {
+            current.goals - selection
+        } else {
+            if (!canBeGoal(selection, current.owned)) return false
+            current.goals + selection
+        }
+
+        _state.value = current.copy(goals = goals)
+        persist()
+        return true
+    }
+
+    /**
+     * Открывает магазин по нажатию на карточку цели: на полке товара и с вариантом цели, так что
+     * игрок сразу видит свою звёздочку и кнопку покупки. Цель на товар, которого в магазине больше
+     * нет, открывает магазин как есть.
+     *
+     * @param selection цель, по карточке которой нажали.
+     */
+    fun openGoal(selection: ItemSelection) {
+        openScreen(Screen.SHOP)
+        val item = catalog.findItemById(selection.itemId) ?: return
+        selectCategory(item.category)
+        pickVariant(item.id, selection.variantId)
+    }
+
+    /**
      * Selects the shop section currently shown to the player.
      *
      * @param category the category to show.
@@ -743,6 +794,9 @@ class GameViewModel(
      * the pet, which is what the purchase was for. The cart is emptied either way, so nothing of it
      * is left to be paid for twice.
      *
+     * Купленное перестаёт быть целью — на него накопили; другой вариант того же товара, если он
+     * тоже был целью, остаётся.
+     *
      * @return True when the purchase went through, false when there was nothing to buy or not
      * enough money for it.
      */
@@ -751,6 +805,7 @@ class GameViewModel(
         if (!current.canBuyCart) return false
 
         val owned = current.owned.toMutableMap()
+        val bought = mutableSetOf<ItemSelection>()
         var logged = current
         var spentMust = 0
         var spentWant = 0
@@ -759,6 +814,7 @@ class GameViewModel(
             val item = catalog.findItemById(itemId) ?: return@forEach
             val key = ItemSelection(itemId, current.pickedVariantOf(item))
             owned[key] = (owned[key] ?: 0) + quantity
+            bought += key
             val cost = item.price * quantity
             when (item.category.spendKind) {
                 SpendKind.MUST -> spentMust += cost
@@ -773,6 +829,7 @@ class GameViewModel(
         _state.value = stateForNavigatingTo(Screen.MAIN).copy(
             balance = current.balance - (spentMust + spentWant),
             owned = owned.toMap(),
+            goals = current.goals.filterNot { goal -> goal in bought },
             quantities = emptyMap(),
             pickedVariants = emptyMap(),
             cartPrice = 0,
@@ -1113,6 +1170,7 @@ class GameViewModel(
             ),
             owned = saved.owned,
             worn = wearableOf(saved.worn, saved.owned),
+            goals = goalsOf(saved.goals, saved.owned),
             stats = saved.stats.decayedBy(ticks),
             statsUpdatedAtMillis = statsUpdatedAt + ticks * PetStats.TICK_MILLIS,
             petAge = Growth.ageAt(bornAt, now),
@@ -1140,6 +1198,31 @@ class GameViewModel(
         owned: Map<ItemSelection, Int>
     ): Set<ItemSelection> = worn.filterTo(mutableSetOf()) { selection ->
         (owned[selection] ?: 0) > 0 && catalog.findItemById(selection.itemId)?.isWearable == true
+    }
+
+    /**
+     * Оставляет из сохранённых целей только те, на которые ещё можно копить: товары и их варианты
+     * могут пропасть из данных между запусками, а купленная вещь целью уже не является.
+     *
+     * @param goals цели, как их сохранили.
+     * @param owned что у игрока есть.
+     * @return Годные цели в сохранённом порядке, без повторов.
+     */
+    private fun goalsOf(
+        goals: List<ItemSelection>,
+        owned: Map<ItemSelection, Int>
+    ): List<ItemSelection> = goals.distinct().filter { goal -> canBeGoal(goal, owned) }
+
+    /**
+     * @param selection товар и вариант.
+     * @param owned что у игрока есть.
+     * @return Можно ли на [selection] копить: товар есть в каталоге, вариант у него есть, и это не
+     * уже купленная вещь. Еда годится всегда — её покупают снова.
+     */
+    private fun canBeGoal(selection: ItemSelection, owned: Map<ItemSelection, Int>): Boolean {
+        val item = catalog.findItemById(selection.itemId) ?: return false
+        if (selection.variantId !in item.variantIds) return false
+        return item.category.use == ItemUse.CONSUMED || (owned[selection] ?: 0) <= 0
     }
 
     /**
@@ -1177,6 +1260,7 @@ class GameViewModel(
                 lastDailyBonusDay = current.lastDailyBonusDay,
                 owned = current.owned,
                 worn = current.worn,
+                goals = current.goals,
                 stats = current.stats,
                 statsUpdatedAtMillis = current.statsUpdatedAtMillis,
                 petBornAtMillis = current.petBornAtMillis,

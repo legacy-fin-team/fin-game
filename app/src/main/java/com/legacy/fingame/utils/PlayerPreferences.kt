@@ -18,10 +18,12 @@ import com.legacy.fingame.game.stats.StatKind
  * the app being closed and the process being killed.
  *
  * Every value is stored under a key of its own rather than as one blob, so a state that grew a
- * new field still reads back on a device that saved it before the field existed. The
- * exceptions are [PlayerState.moneyLog] and [PlayerState.quests]: both are lists of variable
- * length, and a key per record would turn the preferences into a file of thousands of lines, so
- * each is written as a single string by [MoneyLogCodec] and [QuestStateCodec] instead.
+ * new field still reads back on a device that saved it before the field existed. The exceptions
+ * are [PlayerState.moneyLog], [PlayerState.quests] and [PlayerState.goals]: all are lists of
+ * variable length, and a key per record would turn the preferences into a file of thousands of
+ * lines, so each is written as a single string, by [MoneyLogCodec], [QuestStateCodec] and
+ * [GoalsCodec] respectively. The goals are a string rather than a string set because their order
+ * is the player's own, and a set would lose it.
  *
  * @param context current local application context. Used to get access to SharedPreferences.
  */
@@ -71,6 +73,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         private const val KEY_BUDGET_DRAFT_DEPOSIT_TERM_DAYS = "budget_draft_deposit_term_days"
         private const val KEY_PLANNING_OPEN = "planning_open"
         private const val KEY_MONEY_LOG = "money_log"
+        private const val KEY_GOALS = "goals"
 
         /** Состояние квестов одной строкой, см. [QuestStateCodec]. */
         internal const val KEY_QUESTS = "quests"
@@ -151,7 +154,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             KEY_MONEY_LOG,
             KEY_QUESTS,
             KEY_QUESTS_SEEN_AT,
-            KEY_LAST_RANDOM_QUEST_AT
+            KEY_LAST_RANDOM_QUEST_AT,
+            KEY_GOALS
         )
 
         /** Prefix of the key one stat bar is stored under, completed by [StatKind.xmlName]. */
@@ -204,6 +208,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             ),
             owned = readOwned(defaults.owned),
             worn = readWorn(defaults.worn),
+            goals = GoalsCodec.decode(preferences.getString(KEY_GOALS, null)),
             stats = readStats(defaults.stats),
             statsUpdatedAtMillis = preferences.getLong(
                 KEY_STATS_UPDATED_AT,
@@ -285,6 +290,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             .putString(KEY_QUESTS, QuestStateCodec.encode(state.quests))
             .putLong(KEY_QUESTS_SEEN_AT, state.questsSeenAtMillis)
             .putLong(KEY_LAST_RANDOM_QUEST_AT, state.lastRandomQuestAtMillis)
+            .putString(KEY_GOALS, GoalsCodec.encode(state.goals))
 
         StatKind.entries.forEach { stat ->
             editor.putInt(KEY_STAT_PREFIX + stat.xmlName, state.stats[stat])
