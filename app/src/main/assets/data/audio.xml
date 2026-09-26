@@ -7,6 +7,8 @@
 -->
 <audio>
     <background>
-        <track file="music/background/music_for_kids.ogg"/>
+        <track file="music/background/piano-208-octave-long.ogg"/>
+        <track file="music/background/piano-214-octave-down-long.ogg"/>
+        <track file="music/background/piano-214-octave-long.ogg"/>
     </background>
 </audio>
