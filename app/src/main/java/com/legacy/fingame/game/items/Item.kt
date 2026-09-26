@@ -25,6 +25,8 @@ import com.legacy.fingame.game.stats.StatKind
  * that is never drawn there. Defaults to [ItemCategory.defaultLayer], so only items that stand apart
  * from their category — a decoration in front of the pet rather than behind it — name a layer of
  * their own in the data.
+ * @property iconOverride готовая иконка из набора игры вместо папки предмета — у своих предметов
+ * взрослого (см. [CustomItems]), которым никто не рисовал `items/<id>/…`; null у предметов игры.
  */
 data class Item(
     val id: String,
@@ -33,7 +35,8 @@ data class Item(
     val category: ItemCategory,
     val variantIds: List<String>,
     val declaredEffects: Map<StatKind, Int> = emptyMap(),
-    val layer: GameLayer? = category.defaultLayer
+    val layer: GameLayer? = category.defaultLayer,
+    val iconOverride: String? = null
 ) {
     init {
         require(variantIds.isNotEmpty()) { "Item '$id' has no variants." }
@@ -71,7 +74,8 @@ data class Item(
      * @return Path to the icon relative to /assets/textures/, e.g. 'items/hat/black/icon.webp'; see
      * [ItemSprites.icon].
      */
-    fun getIconPath(variantId: String): String = ItemSprites.icon(id, variantOrDefault(variantId))
+    fun getIconPath(variantId: String): String =
+        iconOverride ?: ItemSprites.icon(id, variantOrDefault(variantId))
 
     /**
      * Builds the path to the sprite of the item as it is worn, i.e. what the game area draws on the

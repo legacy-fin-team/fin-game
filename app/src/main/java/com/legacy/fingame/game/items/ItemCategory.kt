@@ -23,7 +23,10 @@ enum class ItemCategory(
     FOOD("food", ItemUse.CONSUMED, null, SpendKind.MUST),
     TOYS("toys", ItemUse.REUSABLE, null, SpendKind.MUST),
     CLOTHES("clothes", ItemUse.WEARABLE, GameLayer.CLOTHES, SpendKind.WANT),
-    DECOR("decor", ItemUse.WEARABLE, GameLayer.ENVIRONMENT_BACK, SpendKind.WANT);
+    DECOR("decor", ItemUse.WEARABLE, GameLayer.ENVIRONMENT_BACK, SpendKind.WANT),
+
+    /** «Другое» — раздел для своих предметов взрослого; в магазине виден, только когда не пуст. */
+    OTHER("other", ItemUse.REUSABLE, null, SpendKind.WANT);
 
     companion object {
         /**

@@ -9,6 +9,7 @@ import com.legacy.fingame.game.economy.Deposit
 import com.legacy.fingame.game.economy.Economy
 import com.legacy.fingame.game.economy.FastForwardClock
 import com.legacy.fingame.game.economy.MoneyLog
+import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.quests.QuestLog
 import com.legacy.fingame.game.quests.QuestProgress
@@ -109,7 +110,8 @@ data class PlayerState(
     val quests: List<QuestProgress> = emptyList(),
     val questsSeenAtMillis: Long = QUESTS_NEVER_SEEN,
     val lastRandomQuestAtMillis: Long = NO_RANDOM_QUEST,
-    val questLog: QuestLog = QuestLog.EMPTY
+    val questLog: QuestLog = QuestLog.EMPTY,
+    val customItems: List<Item> = emptyList()
 ) {
     companion object {
         /**

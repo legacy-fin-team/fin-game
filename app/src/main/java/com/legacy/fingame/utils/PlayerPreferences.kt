@@ -1,5 +1,6 @@
 package com.legacy.fingame.utils
 
+import com.legacy.fingame.game.items.CustomItemsCodec
 import android.content.Context
 import android.util.Log
 import com.legacy.fingame.game.PlayerState
@@ -92,6 +93,9 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         /** Журнал выборов в квестах одной строкой, см. [QuestLogCodec]. */
         internal const val KEY_QUEST_LOG = "quest_log"
 
+        /** Свои предметы взрослого одной строкой, см. [CustomItemsCodec]. */
+        internal const val KEY_CUSTOM_ITEMS = "custom_items"
+
         /** Key the savings account was stored under, read once more to hand the money back. */
         private const val KEY_RETIRED_SAVINGS = "savings"
 
@@ -166,7 +170,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             KEY_QUESTS_SEEN_AT,
             KEY_LAST_RANDOM_QUEST_AT,
             KEY_QUEST_LOG,
-            KEY_GOALS
+            KEY_GOALS,
+            KEY_CUSTOM_ITEMS
         )
 
         /** Prefix of the key one stat bar is stored under, completed by [StatKind.xmlName]. */
@@ -240,7 +245,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
                 KEY_LAST_RANDOM_QUEST_AT,
                 defaults.lastRandomQuestAtMillis
             ),
-            questLog = QuestLogCodec.decode(preferences.getString(KEY_QUEST_LOG, null))
+            questLog = QuestLogCodec.decode(preferences.getString(KEY_QUEST_LOG, null)),
+            customItems = CustomItemsCodec.decode(preferences.getString(KEY_CUSTOM_ITEMS, null))
         )
     }
 
@@ -309,6 +315,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             .putLong(KEY_LAST_RANDOM_QUEST_AT, state.lastRandomQuestAtMillis)
             .putString(KEY_GOALS, GoalsCodec.encode(state.goals))
             .putString(KEY_QUEST_LOG, QuestLogCodec.encode(state.questLog))
+            .putString(KEY_CUSTOM_ITEMS, CustomItemsCodec.encode(state.customItems))
 
         StatKind.entries.forEach { stat ->
             editor.putInt(KEY_STAT_PREFIX + stat.xmlName, state.stats[stat])
