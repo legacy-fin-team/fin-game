@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Аудио игры.
+    <background> — фоновая музыка: пути относительно assets/audio/. Играет первый трек из списка,
+    который нашёлся в assets. Если список пуст или файла нет — берётся первый по имени файл
+    из assets/audio/music/background/.
+-->
+<audio>
+    <background>
+        <track file="music/background/music_for_kids.ogg"/>
+    </background>
+</audio>

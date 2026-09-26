@@ -14,19 +14,39 @@ import android.util.Log
  * Звуки — короткие реакции на действия пользователя.
  *
  * Файлы ожидаются в assets:
- * - Музыка: `audio/music/`
+ * - Музыка: список треков в `data/audio.xml` (см. [AudioReader]), запасной вариант —
+ *   первый по имени файл из `audio/music/background/`
  * - Звуки животных: `audio/sounds/animal/`
  */
 class AudioManager(private val context: Context) {
 
     companion object {
         private const val TAG = "AudioManager"
-        private const val MUSIC_DIR = "audio/music"
+        private const val AUDIO_DIR = "audio"
+        private const val MUSIC_BACKGROUND_DIR = "audio/music/background"
+        private const val AUDIO_DATA = "data/audio.xml"
         private const val SOUNDS_ANIMAL_DIR = "audio/sounds/animal"
         private const val MAX_STREAMS = 4
 
         /** Звук «погладил» при нажатии на питомца: `audio/sounds/animal/pat.wav`. */
         const val SOUND_PAT = "pat"
+
+        /**
+         * Выбирает трек фоновой музыки.
+         *
+         * @param declared треки из `data/audio.xml` (пути относительно `assets/audio/`), по порядку.
+         * @param folderFiles имена файлов в `audio/music/background/`.
+         * @param exists есть ли такой путь (относительно `assets/`) на самом деле.
+         * @return Путь относительно `assets/`: первый объявленный трек, который существует, иначе
+         *   первый по имени файл из папки, иначе null — музыки нет.
+         */
+        fun chooseBackgroundTrack(
+            declared: List<String>,
+            folderFiles: List<String>,
+            exists: (String) -> Boolean
+        ): String? =
+            declared.map { "$AUDIO_DIR/${it.trimStart('/')}" }.firstOrNull(exists)
+                ?: folderFiles.sorted().firstOrNull()?.let { "$MUSIC_BACKGROUND_DIR/$it" }
     }
 
     private var mediaPlayer: MediaPlayer? = null
@@ -65,19 +85,19 @@ class AudioManager(private val context: Context) {
     }
 
     /**
-     * Запускает фоновую музыку. Берёт первый файл из `audio/music/`.
+     * Запускает фоновую музыку: первый трек из `data/audio.xml`, а если его нет —
+     * первый по имени файл из `audio/music/background/`.
      */
     fun startMusic() {
         if (!musicEnabled) return
         if (mediaPlayer != null) return // уже играет
 
         try {
-            val musicFiles = context.assets.list(MUSIC_DIR)
-            if (musicFiles.isNullOrEmpty()) {
-                Log.w(TAG, "Нет музыкальных файлов в $MUSIC_DIR")
+            val musicFile = findBackgroundTrack()
+            if (musicFile == null) {
+                Log.w(TAG, "Нет фоновой музыки ни в $AUDIO_DATA, ни в $MUSIC_BACKGROUND_DIR")
                 return
             }
-            val musicFile = "$MUSIC_DIR/${musicFiles[0]}"
             val afd: AssetFileDescriptor = context.assets.openFd(musicFile)
 
             mediaPlayer = MediaPlayer().apply {
@@ -147,6 +167,30 @@ class AudioManager(private val context: Context) {
         soundPool = null
         loadedSounds.clear()
     }
+
+    /**
+     * Ищет трек фоновой музыки по данным и по папке (см. [chooseBackgroundTrack]).
+     */
+    private fun findBackgroundTrack(): String? {
+        val declared = try {
+            context.assets.open(AUDIO_DATA).use { AudioReader().readBackgroundTracks(it) }
+        } catch (e: Exception) {
+            Log.w(TAG, "Нет $AUDIO_DATA, музыка берётся из папки")
+            emptyList()
+        }
+        val folderFiles = assetList(MUSIC_BACKGROUND_DIR)
+        return chooseBackgroundTrack(declared, folderFiles) { path ->
+            path.substringAfterLast('/') in assetList(path.substringBeforeLast('/', ""))
+        }
+    }
+
+    /** Имена файлов в папке assets, пусто если папки нет. */
+    private fun assetList(dir: String): List<String> =
+        try {
+            context.assets.list(dir)?.toList().orEmpty()
+        } catch (e: Exception) {
+            emptyList()
+        }
 
     /**
      * Загружает все звуки из `audio/sounds/animal/`.
