@@ -29,12 +29,13 @@ import com.legacy.fingame.game.scene.SceneSprite
 import com.legacy.fingame.game.settings.AudioManager
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.ui.components.Sprites
+import com.legacy.fingame.ui.screens.AdultLockScreen
+import com.legacy.fingame.ui.screens.AdultScreen
 import com.legacy.fingame.ui.screens.AnimalSelectScreen
 import com.legacy.fingame.ui.screens.BudgetScreen
 import com.legacy.fingame.ui.screens.InventoryScreen
 import com.legacy.fingame.ui.screens.LogScreen
 import com.legacy.fingame.ui.screens.MainScreen
-import com.legacy.fingame.ui.screens.PlaceholderScreen
 import com.legacy.fingame.ui.screens.QuestsScreen
 import com.legacy.fingame.ui.screens.SettingsScreen
 import com.legacy.fingame.ui.screens.ShopScreen
@@ -61,7 +62,8 @@ private const val TICK_POLLS_PER_TICK = 10L
  *
  * Layout: a full-size [Surface] with an [AnimatedContent] that cross-fades between
  * [MainScreen], [ShopScreen], [InventoryScreen], [QuestsScreen], [BudgetScreen], [LogScreen],
- * [SettingsScreen] and the [PlaceholderScreen] for the yet-unspecified adult mode section, based on
+ * [SettingsScreen], the lock in front of the adult mode ([AdultLockScreen]) and the adult hub
+ * ([AdultScreen]), based on
  * [GameUiState.screen].
  *
  * While there is a pet to look after, this is also where its life goes on: a loop asks
@@ -102,6 +104,7 @@ fun FinGameApp(
     val savedSelection = state.selection
     val pet = savedSelection?.takeIf { animalRegistry.hasVariant(it.animalId, it.variantId) }
 
+    // «Назад» из режима взрослого и из замка ведёт в настройки (см. [GameViewModel.closeScreen]).
     BackHandler(enabled = state.screen != Screen.MAIN) { vm.closeScreen() }
 
     Surface(
@@ -232,15 +235,21 @@ fun FinGameApp(
                     Screen.OPTIONS -> SettingsScreen(
                         settings = state.settings,
                         onSettingsChanged = vm::updateSettings,
-                        onOpenAdultMode = { vm.openScreen(Screen.ADULT_MODE) },
+                        onOpenAdultMode = { vm.openScreen(Screen.ADULT_LOCK) },
                         onResetProgress = vm::resetProgress,
                         onBack = vm::closeScreen
                     )
 
-                    Screen.ADULT_LOCK, Screen.ADULT_MODE -> PlaceholderScreen(
-                        "Режим взрослого",
-                        Sprites.SETTINGS,
-                        vm::closeScreen
+                    Screen.ADULT_LOCK -> AdultLockScreen(
+                        onSolved = vm::enterAdultMode,
+                        onClose = vm::closeScreen
+                    )
+
+                    Screen.ADULT_MODE -> AdultScreen(
+                        state = state,
+                        itemCatalog = itemRegistry,
+                        questCatalog = questRegistry,
+                        onClose = vm::exitAdultMode
                     )
                 }
             }
