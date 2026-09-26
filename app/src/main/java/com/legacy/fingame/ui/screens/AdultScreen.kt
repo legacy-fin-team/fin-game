@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.isImeVisible
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -33,7 +32,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -49,6 +50,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.legacy.fingame.game.GameUiState
@@ -90,6 +93,8 @@ import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
 import com.legacy.fingame.utils.SpriteLoader
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 
 /** Размер крестика — как на остальных экранах. */
 private val AdultCloseSize = 40.dp
@@ -109,11 +114,14 @@ private val LabelMinSize = 9.dp
 /** Сколько вкладок в первой строке, когда их две: 4 + 3. */
 private const val TabsInFirstRow = 4
 
+/** Шаг между вкладками в строке. */
+private val TabGap = 8.dp
+
 /**
- * Ширина ряда вкладок (в dp, делённых на масштаб шрифта), с которой 4 вкладки ещё встают в строку.
- * Уже — вкладки переносятся по ширине подписей.
+ * Ширина ряда вкладок (в dp, делённых на масштаб шрифта), с которой 4 вкладки встают в строку,
+ * чуть ужав подписи. Уже — строки прокручиваются вбок, подписи целиком.
  */
-private val TwoRowTabsMinWidth = 340.dp
+private val FitTabsMinWidth = 340.dp
 
 /** Поля кнопки вкладки в «буквах» — добавка к длине подписи, когда делится ширина строки. */
 private const val TabPaddingChars = 3
@@ -131,9 +139,9 @@ enum class AdultTab(val title: String) {
     PURCHASES("Покупки"),
     QUESTS("Квесты"),
     GOALS("Цели"),
-    INVENTORY("Инвентарь"),
+    INVENTORY("Вещи"),
     LOG("Журнал"),
-    ITEMS("Предметы")
+    ITEMS("Товары")
 }
 
 /**
@@ -328,9 +336,11 @@ private fun AdultClose(onClose: () -> Unit) {
 }
 
 /**
- * Вкладки. Стоя — две строки 4 + 3 (подписи при нехватке места ужимаются целиком), а на узком экране
- * с крупным шрифтом — сколько строк нужно, подписи целиком: все семь видны сразу, без многоточий.
- * Лёжа высоты нет, и вкладки стоят одним рядом, который прокручивается вбок.
+ * Вкладки. Стоя — всегда две строки 4 + 3. На обычном телефоне вкладки делят строку по длине
+ * подписей и при нехватке места чуть ужимают подписи. На узком экране с крупным шрифтом так уже не
+ * помещается: строка, которой не хватает ширины, прокручивается вбок, подписи целиком, выбранная
+ * вкладка въезжает в середину, а край соседней подсказывает, что дальше есть ещё. Лёжа высоты нет,
+ * и вкладки стоят одним рядом, который прокручивается вбок.
  */
 @Composable
 private fun AdultTabs(
@@ -351,34 +361,24 @@ private fun AdultTabs(
             modifier = buttonModifier
         )
     }
-    // Вес — по длине подписи: остаток строки достаётся длинным подписям, «Инвентарь» не режется
-    // рядом с «Журналом».
+    // Вес — по длине подписи: остаток строки достаётся длинным подписям.
     fun weightOf(entry: AdultTab): Float = (entry.title.length + TabPaddingChars).toFloat()
+    val rows = listOf(AdultTab.entries.take(TabsInFirstRow), AdultTab.entries.drop(TabsInFirstRow))
     if (wrap) {
         BoxWithConstraints(modifier = modifier) {
-            val fontScale = LocalDensity.current.fontScale
-            if (maxWidth / fontScale >= TwoRowTabsMinWidth) {
-                // Обычный телефон: две строки, 4 + 3; при нехватке места подписи чуть ужимаются.
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(
-                        AdultTab.entries.take(TabsInFirstRow),
-                        AdultTab.entries.drop(TabsInFirstRow)
-                    ).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            val fits = maxWidth / LocalDensity.current.fontScale >= FitTabsMinWidth
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                rows.forEach { row ->
+                    if (fits) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(TabGap)) {
                             row.forEach { entry ->
                                 TabButton(entry, Modifier.weight(weightOf(entry)), shrink = true)
                             }
                         }
-                    }
-                }
-            } else {
-                // Узкий экран с крупным шрифтом: строк столько, сколько нужно, подписи целиком.
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    AdultTab.entries.forEach { entry ->
-                        TabButton(entry, Modifier.weight(weightOf(entry)))
+                    } else {
+                        StretchOrScrollRow(gap = TabGap, selectedIndex = row.indexOf(tab)) {
+                            row.forEach { entry -> TabButton(entry) }
+                        }
                     }
                 }
             }
@@ -386,9 +386,60 @@ private fun AdultTabs(
     } else {
         Row(
             modifier = modifier.horizontalScroll(scrollState),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(TabGap)
         ) {
             AdultTab.entries.forEach { entry -> TabButton(entry) }
+        }
+    }
+}
+
+/**
+ * Строка кнопок: помещаются — растягиваются поровну во всю ширину; не помещаются — стоят в своей
+ * ширине, и строка прокручивается вбок, а выбранная кнопка сама въезжает в середину.
+ *
+ * @param selectedIndex какая кнопка выбрана, или −1, когда в этой строке ни одна.
+ */
+@Composable
+private fun StretchOrScrollRow(gap: Dp, selectedIndex: Int, content: @Composable () -> Unit) {
+    val scroll = rememberScrollState()
+    // Где встали кнопки: пишется при раскладке, читается только прокруткой к выбранной.
+    val spans = remember { mutableStateOf<List<IntRange>>(emptyList()) }
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val viewport = constraints.maxWidth
+        LaunchedEffect(selectedIndex, viewport) {
+            if (selectedIndex < 0) return@LaunchedEffect
+            val span = snapshotFlow { spans.value.getOrNull(selectedIndex) }.filterNotNull().first()
+            val target = (span.first + span.last) / 2 - viewport / 2
+            scroll.animateScrollTo(target.coerceIn(0, scroll.maxValue))
+        }
+        Layout(
+            content = content,
+            modifier = Modifier.horizontalScroll(scroll)
+        ) { measurables, _ ->
+            val gapPx = gap.roundToPx()
+            val natural = measurables.map { it.maxIntrinsicWidth(Constraints.Infinity) }
+            val needed = natural.sum() + gapPx * (measurables.size - 1).coerceAtLeast(0)
+            val extra = if (needed < viewport && measurables.isNotEmpty()) {
+                (viewport - needed) / measurables.size
+            } else {
+                0
+            }
+            val placeables = measurables.mapIndexed { index, measurable ->
+                val width = natural[index] + extra
+                measurable.measure(Constraints.fixedWidth(width))
+            }
+            val width = maxOf(viewport, needed)
+            val height = placeables.maxOfOrNull { it.height } ?: 0
+            layout(width, height) {
+                var x = 0
+                val placed = mutableListOf<IntRange>()
+                placeables.forEach { placeable ->
+                    placeable.placeRelative(x, (height - placeable.height) / 2)
+                    placed += x until x + placeable.width
+                    x += placeable.width + gapPx
+                }
+                if (spans.value != placed) spans.value = placed
+            }
         }
     }
 }
