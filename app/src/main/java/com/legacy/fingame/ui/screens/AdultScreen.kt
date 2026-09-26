@@ -5,6 +5,7 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
@@ -100,6 +101,15 @@ private val TitleMinSize = 16.dp
 
 /** Мельче этого подписи в карточках не ужимаются. */
 private val LabelMinSize = 9.dp
+
+/** Сколько вкладок в первой строке, когда их две: 4 + 3. */
+private const val TabsInFirstRow = 4
+
+/**
+ * Ширина ряда вкладок (в dp, делённых на масштаб шрифта), с которой 4 вкладки ещё встают в строку.
+ * Уже — вкладки переносятся по ширине подписей.
+ */
+private val TwoRowTabsMinWidth = 340.dp
 
 /** Поля кнопки вкладки в «буквах» — добавка к длине подписи, когда делится ширина строки. */
 private const val TabPaddingChars = 3
@@ -302,9 +312,9 @@ private fun AdultClose(onClose: () -> Unit) {
 }
 
 /**
- * Вкладки. Стоя — строки по ширине подписей (на телефоне 4 + 3, на узком с крупным шрифтом — сколько
- * влезет): все семь видны сразу, подписи целиком, без многоточий. Лёжа высоты нет, и вкладки стоят
- * одним рядом, который прокручивается вбок.
+ * Вкладки. Стоя — две строки 4 + 3 (подписи при нехватке места ужимаются целиком), а на узком экране
+ * с крупным шрифтом — сколько строк нужно, подписи целиком: все семь видны сразу, без многоточий.
+ * Лёжа высоты нет, и вкладки стоят одним рядом, который прокручивается вбок.
  */
 @Composable
 private fun AdultTabs(
@@ -315,28 +325,46 @@ private fun AdultTabs(
     scrollState: ScrollState = rememberScrollState()
 ) {
     @Composable
-    fun TabButton(entry: AdultTab, buttonModifier: Modifier = Modifier) {
+    fun TabButton(entry: AdultTab, buttonModifier: Modifier = Modifier, shrink: Boolean = false) {
         PillButton(
             text = entry.title,
             onClick = { onSelect(entry) },
             selected = entry == tab,
             compact = true,
-            autoShrink = false,
+            autoShrink = shrink,
             modifier = buttonModifier
         )
     }
+    // Вес — по длине подписи: остаток строки достаётся длинным подписям, «Инвентарь» не режется
+    // рядом с «Журналом».
+    fun weightOf(entry: AdultTab): Float = (entry.title.length + TabPaddingChars).toFloat()
     if (wrap) {
-        // Строки собираются по ширине подписей: на обычном телефоне — 4 + 3, на узком с крупным
-        // шрифтом — сколько поместится, но подпись целиком. Остаток строки делится между кнопками.
-        FlowRow(
-            modifier = modifier,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Вес — по длине подписи: остаток строки достаётся длинным подписям, «Инвентарь» не
-            // режется рядом с «Журналом».
-            AdultTab.entries.forEach { entry ->
-                TabButton(entry, Modifier.weight((entry.title.length + TabPaddingChars).toFloat()))
+        BoxWithConstraints(modifier = modifier) {
+            val fontScale = LocalDensity.current.fontScale
+            if (maxWidth / fontScale >= TwoRowTabsMinWidth) {
+                // Обычный телефон: две строки, 4 + 3; при нехватке места подписи чуть ужимаются.
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(
+                        AdultTab.entries.take(TabsInFirstRow),
+                        AdultTab.entries.drop(TabsInFirstRow)
+                    ).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            row.forEach { entry ->
+                                TabButton(entry, Modifier.weight(weightOf(entry)), shrink = true)
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Узкий экран с крупным шрифтом: строк столько, сколько нужно, подписи целиком.
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AdultTab.entries.forEach { entry ->
+                        TabButton(entry, Modifier.weight(weightOf(entry)))
+                    }
+                }
             }
         }
     } else {
