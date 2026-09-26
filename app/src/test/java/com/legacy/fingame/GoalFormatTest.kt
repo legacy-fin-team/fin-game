@@ -3,6 +3,7 @@ package com.legacy.fingame
 import com.legacy.fingame.ui.screens.GoalReadyText
 import com.legacy.fingame.ui.screens.NoBreakSpace
 import com.legacy.fingame.ui.screens.goalAmountText
+import com.legacy.fingame.ui.screens.goalCounterSpoken
 import com.legacy.fingame.ui.screens.goalCounterText
 import com.legacy.fingame.ui.screens.goalFooterText
 import com.legacy.fingame.ui.screens.goalIsReady
@@ -49,8 +50,14 @@ class GoalFormatTest {
 
     @Test
     fun `the footer shows the amount until there is enough`() {
-        assertEquals("120$NoBreakSpace/${NoBreakSpace}200", goalFooterText(balance = 120, price = 200))
-        assertEquals("199$NoBreakSpace/${NoBreakSpace}200", goalFooterText(balance = 199, price = 200))
+        assertEquals(
+            "120$NoBreakSpace/${NoBreakSpace}200",
+            goalFooterText(balance = 120, price = 200)
+        )
+        assertEquals(
+            "199$NoBreakSpace/${NoBreakSpace}200",
+            goalFooterText(balance = 199, price = 200)
+        )
     }
 
     @Test
@@ -66,7 +73,10 @@ class GoalFormatTest {
         assertTrue(goalIsReady(balance = 200, price = 200))
         assertTrue(goalIsReady(balance = -5, price = 0))
         for (balance in listOf(-10, 0, 1, 99, 100, 101, 1000)) {
-            assertEquals(goalPercentText(balance = balance, price = 100) == "100%", goalIsReady(balance, 100))
+            assertEquals(
+                goalPercentText(balance = balance, price = 100) == "100%",
+                goalIsReady(balance, 100)
+            )
         }
     }
 
@@ -74,5 +84,11 @@ class GoalFormatTest {
     fun `the counter counts goals from one`() {
         assertEquals("1/3", goalCounterText(index = 0, count = 3))
         assertEquals("3/3", goalCounterText(index = 2, count = 3))
+    }
+
+    @Test
+    fun `the counter is spoken as one of so many`() {
+        assertEquals("1 из 3", goalCounterSpoken(index = 0, count = 3))
+        assertEquals("3 из 3", goalCounterSpoken(index = 2, count = 3))
     }
 }

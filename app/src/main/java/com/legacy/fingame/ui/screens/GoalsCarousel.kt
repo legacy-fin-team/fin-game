@@ -91,6 +91,11 @@ fun GoalsCarousel(
                     } else {
                         null
                     },
+                    counterSpoken = if (goals.size > 1) {
+                        goalCounterSpoken(index = index, count = goals.size)
+                    } else {
+                        null
+                    },
                     onClick = { onOpenGoal(goal.selection) },
                     modifier = Modifier.fillParentMaxWidth()
                 )
@@ -104,7 +109,14 @@ fun GoalsCarousel(
  * @return Ключ карточки в ряду: строка, которую можно сохранить, — ряд помнит по ней, какая
  * карточка открыта.
  */
-private fun goalKeyOf(selection: ItemSelection): String = "${selection.itemId}:${selection.variantId}"
+private fun goalKeyOf(selection: ItemSelection): String =
+    "${selection.itemId}$GoalKeySeparator${selection.variantId}"
+
+/**
+ * Разделитель id товара и варианта в ключе карточки — тот же непечатный символ, что в
+ * [com.legacy.fingame.utils.GoalsCodec]: в id его не бывает, и ключи двух разных целей не совпадут.
+ */
+private const val GoalKeySeparator = '\u001F'
 
 /**
  * Цели превью: одна по карману (при 250 монетах), одна на полпути и одна с длинным именем — на

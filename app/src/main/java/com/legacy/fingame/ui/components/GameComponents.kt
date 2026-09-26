@@ -492,6 +492,8 @@ fun BalanceChip(
  * @param footerIsReady денег на цель хватает — нижняя строка выделяется цветом успеха.
  * @param counterText какая это цель из скольких, например `1/3`, — справа от имени; null, когда
  *   цель одна.
+ * @param counterSpoken тот же счётчик словами для TalkBack, например «1 из 3»; null — читается
+ *   как написан.
  * @param onClick нажатие на карточку, или null, когда карточка не нажимается.
  */
 @Composable
@@ -503,12 +505,13 @@ fun GoalCard(
     modifier: Modifier = Modifier,
     footerIsReady: Boolean = false,
     counterText: String? = null,
+    counterSpoken: String? = null,
     onClick: (() -> Unit)? = null
 ) {
     val clampedProgress = progress.coerceIn(0f, 1f)
 
     GoalCardFrame(onClick = onClick, modifier = modifier) {
-        GoalTitleRow(title = title, counterText = counterText)
+        GoalTitleRow(title = title, counterText = counterText, counterSpoken = counterSpoken)
         Spacer(modifier = Modifier.height(GoalRowGap))
         Row(verticalAlignment = Alignment.CenterVertically) {
             // Stripped down to a plain bar: the round cap, the gap before it and the dot
@@ -663,9 +666,10 @@ private fun GoalCardFrame(
  *
  * @param title имя товара или заголовок подсказки.
  * @param counterText счётчик вида `1/3`, или null, когда его нет.
+ * @param counterSpoken счётчик словами для TalkBack («1 из 3»); null — читается как написан.
  */
 @Composable
-private fun GoalTitleRow(title: String, counterText: String?) {
+private fun GoalTitleRow(title: String, counterText: String?, counterSpoken: String? = null) {
     val titleStyle = MaterialTheme.typography.titleMedium.fullLine()
     val (minFontSize, maxFontSize) = pillButtonAutoSizeRange(
         minLabelSize = PillButtonMinLabelSize,
@@ -689,6 +693,11 @@ private fun GoalTitleRow(title: String, counterText: String?) {
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = counterText,
+                modifier = if (counterSpoken == null) {
+                    Modifier
+                } else {
+                    Modifier.semantics { contentDescription = counterSpoken }
+                },
                 style = MaterialTheme.typography.labelSmall.fullLine(),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,

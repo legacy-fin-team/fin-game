@@ -85,3 +85,12 @@ fun goalFooterText(balance: Int, price: Int): String =
  * @return Строка вида `1/3`.
  */
 fun goalCounterText(index: Int, count: Int): String = "${index + 1}/$count"
+
+/**
+ * Тот же счётчик словами — так его читает TalkBack: «1 из 3», а не «1 слэш 3».
+ *
+ * @param index место цели в списке, с нуля.
+ * @param count сколько всего целей.
+ * @return Строка вида `1 из 3`.
+ */
+fun goalCounterSpoken(index: Int, count: Int): String = "${index + 1} из $count"
