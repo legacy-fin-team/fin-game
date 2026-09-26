@@ -49,7 +49,31 @@ class PetTouchAssetsTest {
 
     @Test
     fun `the pat sound is a short 16-bit mono WAV under its key`() {
-        val bytes = asset("audio/sounds/animal/${AudioManager.SOUND_PAT}.wav").readBytes()
+        assertShortWav("audio/sounds/animal/${AudioManager.SOUND_PAT}.wav", 150..200)
+    }
+
+    @Test
+    fun `the cat has three short 16-bit mono WAV sounds of its own`() {
+        val folder = asset("audio/sounds/animal/${AudioManager.SOUND_PAT}.wav").parentFile!!
+        val keys = folder.list()!!.map { it.substringBeforeLast('.') }
+        assertEquals(listOf("cat1", "cat2", "cat3"), AudioManager.animalSoundKeys(keys, "cat"))
+        for (key in listOf("cat1", "cat2", "cat3")) {
+            assertShortWav("audio/sounds/animal/$key.wav", 120..200)
+        }
+    }
+
+    @Test
+    fun `an animal's sounds are its id followed by digits only`() {
+        val all = listOf("cat1", "cat2", "cat10", "category", "cat", "catx1", "dog1", "pat")
+        assertEquals(listOf("cat1", "cat2", "cat10"), AudioManager.animalSoundKeys(all, "cat"))
+        assertEquals(listOf("dog1"), AudioManager.animalSoundKeys(all, "dog"))
+        assertTrue(AudioManager.animalSoundKeys(all, "fox").isEmpty())
+        assertTrue(AudioManager.animalSoundKeys(all, "").isEmpty())
+    }
+
+    /** The asset at [path] is a 22050 Hz 16-bit mono PCM WAV lasting [millisRange] ms. */
+    private fun assertShortWav(path: String, millisRange: IntRange) {
+        val bytes = asset(path).readBytes()
 
         assertEquals("RIFF", String(bytes, 0, 4, Charsets.US_ASCII))
         assertEquals("WAVE", String(bytes, 8, 4, Charsets.US_ASCII))
@@ -59,6 +83,6 @@ class PetTouchAssetsTest {
         assertEquals(16, int16(bytes, 34))         // bits per sample
         assertEquals("data", String(bytes, 36, 4, Charsets.US_ASCII))
         val millis = int32(bytes, 40) / 2 * 1000 / 22050
-        assertTrue("$millis ms", millis in 150..200)
+        assertTrue("$path: $millis ms", millis in millisRange)
     }
 }

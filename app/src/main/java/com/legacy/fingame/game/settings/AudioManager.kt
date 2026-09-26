@@ -5,6 +5,7 @@ import android.content.res.AssetFileDescriptor
 import android.media.MediaPlayer
 import android.media.SoundPool
 import android.util.Log
+import kotlin.random.Random
 
 /**
  * Менеджер аудио: управляет фоновой музыкой (через [MediaPlayer])
@@ -28,8 +29,28 @@ class AudioManager(private val context: Context) {
         private const val SOUNDS_ANIMAL_DIR = "audio/sounds/animal"
         private const val MAX_STREAMS = 4
 
-        /** Звук «погладил» при нажатии на питомца: `audio/sounds/animal/pat.wav`. */
+        /**
+         * Запасной звук «погладил» при нажатии на питомца (`audio/sounds/animal/pat.wav`) —
+         * для животного, у которого нет своих звуков.
+         */
         const val SOUND_PAT = "pat"
+
+        /**
+         * Звуки животного: ключи вида `<animalId><цифры>` (`cat1`, `cat2`, `cat10`).
+         * `category` для `cat` не подходит — после id должны идти только цифры.
+         *
+         * @param all все ключи загруженных звуков (имена файлов без расширения).
+         * @param animalId id животного из `data/animals.xml`.
+         * @return Ключи звуков животного, отсортированные по номеру.
+         */
+        fun animalSoundKeys(all: Collection<String>, animalId: String): List<String> {
+            if (animalId.isEmpty()) return emptyList()
+            return all.filter { key ->
+                key.length > animalId.length &&
+                    key.startsWith(animalId) &&
+                    key.substring(animalId.length).all { it.isDigit() }
+            }.sortedBy { it.substring(animalId.length).toBigInteger() }
+        }
 
         /**
          * Выбирает трек фоновой музыки.
@@ -156,6 +177,20 @@ class AudioManager(private val context: Context) {
             return
         }
         soundPool?.play(soundId, 1f, 1f, 1, 0, 1f)
+        Log.d(TAG, "Звук: $soundKey")
+    }
+
+    /**
+     * Проигрывает случайный звук животного из его набора (`cat1`, `cat2`, `cat3` для `cat`),
+     * а если своих звуков у животного нет — запасной [SOUND_PAT].
+     *
+     * @param animalId id животного из `data/animals.xml`.
+     * @param random источник случайности (подменяется в тестах).
+     */
+    fun playAnimalSound(animalId: String, random: Random = Random.Default) {
+        if (!soundEnabled) return
+        val keys = animalSoundKeys(loadedSounds.keys, animalId)
+        playSound(if (keys.isEmpty()) SOUND_PAT else keys.random(random))
     }
 
     /**
