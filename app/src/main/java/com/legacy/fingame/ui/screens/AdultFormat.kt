@@ -6,6 +6,7 @@ import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestChoice
 import com.legacy.fingame.game.quests.QuestProgress
+import com.legacy.fingame.ui.components.Sprites
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -13,6 +14,18 @@ import java.util.Locale
 /** Дата дня так, как её читает взрослый: «26 сентября». */
 private val DateFormat: DateTimeFormatter =
     DateTimeFormatter.ofPattern("d MMMM", Locale.forLanguageTag("ru"))
+
+/**
+ * Иконка покупки: картинка варианта товара, а пока её нет в ассетах — иконка его раздела магазина;
+ * товар, которого больше нет, — иконка магазина. Красная заглушка «ERROR» взрослому ничего не скажет.
+ *
+ * @param iconPath картинка варианта, или null, когда товара больше нет.
+ * @param categoryIcon иконка раздела магазина, или null, когда товара больше нет.
+ * @param exists есть ли такой файл в ассетах.
+ * @return Путь к картинке, которая точно есть — или иконка магазина.
+ */
+fun purchaseIconOf(iconPath: String?, categoryIcon: String?, exists: (String) -> Boolean): String =
+    iconPath?.takeIf(exists) ?: categoryIcon?.takeIf(exists) ?: Sprites.SHOP
 
 /** Чем кончился день по плану. */
 enum class DayVerdict {

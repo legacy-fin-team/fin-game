@@ -34,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -99,6 +98,8 @@ fun AdultLockScreen(
     var active by rememberSaveable { mutableIntStateOf(0) }
     var wrong by rememberSaveable { mutableStateOf(false) }
     val shake = remember { Animatable(0f) }
+    val allTyped = answers.all { it.isNotEmpty() }
+    val short = GameDimens.isShortScreen
     val scope = rememberCoroutineScope()
 
     fun setAnswer(index: Int, value: String) {
@@ -145,8 +146,6 @@ fun AdultLockScreen(
         }
     }
 
-    val allTyped = answers.all { it.isNotEmpty() }
-    val short = GameDimens.isShortScreen
 
     Column(
         modifier = modifier
@@ -155,9 +154,10 @@ fun AdultLockScreen(
             .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        // Шапка ровно над примерами и клавиатурой: та же ширина, что у них.
         Row(
             modifier = Modifier
-                .widthIn(max = GameDimens.ContentMaxWidth)
+                .widthIn(max = if (short) LockMaxWidth * 2 else LockMaxWidth)
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -185,7 +185,7 @@ fun AdultLockScreen(
             ) {
                 Text(
                     text = if (wrong) "Не сошлось, попробуй ещё" else "Реши примеры",
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = if (wrong) {
                         MaterialTheme.colorScheme.error
                     } else {
@@ -273,14 +273,12 @@ private fun TaskRow(task: LockTask, answer: String, active: Boolean, onClick: ()
             .clickable(onClick = onClick)
             .semantics { contentDescription = "${task.a} умножить на ${task.b}" },
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally)
     ) {
         Text(
             text = "${task.a}$NoBreakSpace×$NoBreakSpace${task.b}$NoBreakSpace=",
-            modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.End,
             maxLines = 1,
             softWrap = false
         )
@@ -309,7 +307,6 @@ private fun TaskRow(task: LockTask, answer: String, active: Boolean, onClick: ()
                 )
             }
         }
-        Box(modifier = Modifier.weight(1f))
     }
 }
 

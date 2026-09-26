@@ -33,7 +33,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import com.legacy.fingame.ui.components.pillButtonAutoSizeRange
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -56,7 +61,6 @@ import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.items.ItemSelection
-import com.legacy.fingame.game.items.ItemSprites
 import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestCatalog
 import com.legacy.fingame.game.quests.QuestChoice
@@ -73,6 +77,7 @@ import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
+import com.legacy.fingame.utils.SpriteLoader
 
 /** Размер крестика — как на остальных экранах. */
 private val AdultCloseSize = 40.dp
@@ -82,6 +87,12 @@ private val AdultCardMinWidth = 320.dp
 
 /** Иконка товара в строке покупки. */
 private val PurchaseIconSize = 32.dp
+
+/** Мельче этого заголовок хаба не ужимается. */
+private val TitleMinSize = 16.dp
+
+/** Мельче этого подписи в карточках не ужимаются. */
+private val LabelMinSize = 9.dp
 
 /** Шаг между карточками. */
 private val CardGap = 12.dp
@@ -201,17 +212,41 @@ fun AdultScreen(
 }
 
 @Composable
-private fun AdultTitle(
-    style: androidx.compose.ui.text.TextStyle,
-    modifier: Modifier = Modifier
-) {
-    Text(
+private fun AdultTitle(style: TextStyle, modifier: Modifier = Modifier) {
+    ShrinkText(
         text = "Режим взрослого",
-        modifier = modifier,
         style = style,
         color = MaterialTheme.colorScheme.onBackground,
+        minSize = TitleMinSize,
+        modifier = modifier
+    )
+}
+
+/**
+ * Текст в одну строку, который при нехватке места ужимается целиком, а не режется многоточием —
+ * как названия в журнале. Мельче [minSize] (физический размер) не становится.
+ */
+@Composable
+private fun ShrinkText(
+    text: String,
+    style: TextStyle,
+    color: Color,
+    minSize: Dp,
+    modifier: Modifier = Modifier
+) {
+    val (minFontSize, maxFontSize) = pillButtonAutoSizeRange(
+        minLabelSize = minSize,
+        styleFontSize = style.fontSize,
+        density = LocalDensity.current
+    )
+    Text(
+        text = text,
+        modifier = modifier,
+        style = style,
+        color = color,
         maxLines = 1,
-        overflow = TextOverflow.Ellipsis
+        overflow = TextOverflow.Ellipsis,
+        autoSize = TextAutoSize.StepBased(minFontSize = minFontSize, maxFontSize = maxFontSize)
     )
 }
 
@@ -335,13 +370,12 @@ private fun diffColor(diff: Int): Color = when {
  */
 @Composable
 private fun PlanRow(title: String, planned: Int, actual: Int, diff: Int) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        ShrinkText(
             text = title.uppercase(),
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            minSize = LabelMinSize
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PlanCell("план", planned.toString(), MaterialTheme.colorScheme.onSurface, Modifier.weight(1f))
@@ -353,13 +387,12 @@ private fun PlanRow(title: String, planned: Int, actual: Int, diff: Int) {
 
 @Composable
 private fun PlanCell(label: String, value: String, valueColor: Color, modifier: Modifier) {
-    Column(modifier = modifier) {
-        Text(
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        ShrinkText(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            minSize = LabelMinSize
         )
         Text(
             text = value,
@@ -375,13 +408,12 @@ private fun PlanCell(label: String, value: String, valueColor: Color, modifier: 
 @Composable
 private fun ValueRow(label: String, value: String, valueColor: Color = MaterialTheme.colorScheme.onSurface) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
+        ShrinkText(
             text = label,
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            minSize = LabelMinSize
         )
         Text(
             text = value,
@@ -415,10 +447,17 @@ private fun PurchaseRow(entry: MoneyEntry, itemCatalog: ItemCatalog) {
     val item = entry.itemId?.let { itemCatalog.findItemById(it) }
     val variantId = entry.variantId ?: item?.defaultVariantId ?: ""
     val name = item?.name ?: entry.reason
+    val context = LocalContext.current
+    val loader = remember(context) { SpriteLoader(context) }
+    val icon = remember(item, variantId, loader) {
+        purchaseIconOf(
+            iconPath = item?.getIconPath(variantId),
+            categoryIcon = item?.let { Sprites.shopCategory(it.category.xmlName) }
+        ) { loader.hasSprite(it) }
+    }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Sprite(
-            assetPath = item?.getIconPath(variantId)
-                ?: ItemSprites.icon(entry.itemId.orEmpty(), variantId),
+            assetPath = icon,
             contentDescription = null,
             modifier = Modifier.size(PurchaseIconSize)
         )
@@ -481,9 +520,13 @@ private fun spentText(spent: Int): String = signedAmountText(-spent)
 
 @Composable
 private fun PlanBlock(plan: BudgetResult) {
+    // Черта между категориями — как в отчёте бюджета: иначе три одинаковых блока сливаются.
     PlanRow(SpendKind.MUST.title, plan.plannedMust, plan.actualMust, plan.mustDiff)
+    CardDivider()
     PlanRow(SpendKind.WANT.title, plan.plannedWant, plan.actualWant, plan.wantDiff)
+    CardDivider()
     PlanRow("Сбережения", plan.plannedSavings, plan.actualSavings, plan.savingsDiff)
+    CardDivider()
     if (plan.plannedDeposit > 0) ValueRow("На вклад", plan.plannedDeposit.toString())
 }
 
@@ -542,7 +585,10 @@ private fun QuestCard(entry: QuestHistoryEntry, progress: QuestProgress?, firstD
 
 @Composable
 private fun QuestChoiceRow(quest: Quest?, choice: QuestChoice, firstDay: Long) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(
+        modifier = Modifier.padding(vertical = 2.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
         Text(
             text = questChoiceTitleText(quest, choice),
             style = MaterialTheme.typography.bodyMedium,

@@ -26,15 +26,22 @@ data class LockTask(val a: Int, val b: Int) {
 /**
  * @param random кости; в тестах — заранее заданные.
  * @param count сколько примеров нужно.
- * @return [count] примеров с множителями от [LOCK_MIN_FACTOR] до [LOCK_MAX_FACTOR].
+ * @return [count] разных примеров с множителями от [LOCK_MIN_FACTOR] до [LOCK_MAX_FACTOR]:
+ * «7 × 8» и «8 × 7» считаются одним примером и вместе не выпадают.
  */
-fun lockTasksOf(random: Random, count: Int = LOCK_TASK_COUNT): List<LockTask> =
-    List(count) {
-        LockTask(
+fun lockTasksOf(random: Random, count: Int = LOCK_TASK_COUNT): List<LockTask> {
+    val tasks = mutableListOf<LockTask>()
+    while (tasks.size < count) {
+        val task = LockTask(
             a = random.nextInt(LOCK_MIN_FACTOR, LOCK_MAX_FACTOR + 1),
             b = random.nextInt(LOCK_MIN_FACTOR, LOCK_MAX_FACTOR + 1)
         )
+        if (tasks.none { it.answer == task.answer && setOf(it.a, it.b) == setOf(task.a, task.b) }) {
+            tasks += task
+        }
     }
+    return tasks
+}
 
 /**
  * @param tasks примеры замка.

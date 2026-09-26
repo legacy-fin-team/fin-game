@@ -13,7 +13,9 @@ import com.legacy.fingame.ui.screens.adultQuestStatusText
 import com.legacy.fingame.ui.screens.dateTextOf
 import com.legacy.fingame.ui.screens.dayVerdictOf
 import com.legacy.fingame.ui.screens.dayVerdictText
+import com.legacy.fingame.ui.screens.purchaseIconOf
 import com.legacy.fingame.ui.screens.purchaseTitleText
+import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.screens.questChoiceDetailText
 import com.legacy.fingame.ui.screens.questChoiceTitleText
 import org.junit.Assert.assertEquals
@@ -68,6 +70,13 @@ class AdultFormatTest {
         assertEquals(19_001L, adultFirstDayOf(log, listOf(plan(0 to 0, 0 to 0).copy(startDay = 19_001L)), 19_005L))
         assertEquals(19_003L, adultFirstDayOf(log, emptyList(), 19_005L))
         assertEquals(19_005L, adultFirstDayOf(MoneyLog.EMPTY, emptyList(), 19_005L))
+    }
+
+    @Test
+    fun `a purchase icon falls back to its shop section and then to the shop`() {
+        assertEquals("a.webp", purchaseIconOf("a.webp", "c.webp") { true })
+        assertEquals("c.webp", purchaseIconOf("a.webp", "c.webp") { it == "c.webp" })
+        assertEquals(Sprites.SHOP, purchaseIconOf(null, null) { true })
     }
 
     @Test

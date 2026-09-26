@@ -32,6 +32,14 @@ class ParentLockTest {
     }
 
     @Test
+    fun `the tasks are never the same twice`() {
+        repeat(200) { seed ->
+            val tasks = lockTasksOf(Random(seed))
+            assertEquals(3, tasks.map { setOf(it.a, it.b) }.toSet().size)
+        }
+    }
+
+    @Test
     fun `every factor from 3 to 9 comes up`() {
         val factors = (0 until 200).flatMap { seed ->
             lockTasksOf(Random(seed)).flatMap { listOf(it.a, it.b) }

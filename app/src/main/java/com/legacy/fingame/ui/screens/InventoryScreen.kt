@@ -134,7 +134,12 @@ fun InventoryScreen(
         ) {
             Text(
                 text = if (readOnly) "Инвентарь ребёнка" else "Инвентарь",
-                style = MaterialTheme.typography.headlineSmall,
+                // Внутри хаба взрослого заголовок экрана уже есть — этот тише, как у журнала там же.
+                style = if (readOnly) {
+                    MaterialTheme.typography.titleLarge
+                } else {
+                    MaterialTheme.typography.headlineSmall
+                },
                 color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
