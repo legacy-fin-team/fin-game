@@ -46,6 +46,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.selected
@@ -577,12 +580,19 @@ fun GoalHintCard(
         density = LocalDensity.current
     )
 
-    // Заголовок и текст внутри замолкают, карточка читается одной фразой; нажатие остаётся —
-    // оно на той же карточке, а не внутри неё.
+    // Заголовок и текст внутри замолкают, карточка читается одной фразой. Семантику нажатия Surface
+    // вешает после этого модификатора, и clearAndSetSemantics стёр бы её — поэтому нажатие и роль
+    // кнопки заданы здесь же: TalkBack и читает фразу, и нажимает карточку.
     val spokenModifier = if (contentDescription == null) {
         modifier
     } else {
-        modifier.clearAndSetSemantics { this.contentDescription = contentDescription }
+        modifier.clearAndSetSemantics {
+            this.contentDescription = contentDescription
+            if (onClick != null) {
+                role = Role.Button
+                onClick { onClick(); true }
+            }
+        }
     }
 
     GoalCardFrame(onClick = onClick, modifier = spokenModifier) {
