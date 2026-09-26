@@ -62,7 +62,9 @@ enum class Screen {
     LOG,
     /** The options/settings screen. */
     OPTIONS,
-    /** The adult mode screen (placeholder). */
+    /** Замок перед режимом взрослого: три примера на умножение. */
+    ADULT_LOCK,
+    /** Режим взрослого: история дней, покупок и квестов, инвентарь, цели и журнал ребёнка. */
     ADULT_MODE
 }
 
@@ -141,6 +143,9 @@ enum class Screen {
  * @property hasUnseenQuestStep горит ли точка на кнопке квестов: есть шаг, ставший доступным после
  * последнего взгляда на экран (см. [QuestEngine.hasUnseenStep]). Пересчитывается на каждом
  * [GameViewModel.tick], не сохраняется.
+ * @property adultMode открыт ли режим взрослого: пока он включён, модель не пускает ни покупки, ни
+ * предметы, ни квесты, ни бонус, ни бюджет, ни цели. Не сохраняется — после перезапуска игра снова
+ * у ребёнка.
  */
 data class GameUiState(
     val screen: Screen = Screen.MAIN,
@@ -174,6 +179,7 @@ data class GameUiState(
     val questsSeenAtMillis: Long = PlayerState.QUESTS_NEVER_SEEN,
     val lastRandomQuestAtMillis: Long = PlayerState.NO_RANDOM_QUEST,
     val hasUnseenQuestStep: Boolean = false,
+    val adultMode: Boolean = false,
     val settings: GameSettings = GameSettings()
 ) {
     /**
@@ -367,8 +373,27 @@ class GameViewModel(
      * If the player was on [Screen.SHOP], the unpaid shop cart is dropped.
      */
     fun closeScreen() {
-        openScreen(Screen.MAIN)
+        when (_state.value.screen) {
+            Screen.ADULT_MODE -> exitAdultMode()
+            Screen.ADULT_LOCK -> openScreen(Screen.OPTIONS)
+            else -> openScreen(Screen.MAIN)
+        }
     }
+
+    /** Замок решён: открывается режим взрослого, и игра ребёнка становится только для просмотра. */
+    fun enterAdultMode() {
+        _state.value = _state.value.copy(adultMode = true)
+        openScreen(Screen.ADULT_MODE)
+    }
+
+    /** Взрослый закрыл свой режим: обратно в настройки, игра снова у ребёнка. */
+    fun exitAdultMode() {
+        _state.value = _state.value.copy(adultMode = false)
+        openScreen(Screen.OPTIONS)
+    }
+
+    /** Режим взрослого включён: действия, меняющие игру ребёнка, ничего не делают. */
+    private val readOnly: Boolean get() = _state.value.adultMode
 
     /**
      * Builds the state resulting from navigating to [screen]: the unpaid cart is dropped when the
@@ -391,6 +416,7 @@ class GameViewModel(
             },
             hasUnseenQuestStep = !openingQuests && !leavingQuests && previous.hasUnseenQuestStep,
             screen = screen,
+            adultMode = previous.adultMode && screen == Screen.ADULT_MODE,
             quantities = if (leavingShop) emptyMap() else previous.quantities,
             pickedVariants = if (leavingShop) emptyMap() else previous.pickedVariants,
             cartPrice = if (leavingShop) 0 else previous.cartPrice,
@@ -503,6 +529,7 @@ class GameViewModel(
      * @return True, когда квест начат.
      */
     fun startQuest(questId: String): Boolean {
+        if (readOnly) return false
         val quest = questCatalog.findQuestById(questId) ?: return false
         if (quest.kind != QuestKind.PLAYER) return false
         if (_state.value.questProgressOf(questId) != null) return false
@@ -517,6 +544,7 @@ class GameViewModel(
      * @return True, когда квест начат заново.
      */
     fun restartQuest(questId: String): Boolean {
+        if (readOnly) return false
         if (!allowRestart) return false
         val quest = questCatalog.findQuestById(questId) ?: return false
         if (quest.kind != QuestKind.PLAYER) return false
@@ -533,6 +561,7 @@ class GameViewModel(
      * @return True, когда выбор сделан; false, когда выбирать сейчас нечего (см. [QuestEngine.choose]).
      */
     fun chooseQuestOption(questId: String, optionIndex: Int): Boolean {
+        if (readOnly) return false
         val quest = questCatalog.findQuestById(questId) ?: return false
         val current = _state.value
         val now = clock.nowMillis()
@@ -563,6 +592,7 @@ class GameViewModel(
      * @return True, когда игрок перешёл на следующий шаг или квест завершён.
      */
     fun advanceQuest(questId: String): Boolean {
+        if (readOnly) return false
         val quest = questCatalog.findQuestById(questId) ?: return false
         val current = _state.value
         val now = clock.nowMillis()
@@ -648,6 +678,7 @@ class GameViewModel(
      * any more, or it is worn rather than used.
      */
     fun useItem(selection: ItemSelection): Boolean {
+        if (readOnly) return false
         val current = _state.value
         val item = catalog.findItemById(selection.itemId) ?: return false
         if (item.isWearable) return false
@@ -684,6 +715,7 @@ class GameViewModel(
      * not registered any more, or it is not something the pet can wear.
      */
     fun toggleWorn(selection: ItemSelection): Boolean {
+        if (readOnly) return false
         val current = _state.value
         val item = catalog.findItemById(selection.itemId) ?: return false
         if (!item.isWearable) return false
@@ -713,6 +745,7 @@ class GameViewModel(
      * @return True, когда цель добавлена или снята, false, когда такой товар целью стать не может.
      */
     fun toggleGoal(selection: ItemSelection): Boolean {
+        if (readOnly) return false
         val current = _state.value
         val goals = if (selection in current.goals) {
             current.goals - selection
@@ -820,6 +853,7 @@ class GameViewModel(
      * enough money for it.
      */
     fun buyCart(): Boolean {
+        if (readOnly) return false
         val current = _state.value
         if (!current.canBuyCart) return false
 
@@ -880,6 +914,7 @@ class GameViewModel(
      * (по сроку — тогда деньги на счету, но не через "досрочно").
      */
     fun closeDepositEarly(): Boolean {
+        if (readOnly) return false
         settleMaturedDeposit()
 
         val current = _state.value
@@ -974,6 +1009,7 @@ class GameViewModel(
      * @return True, когда бонус выдан, false, когда этот день уже платил.
      */
     fun claimDailyBonus(): Boolean {
+        if (readOnly) return false
         settleMaturedDeposit()
 
         val current = _state.value
@@ -1025,6 +1061,7 @@ class GameViewModel(
      * ([GameUiState.canPlanBudget]) — подтверждённый бюджет не переписывается.
      */
     fun updateBudgetDraft(draft: BudgetDraft) {
+        if (readOnly) return
         settleMaturedDeposit()
 
         val current = _state.value
@@ -1052,6 +1089,7 @@ class GameViewModel(
      * ([GameUiState.canPlanBudget]), то есть подтверждать нечего.
      */
     fun confirmBudget(): Boolean {
+        if (readOnly) return false
         settleMaturedDeposit()
 
         val current = _state.value

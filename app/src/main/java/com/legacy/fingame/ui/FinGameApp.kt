@@ -237,7 +237,7 @@ fun FinGameApp(
                         onBack = vm::closeScreen
                     )
 
-                    Screen.ADULT_MODE -> PlaceholderScreen(
+                    Screen.ADULT_LOCK, Screen.ADULT_MODE -> PlaceholderScreen(
                         "Режим взрослого",
                         Sprites.SETTINGS,
                         vm::closeScreen
