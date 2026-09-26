@@ -15,6 +15,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.TimeUnit
 
 class GameViewModelTest {
 
@@ -198,6 +199,20 @@ class GameViewModelTest {
         assertEquals(MoneyLog.EMPTY, store.state.moneyLog)
         assertEquals(Economy.NEVER_CLAIMED, store.state.lastDailyBonusDay)
         assertNull(testGameViewModel(store = store).state.value.selection)
+    }
+
+    @Test
+    fun `resetProgress keeps the clock`() {
+        val store = FakePlayerStateStore()
+        val vm = testGameViewModel(store = store)
+        val skipped = TimeUnit.HOURS.toMillis(12)
+        vm.fastForward(skipped)
+
+        vm.resetProgress()
+
+        // The hours skipped ahead are not taken back: the game never goes back behind what the
+        // player was already shown, whatever the new game starts with.
+        assertEquals(skipped, store.state.clockShiftMillis)
     }
 
     @Test

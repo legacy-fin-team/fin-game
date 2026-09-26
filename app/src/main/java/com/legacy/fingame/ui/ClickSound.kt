@@ -13,6 +13,11 @@ import androidx.compose.foundation.ExperimentalFoundationApi
  * переключение действует сразу и во всех окнах — в главном, в диалогах и во всплывающих окнах.
  * Флаг `View.isSoundEffectsEnabled` для этого не годится: щелчок играет не тот view, на котором его
  * обычно выключают, а у каждого диалога вообще свой.
+ *
+ * Флаг помечен `@ExperimentalFoundationApi` и временный (в Compose — TODO b/495885589): когда его
+ * уберут, сборка упадёт именно здесь. Запасной путь — no-op `LocalSoundEffect` в корне приложения
+ * и внутри каждого диалога. Что щелчок действительно включается и выключается, ловит
+ * `ClickSoundTest`.
  */
 object ClickSound {
 
