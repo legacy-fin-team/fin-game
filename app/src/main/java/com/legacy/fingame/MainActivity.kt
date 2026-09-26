@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity() {
                     GameViewModel.factory(
                         store = playerPreferences,
                         catalog = itemRegistry,
+                        questCatalog = questRegistry,
                         settings = savedSettings
                     )
                 }

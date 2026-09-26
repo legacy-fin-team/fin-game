@@ -10,6 +10,7 @@ import com.legacy.fingame.game.economy.Economy
 import com.legacy.fingame.game.economy.FastForwardClock
 import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.items.ItemSelection
+import com.legacy.fingame.game.quests.QuestProgress
 import com.legacy.fingame.game.stats.PetStats
 
 /**
@@ -67,6 +68,13 @@ import com.legacy.fingame.game.stats.PetStats
  * @property planningOpen открыто ли планирование: становится true при получении бонуса дня и
  * false при подтверждении бюджета.
  * @property moneyLog журнал изменений текущего счёта, новейшее первым.
+ * @property quests где игрок в каждом квесте, который он брал или который ему выпал; квест, которого
+ * здесь нет, не начинался.
+ * @property questsSeenAtMillis момент по игровым часам, когда игрок последний раз видел экран
+ * квестов, или [QUESTS_NEVER_SEEN]. Шаг, ставший доступным позже, — непросмотренный, и на кнопке
+ * квестов горит точка.
+ * @property lastRandomQuestAtMillis момент, когда выпал последний случайный квест, или
+ * [NO_RANDOM_QUEST]; следующий выпадает не раньше, чем через шесть игровых часов.
  */
 data class PlayerState(
     val selection: AnimalSelection? = null,
@@ -86,7 +94,10 @@ data class PlayerState(
     val statsUpdatedAtMillis: Long = NEVER_UPDATED,
     val petBornAtMillis: Long = Growth.NOT_BORN,
     val gameNowMillis: Long = CLOCK_NEVER_SAVED,
-    val clockShiftMillis: Long = FastForwardClock.NO_SHIFT
+    val clockShiftMillis: Long = FastForwardClock.NO_SHIFT,
+    val quests: List<QuestProgress> = emptyList(),
+    val questsSeenAtMillis: Long = QUESTS_NEVER_SEEN,
+    val lastRandomQuestAtMillis: Long = NO_RANDOM_QUEST
 ) {
     companion object {
         /**
@@ -102,5 +113,14 @@ data class PlayerState(
          * no moment to pick the clock up at, so it simply starts at the device's own.
          */
         const val CLOCK_NEVER_SAVED = Long.MIN_VALUE
+
+        /** Значение [questsSeenAtMillis]: игрок ещё ни разу не открывал экран квестов. */
+        const val QUESTS_NEVER_SEEN = Long.MIN_VALUE
+
+        /**
+         * Значение [lastRandomQuestAtMillis]: случайных квестов ещё не было, шесть часов считаются
+         * от момента, когда игрок завёл питомца.
+         */
+        const val NO_RANDOM_QUEST = Long.MIN_VALUE
     }
 }
