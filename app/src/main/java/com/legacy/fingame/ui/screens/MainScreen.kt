@@ -473,7 +473,8 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
  *   from the pet, its age stage and what it wears (see [GameScene.of]), so this screen doesn't have
  *   to know how the assets are laid out. Defaults to the demo content pet alone.
  * @param subLocationTitles titles for each sub-location, indexed by
- *   [GameUiState.subLocationIndex]; defaults to the demo content titles.
+ *   [GameUiState.subLocationIndex]; kept for callers, but no longer shown: the badge above the pet
+ *   says only its name.
  * @param onPetTap called when the player pats the pet — taps it in the game area — and the pat
  *   counts, i.e. no more often than [PetTouchController.MIN_TAP_INTERVAL_MILLIS]; the hearts over
  *   the pet are the screen's own business, the sound of the pat is the caller's.
@@ -574,7 +575,8 @@ fun MainScreen(
                     scene = scene,
                     title = stageTitleOf(
                         petName = state.petName,
-                        subLocationTitle = subLocationTitles.getOrNull(state.subLocationIndex)
+                        // Локаций в игре больше нет: над питомцем — только его имя.
+                        subLocationTitle = null
                     ),
                     // Only an upright screen holds the area to a share of the width: on a wide one
                     // the band between the corner blocks is narrow enough as it is.
