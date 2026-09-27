@@ -7,6 +7,7 @@ import com.legacy.fingame.game.economy.GameClock
 import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.items.ItemCategory
+import com.legacy.fingame.game.rules.PetCareTuning
 import com.legacy.fingame.game.scene.GameLayer
 import com.legacy.fingame.game.stats.StatKind
 
@@ -158,10 +159,28 @@ internal class FakeGameClock(
  * @param store where the player's state is restored from and saved to.
  * @param catalog what is on sale.
  * @param clock which day the game is played on.
+ * @param careTuning правила ухода; по умолчанию — те же, что в игре.
  * @return A view model backed by the given doubles.
  */
 internal fun testGameViewModel(
     store: PlayerStateStore = FakePlayerStateStore(),
     catalog: ItemCatalog = FakeItemCatalog(),
-    clock: GameClock = FakeGameClock()
-): GameViewModel = GameViewModel(store = store, catalog = catalog, clock = clock)
+    clock: GameClock = FakeGameClock(),
+    careTuning: PetCareTuning = PetCareTuning.DEFAULT
+): GameViewModel = GameViewModel(
+    store = store,
+    catalog = catalog,
+    clock = clock,
+    careTuning = careTuning
+)
+
+/**
+ * Правила ухода, при которых питомец всегда растёт как обычно и никаких штрафов нет: для
+ * проверок часов и перезапусков, где питомца нарочно оставляют одного. Сами правила ухода
+ * проверяет [GameCareRulesTest].
+ */
+internal val NO_CARE_RULES = PetCareTuning(
+    stopGrowthBelow = 0.0,
+    slowGrowthBelow = 0.0,
+    neglectBelow = 0.0
+)

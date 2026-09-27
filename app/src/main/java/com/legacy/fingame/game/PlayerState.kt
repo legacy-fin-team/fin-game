@@ -10,6 +10,7 @@ import com.legacy.fingame.game.economy.Economy
 import com.legacy.fingame.game.economy.FastForwardClock
 import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.items.ItemSelection
+import com.legacy.fingame.game.rules.PetCare
 import com.legacy.fingame.game.stats.PetStats
 
 /**
@@ -48,8 +49,11 @@ import com.legacy.fingame.game.stats.PetStats
  * [NEVER_UPDATED] when the pet's stats were never touched. The decay of the time between it and the
  * next launch is applied by [GameViewModel] when it restores the state.
  * @property petBornAtMillis moment the pet was taken in, in milliseconds, or [Growth.NOT_BORN] when
- * there is no pet yet. The pet's age stage is worked out from it (see [Growth.ageAt]) instead of
- * being saved, so the pet grows while the app is closed and the stage can never drift.
+ * there is no pet yet. The pet's own days, by which its care is judged, are counted from it (see
+ * [PetCare]).
+ * @property care как питомцу жилось: сколько он вырос и сколько дней подряд им не занимались, или
+ * null в сохранении, сделанном до правил ухода, — тогда [GameViewModel] достраивает его через
+ * [PetCare.migrated], и питомец сохраняет возраст, который у него был.
  * @property gameNowMillis moment the game's own clock had reached when this state was saved, in
  * milliseconds, or [CLOCK_NEVER_SAVED] when no run has saved one yet. It is the floor the next
  * launch holds its clock to (see [FastForwardClock.fastForwardTo]), so a device clock moved back in
@@ -90,6 +94,7 @@ data class PlayerState(
     val stats: PetStats = PetStats.FULL,
     val statsUpdatedAtMillis: Long = NEVER_UPDATED,
     val petBornAtMillis: Long = Growth.NOT_BORN,
+    val care: PetCare? = null,
     val gameNowMillis: Long = CLOCK_NEVER_SAVED,
     val clockShiftMillis: Long = FastForwardClock.NO_SHIFT
 ) {

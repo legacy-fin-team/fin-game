@@ -10,6 +10,7 @@ import com.legacy.fingame.game.economy.BudgetResult
 import com.legacy.fingame.game.economy.BudgetState
 import com.legacy.fingame.game.economy.Deposit
 import com.legacy.fingame.game.items.ItemSelection
+import com.legacy.fingame.game.rules.PetCare
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.game.stats.StatKind
 
@@ -73,6 +74,10 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         private const val KEY_PLANNING_OPEN = "planning_open"
         private const val KEY_MONEY_LOG = "money_log"
         private const val KEY_GOALS = "goals"
+        private const val KEY_CARE_GROWTH = "care_growth_millis"
+        private const val KEY_CARE_JUDGED_DAYS = "care_judged_days"
+        private const val KEY_CARE_DAY_BEST = "care_day_best"
+        private const val KEY_CARE_NEGLECT_STREAK = "care_neglect_streak"
 
         /** Key the savings account was stored under, read once more to hand the money back. */
         private const val KEY_RETIRED_SAVINGS = "savings"
@@ -142,7 +147,11 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             KEY_BUDGET_DRAFT_DEPOSIT_TERM_DAYS,
             KEY_PLANNING_OPEN,
             KEY_MONEY_LOG,
-            KEY_GOALS
+            KEY_GOALS,
+            KEY_CARE_GROWTH,
+            KEY_CARE_JUDGED_DAYS,
+            KEY_CARE_DAY_BEST,
+            KEY_CARE_NEGLECT_STREAK
         )
 
         /** Prefix of the key one stat bar is stored under, completed by [StatKind.xmlName]. */
@@ -202,6 +211,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
                 defaults.statsUpdatedAtMillis
             ),
             petBornAtMillis = preferences.getLong(KEY_PET_BORN_AT, defaults.petBornAtMillis),
+            care = readCare(),
             gameNowMillis = preferences.getLong(KEY_GAME_NOW, defaults.gameNowMillis),
             clockShiftMillis = preferences.getLong(KEY_CLOCK_SHIFT, defaults.clockShiftMillis)
         )
@@ -266,6 +276,19 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             .putBoolean(KEY_PLANNING_OPEN, state.planningOpen)
             .putString(KEY_MONEY_LOG, MoneyLogCodec.encode(state.moneyLog))
             .putString(KEY_GOALS, GoalsCodec.encode(state.goals))
+
+        val care = state.care
+        if (care == null) {
+            editor.remove(KEY_CARE_GROWTH)
+                .remove(KEY_CARE_JUDGED_DAYS)
+                .remove(KEY_CARE_DAY_BEST)
+                .remove(KEY_CARE_NEGLECT_STREAK)
+        } else {
+            editor.putLong(KEY_CARE_GROWTH, care.growthMillis)
+                .putLong(KEY_CARE_JUDGED_DAYS, care.judgedDays)
+                .putFloat(KEY_CARE_DAY_BEST, care.dayBestCare.toFloat())
+                .putInt(KEY_CARE_NEGLECT_STREAK, care.neglectStreak)
+        }
 
         StatKind.entries.forEach { stat ->
             editor.putInt(KEY_STAT_PREFIX + stat.xmlName, state.stats[stat])
@@ -348,6 +371,22 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
      *
      * @return The player's deposit, or null when there is none.
      */
+    /**
+     * Уход за питомцем, или null, когда сохранение сделано до правил ухода: его достроит
+     * [com.legacy.fingame.game.GameViewModel] (см. [PetCare.migrated]).
+     */
+    private fun readCare(): PetCare? {
+        if (!preferences.contains(KEY_CARE_GROWTH)) return null
+
+        return PetCare(
+            growthMillis = preferences.getLong(KEY_CARE_GROWTH, 0L).coerceAtLeast(0L),
+            judgedDays = preferences.getLong(KEY_CARE_JUDGED_DAYS, 0L).coerceAtLeast(0L),
+            dayBestCare = preferences.getFloat(KEY_CARE_DAY_BEST, 1f).toDouble().coerceIn(0.0, 1.0),
+            neglectStreak = preferences.getInt(KEY_CARE_NEGLECT_STREAK, 0)
+                .coerceIn(0, PetCare.MAX_STREAK)
+        )
+    }
+
     private fun readDeposit(): Deposit? {
         val amount = preferences.getInt(KEY_DEPOSIT_AMOUNT, 0)
         if (amount <= 0) return null

@@ -76,7 +76,11 @@ fun FinGameApp(
     modifier: Modifier = Modifier,
     vm: GameViewModel = viewModel(
         factory = with(LocalContext.current.applicationContext as FinGameApplication) {
-            GameViewModel.factory(store = playerPreferences, catalog = itemRegistry)
+            GameViewModel.factory(
+                store = playerPreferences,
+                catalog = itemRegistry,
+                careTuning = careTuning
+            )
         }
     )
 ) {
@@ -147,17 +151,18 @@ fun FinGameApp(
                             catalog = itemRegistry,
                             animalAge = state.petAge
                         ),
-                        goals = Goals.linesOf(goals = state.goals, catalog = itemRegistry),
+                        // Цели показывают те же цены, что и магазин (см. GameViewModel.shopCatalog).
+                        goals = Goals.linesOf(goals = state.goals, catalog = vm.shopCatalog),
                         onOpenGoal = vm::openGoal
                     )
 
                     Screen.SHOP -> ShopScreen(
                         state = state,
-                        items = itemRegistry.getItemsByCategory(state.selectedCategory),
+                        items = vm.shopCatalog.getItemsByCategory(state.selectedCategory),
                         cartLines = Cart.linesOf(
                             quantities = state.quantities,
                             pickedVariants = state.pickedVariants,
-                            catalog = itemRegistry
+                            catalog = vm.shopCatalog
                         ),
                         onSelectCategory = vm::selectCategory,
                         onPickVariant = vm::pickVariant,
