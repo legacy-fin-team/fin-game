@@ -38,4 +38,9 @@ class PlayerPreferencesKeysTest {
         assertTrue(PlayerPreferences.LIVE_KEYS.none { it in statKeys })
         assertTrue(PlayerPreferences.RETIRED_KEYS.none { it in statKeys })
     }
+
+    @Test
+    fun `the goals are written under a key of their own`() {
+        assertTrue("goals" in PlayerPreferences.LIVE_KEYS)
+    }
 }
