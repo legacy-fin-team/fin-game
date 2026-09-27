@@ -19,10 +19,9 @@ class SpriteLoader(private val context: Context) {
     companion object {
         /**
          * The sprite drawn in place of one whose file is not in the assets, as a path relative to
-         * /assets/textures/ folder. Callers that would otherwise stack several of these on top of
-         * each other can ask [hasSprite] first and draw this one themselves, just once.
+         * /assets/textures/ folder.
          */
-        const val MISSING_SPRITE = "error/error.webp"
+        private const val MISSING_SPRITE = "error/error.webp"
     }
 
     private val tag = "SpriteLoader"
