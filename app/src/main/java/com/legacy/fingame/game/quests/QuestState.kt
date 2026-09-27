@@ -45,6 +45,10 @@ data class QuestOutcome(
  * @property progress прогресс 0..100 % (у квестов без прогресса всегда 0).
  * @property status идёт квест или пройден.
  * @property lastChoice исход последнего выбора, пока игрок не нажал «Дальше», иначе null.
+ * @property enabledAgain включил ли взрослый этот пройденный квест снова — тогда
+ * [QuestEngine.availabilityOf] не смотрит ни на [Quest.repeatable], ни на кулдаун. Ставится
+ * [QuestEngine.enable], снимается автоматически, когда квест начинается заново ([QuestEngine.start]
+ * строит новую запись без этого флага).
  */
 data class QuestProgress(
     val questId: String,
@@ -52,7 +56,8 @@ data class QuestProgress(
     val availableAtMillis: Long,
     val progress: Int = Quest.MIN_PROGRESS,
     val status: QuestStatus = QuestStatus.ACTIVE,
-    val lastChoice: QuestOutcome? = null
+    val lastChoice: QuestOutcome? = null,
+    val enabledAgain: Boolean = false
 ) {
     /** Идёт ли квест. */
     val isActive: Boolean get() = status == QuestStatus.ACTIVE

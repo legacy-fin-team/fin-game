@@ -470,8 +470,9 @@ class GameViewModel(
     }
 
     /**
-     * Игрок берёт квест кнопкой «Взять». Только квест игрока, который ещё не начинался, и только
-     * когда на счёте его минимум; минимум не тратится.
+     * Игрок берёт квест кнопкой «Взять». Только квест игрока и только когда его можно начать —
+     * все условия у [QuestEngine.availabilityOf]: не идёт ли он уже, хватает ли минимума, не
+     * пройден ли одноразовый и не остывает ли ещё после кулдауна.
      *
      * @param questId id квеста.
      * @return True, когда квест начат.
@@ -479,8 +480,24 @@ class GameViewModel(
     fun startQuest(questId: String): Boolean {
         val quest = questCatalog.findQuestById(questId) ?: return false
         if (quest.kind != QuestKind.PLAYER) return false
-        if (_state.value.questProgressOf(questId) != null) return false
         return beginQuest(quest)
+    }
+
+    /**
+     * Взрослый включает пройденный квест снова: один следующий раз его можно начать, не дожидаясь
+     * кулдауна и не оглядываясь на `repeatable = false`. Экран для этого — в другой ветке, здесь
+     * только правило (см. [QuestEngine.enable]).
+     *
+     * @param questId id квеста.
+     * @return True, когда квест был пройден и включён; false, когда он не начинался или ещё идёт.
+     */
+    fun enableQuest(questId: String): Boolean {
+        val current = _state.value
+        val quests = QuestEngine.enable(current.quests, questId) ?: return false
+
+        _state.value = current.copy(quests = quests)
+        persist()
+        return true
     }
 
     /**

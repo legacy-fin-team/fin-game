@@ -1,9 +1,12 @@
 package com.legacy.fingame.ui.screens
 
+import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestEngine
 import com.legacy.fingame.game.quests.QuestEntry
 import com.legacy.fingame.game.quests.QuestOption
 import com.legacy.fingame.game.quests.QuestOutcome
+import com.legacy.fingame.game.quests.QuestProgress
+import com.legacy.fingame.game.quests.QuestUnavailableReason
 import com.legacy.fingame.ui.components.Sprites
 import java.util.Locale
 import kotlin.math.abs
@@ -74,6 +77,34 @@ fun nextStepInText(remainingMillis: Long): String =
 fun finishedText(hasProgress: Boolean, progress: Int): String =
     if (hasProgress) "Завершён$DotSeparator$progress%" else "Завершён"
 
+/** @return «Доступен через 1:02:03» — квест на кулдауне после прохождения. */
+fun availableInText(remainingMillis: Long): String =
+    "Доступен через ${countdownText(remainingMillis)}"
+
+/**
+ * Статус пройденного квеста: обычное «Завершён», либо, когда квест на кулдауне, отсчёт до
+ * следующей возможности его начать. Одноразовый квест, ждущий взрослого, тоже «Завершён» — для
+ * него текста пока нет, экран взрослого режима будет в другой ветке.
+ *
+ * @param quest квест.
+ * @param progress его сохранённый прогресс — пройденный.
+ * @param balance текущий счёт игрока.
+ * @param nowMillis текущий момент.
+ */
+private fun finishedStatusText(
+    quest: Quest,
+    progress: QuestProgress,
+    balance: Int,
+    nowMillis: Long
+): String {
+    val availability = QuestEngine.availabilityOf(quest, listOf(progress), balance, nowMillis)
+    return if (availability.reason == QuestUnavailableReason.COOLDOWN) {
+        availableInText(availability.availableAtMillis!! - nowMillis)
+    } else {
+        finishedText(quest.hasProgress, progress.progress)
+    }
+}
+
 /**
  * Короткий статус под названием карточки.
  *
@@ -81,7 +112,7 @@ fun finishedText(hasProgress: Boolean, progress: Int): String =
  * @param balance текущий счёт игрока — для «Нужно N монет».
  * @param nowMillis момент по игровым часам — для отсчёта.
  * @return «Можно взять», «Нужно 100 монет», «Шаг 2 из 3», «Следующий шаг через 0:42»,
- * «Следующий шаг готов», «Можно завершить» или «Завершён · 80%».
+ * «Следующий шаг готов», «Можно завершить», «Завершён · 80%» или «Доступен через …».
  */
 fun questStatusText(entry: QuestEntry, balance: Int, nowMillis: Long): String {
     val quest = entry.quest
@@ -89,7 +120,7 @@ fun questStatusText(entry: QuestEntry, balance: Int, nowMillis: Long): String {
         ?: return if (balance < quest.minBalance) needCoinsText(quest.minBalance) else "Можно взять"
     val choice = progress.lastChoice
     return when {
-        progress.isFinished -> finishedText(quest.hasProgress, progress.progress)
+        progress.isFinished -> finishedStatusText(quest, progress, balance, nowMillis)
         choice == null -> stepText(
             quest.stepNumberOf(progress.nodeId).coerceAtLeast(1),
             quest.stepCount.coerceAtLeast(1)
@@ -103,16 +134,24 @@ fun questStatusText(entry: QuestEntry, balance: Int, nowMillis: Long): String {
 
 /**
  * Статус под названием раскрытой карточки. Низ раскрытой карточки сам показывает отсчёт и что квест
- * завершён, так что шапка их не повторяет.
+ * завершён, так что шапка их не повторяет — кроме отсчёта кулдауна, его больше негде показать.
  *
  * @param entry карточка.
  * @param balance текущий счёт игрока — для «Нужно N монет».
  * @param nowMillis момент по игровым часам.
- * @return «Шаг 2 из 3» у взятого квеста, null у пройденного, у невзятого — как [questStatusText].
+ * @return «Шаг 2 из 3» у взятого квеста, «Доступен через …» у пройденного на кулдауне, null у
+ * пройденного без кулдауна, у невзятого — как [questStatusText].
  */
 fun expandedQuestStatusText(entry: QuestEntry, balance: Int, nowMillis: Long): String? {
     val progress = entry.progress ?: return questStatusText(entry, balance, nowMillis)
-    if (progress.isFinished) return null
+    if (progress.isFinished) {
+        val availability = QuestEngine.availabilityOf(entry.quest, listOf(progress), balance, nowMillis)
+        return if (availability.reason == QuestUnavailableReason.COOLDOWN) {
+            availableInText(availability.availableAtMillis!! - nowMillis)
+        } else {
+            null
+        }
+    }
     return stepText(
         entry.quest.stepNumberOf(progress.nodeId).coerceAtLeast(1),
         entry.quest.stepCount.coerceAtLeast(1)

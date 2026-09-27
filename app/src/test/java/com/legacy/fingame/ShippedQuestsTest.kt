@@ -147,6 +147,24 @@ class ShippedQuestsTest {
     }
 
     @Test
+    fun `every quest is repeatable with at least the default cooldown`() {
+        readShippedQuests().forEach { quest ->
+            assertTrue("${quest.id} should stay repeatable", quest.repeatable)
+            assertTrue(
+                "${quest.id} cooldown is below the default",
+                quest.cooldownMinutes >= Quest.DEFAULT_COOLDOWN_MINUTES
+            )
+        }
+    }
+
+    @Test
+    fun `the piggy bank has a noticeable cooldown so it cannot be farmed`() {
+        val piggy = readShippedQuests().single { it.id == "piggy_bank" }
+
+        assertTrue(piggy.cooldownMinutes > Quest.DEFAULT_COOLDOWN_MINUTES)
+    }
+
+    @Test
     fun `a catalog finds a quest by its id`() {
         val quests = readShippedQuests()
         val catalog = QuestCatalog.of(quests)

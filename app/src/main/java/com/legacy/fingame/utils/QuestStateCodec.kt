@@ -14,9 +14,13 @@ import com.legacy.fingame.game.stats.StatKind
  * эффекты на статы внутри поля — group separator (`\u001D`), а стат от значения — `=`. Все три
  * управляющих символа вычищаются из текстов при кодировании, так что формат не ломается.
  *
- * Поля записи, всегда двенадцать: id квеста, узел, момент доступности, прогресс, статус, есть ли
- * выбор (`0`/`1`), надпись варианта, текст результата, куда ведёт, эффекты, деньги, изменение
- * прогресса. Без выбора последние шесть пустые/нулевые.
+ * Поля записи: id квеста, узел, момент доступности, прогресс, статус, есть ли выбор (`0`/`1`),
+ * надпись варианта, текст результата, куда ведёт, эффекты, деньги, изменение прогресса и, самым
+ * последним, флаг «взрослый включил квест снова» (`0`/`1`, [QuestProgress.enabledAgain]). Без
+ * выбора шесть полей после него пустые/нулевые.
+ *
+ * Запись без последнего поля (старый сейв, где [QuestProgress.enabledAgain] ещё не было) читается
+ * как есть — тринадцатое поле тогда считается ложью, ровно как оно и было раньше.
  */
 object QuestStateCodec {
 
@@ -27,9 +31,15 @@ object QuestStateCodec {
     private const val EFFECT_SEPARATOR = '\u001D'
     private const val EFFECT_VALUE_SEPARATOR = '='
 
-    private const val FIELDS_PER_RECORD = 12
+    private const val FIELDS_PER_RECORD = 13
+
+    /** Сколько полей была запись до [QuestProgress.enabledAgain] — старые сейвы читаются и так. */
+    private const val LEGACY_FIELDS_PER_RECORD = 12
+
     private const val NO_CHOICE = "0"
     private const val HAS_CHOICE = "1"
+    private const val NOT_ENABLED_AGAIN = "0"
+    private const val ENABLED_AGAIN = "1"
 
     /**
      * @param quests состояние квестов игрока.
@@ -66,13 +76,24 @@ object QuestStateCodec {
             clean(choice?.nextNodeId.orEmpty()),
             encodeEffects(choice?.statEffects.orEmpty()),
             (choice?.moneyDelta ?: 0).toString(),
-            (choice?.progressDelta ?: 0).toString()
+            (choice?.progressDelta ?: 0).toString(),
+            if (progress.enabledAgain) ENABLED_AGAIN else NOT_ENABLED_AGAIN
         ).joinToString(FIELD_SEPARATOR.toString())
     }
 
     private fun decodeRecord(record: String): QuestProgress? {
         val fields = record.split(FIELD_SEPARATOR)
-        if (fields.size != FIELDS_PER_RECORD) return dropped(record)
+        val enabledAgain = when {
+            fields.size == FIELDS_PER_RECORD -> when (fields[LEGACY_FIELDS_PER_RECORD]) {
+                NOT_ENABLED_AGAIN -> false
+                ENABLED_AGAIN -> true
+                else -> return dropped(record)
+            }
+            // Сейв прежней версии, без флага «включён взрослым снова»: читается как есть, флаг —
+            // ложь, ровно как он и вёл себя до появления этого поля.
+            fields.size == LEGACY_FIELDS_PER_RECORD -> false
+            else -> return dropped(record)
+        }
 
         val questId = fields[0]
         val nodeId = fields[1]
@@ -97,7 +118,8 @@ object QuestStateCodec {
             availableAtMillis = availableAtMillis,
             progress = progress.coerceIn(Quest.MIN_PROGRESS, Quest.MAX_PROGRESS),
             status = status,
-            lastChoice = lastChoice
+            lastChoice = lastChoice,
+            enabledAgain = enabledAgain
         )
     }
 

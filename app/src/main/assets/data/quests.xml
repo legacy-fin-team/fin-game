@@ -5,7 +5,8 @@
     Картинки quests/<id>.webp необязательны, файлов пока нет: без картинки на карточке
     показывается иконка квестов.
 
-    <quest id kind="player|random" title progress="true|false" min-balance="N" start="<id узла>" image>
+    <quest id kind="player|random" title progress="true|false" min-balance="N" start="<id узла>"
+           image repeatable="true|false" cooldown-minutes="N" stage-delay-minutes="N">
         <description>Описание квеста</description>
         <node id delay-minutes="N" image>
             <text>Описание ситуации</text>
@@ -16,9 +17,15 @@
         </node>
     </quest>
 
-    min-balance не тратится при взятии квеста. delay-minutes — через сколько игровых минут
-    после выбора станет доступен следующий узел. image — путь относительно assets/textures/,
+    min-balance не тратится при взятии квеста. delay-minutes — через сколько реальных минут
+    после выбора станет доступен следующий узел; когда его нет у узла, берётся
+    stage-delay-minutes квеста (по умолчанию 0). image — путь относительно assets/textures/,
     необязателен. Надпись на кнопке — не длиннее 16 символов.
+
+    repeatable (по умолчанию true) — можно ли брать квест снова после того, как он пройден; у
+    "false" это разово, пока взрослый не включит его заново. cooldown-minutes (по умолчанию 60) —
+    сколько реальных минут ждать после прохождения повторяемого квеста, прежде чем его можно
+    начать снова.
 -->
 <quests>
     <quest id="picnic" title="Пикник" kind="player" progress="true" min-balance="100"
@@ -66,7 +73,7 @@
         </node>
     </quest>
 
-    <quest id="piggy_bank" title="Копилка" kind="player" start="gift"
+    <quest id="piggy_bank" title="Копилка" kind="player" start="gift" cooldown-minutes="180"
            image="quests/piggy_bank.webp">
         <description>Научись откладывать: терпение приносит монеты.</description>
         <node id="gift" delay-minutes="2">

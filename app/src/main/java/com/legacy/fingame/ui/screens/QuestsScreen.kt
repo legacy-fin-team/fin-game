@@ -44,6 +44,7 @@ import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.legacy.fingame.game.quests.Quest
+import com.legacy.fingame.game.quests.QuestEngine
 import com.legacy.fingame.game.quests.QuestEntry
 import com.legacy.fingame.game.quests.QuestKind
 import com.legacy.fingame.game.quests.QuestNode
@@ -353,8 +354,10 @@ private fun QuestBody(
         progress == null -> StartBlock(quest = quest, balance = balance, onStart = onStart)
         progress.isFinished -> FinishedBlock(
             quest = quest,
+            progress = progress,
             balance = balance,
             canRestart = canRestart,
+            nowMillis = nowMillis,
             onRestart = onRestart
         )
         choice != null -> OutcomeBlock(
@@ -390,9 +393,20 @@ private fun StartBlock(quest: Quest, balance: Int, onStart: () -> Unit) {
     }
 }
 
-/** Квест пройден: надпись и, для квеста игрока в демо-сборке, «Ещё раз». */
+/**
+ * Квест пройден: надпись и, для квеста игрока в демо-сборке, «Ещё раз» — неактивная, пока квест
+ * ещё нельзя начать снова (кулдаун, одноразовый без включения взрослым или не хватает монет; см.
+ * [QuestEngine.availabilityOf]).
+ */
 @Composable
-private fun FinishedBlock(quest: Quest, balance: Int, canRestart: Boolean, onRestart: () -> Unit) {
+private fun FinishedBlock(
+    quest: Quest,
+    progress: QuestProgress,
+    balance: Int,
+    canRestart: Boolean,
+    nowMillis: Long,
+    onRestart: () -> Unit
+) {
     Column(verticalArrangement = Arrangement.spacedBy(CardGap)) {
         Text(
             text = "Квест завершён",
@@ -401,12 +415,13 @@ private fun FinishedBlock(quest: Quest, balance: Int, canRestart: Boolean, onRes
         )
         if (canRestart && quest.kind == QuestKind.PLAYER) {
             val affordable = balance >= quest.minBalance
+            val availability = QuestEngine.availabilityOf(quest, listOf(progress), balance, nowMillis)
             PillButton(
                 text = "Ещё раз",
                 onClick = onRestart,
                 modifier = Modifier.fillMaxWidth(),
                 style = PillStyle.Outlined,
-                enabled = affordable,
+                enabled = availability.canStart,
                 compact = true
             )
             if (quest.minBalance > 0) {

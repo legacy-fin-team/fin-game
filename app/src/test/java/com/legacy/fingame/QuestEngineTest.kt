@@ -6,6 +6,7 @@ import com.legacy.fingame.game.quests.QuestEngine
 import com.legacy.fingame.game.quests.QuestOutcome
 import com.legacy.fingame.game.quests.QuestProgress
 import com.legacy.fingame.game.quests.QuestStatus
+import com.legacy.fingame.game.quests.QuestUnavailableReason
 import com.legacy.fingame.game.stats.StatKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -29,7 +30,7 @@ class QuestEngineTest {
 
     @Test
     fun `a quest cannot be taken without its minimum on the balance`() {
-        assertFalse(QuestEngine.canStart(TestQuests.PICNIC, emptyList(), balance = 99))
+        assertFalse(QuestEngine.canStart(TestQuests.PICNIC, emptyList(), balance = 99, nowMillis = now))
         assertNull(QuestEngine.start(TestQuests.PICNIC, emptyList(), balance = 99, nowMillis = now))
     }
 
@@ -44,12 +45,14 @@ class QuestEngineTest {
     fun `a running quest cannot be taken a second time`() {
         val quests = started(TestQuests.PICNIC)
 
-        assertFalse(QuestEngine.canStart(TestQuests.PICNIC, quests, balance = 1_000))
+        assertFalse(QuestEngine.canStart(TestQuests.PICNIC, quests, balance = 1_000, nowMillis = now + minute))
         assertNull(QuestEngine.start(TestQuests.PICNIC, quests, 1_000, now + minute))
     }
 
     @Test
-    fun `a finished quest starts over from scratch`() {
+    fun `a finished quest starts over from scratch once its cooldown is over`() {
+        // Кулдаун снят копией квеста — тест проверяет только сброс прогресса и узла, не время.
+        val quest = TestQuests.PICNIC.copy(cooldownMinutes = 0)
         val finished = QuestProgress(
             questId = "picnic",
             nodeId = Quest.END_NODE,
@@ -58,9 +61,103 @@ class QuestEngineTest {
             status = QuestStatus.FINISHED
         )
 
-        val quests = QuestEngine.start(TestQuests.PICNIC, listOf(finished), 1_000, now + minute)
+        val quests = QuestEngine.start(quest, listOf(finished), 1_000, now + minute)
 
         assertEquals(listOf(QuestProgress("picnic", "food", now + minute)), quests)
+    }
+
+    // --- Кулдаун и одноразовые квесты ---
+
+    @Test
+    fun `a repeatable quest is on cooldown right after it finishes`() {
+        val finished = QuestProgress("picnic", Quest.END_NODE, availableAtMillis = now, status = QuestStatus.FINISHED)
+
+        val availability = QuestEngine.availabilityOf(TestQuests.PICNIC, listOf(finished), 1_000, now)
+
+        assertFalse(availability.canStart)
+        assertEquals(QuestUnavailableReason.COOLDOWN, availability.reason)
+        assertEquals(
+            now + TimeUnit.MINUTES.toMillis(TestQuests.PICNIC.cooldownMinutes.toLong()),
+            availability.availableAtMillis
+        )
+        assertNull(QuestEngine.start(TestQuests.PICNIC, listOf(finished), 1_000, now))
+    }
+
+    @Test
+    fun `a repeatable quest can be taken again once its cooldown passes`() {
+        val finished = QuestProgress("picnic", Quest.END_NODE, availableAtMillis = now, status = QuestStatus.FINISHED)
+        val cooldownEnd = now + TimeUnit.MINUTES.toMillis(TestQuests.PICNIC.cooldownMinutes.toLong())
+
+        assertNull(QuestEngine.start(TestQuests.PICNIC, listOf(finished), 1_000, cooldownEnd - 1))
+        assertTrue(QuestEngine.canStart(TestQuests.PICNIC, listOf(finished), 1_000, cooldownEnd))
+        assertEquals(
+            listOf(QuestProgress("picnic", "food", cooldownEnd)),
+            QuestEngine.start(TestQuests.PICNIC, listOf(finished), 1_000, cooldownEnd)
+        )
+    }
+
+    @Test
+    fun `a quest that is not repeatable stays locked no matter how long it waits`() {
+        val quest = TestQuests.PICNIC.copy(repeatable = false)
+        val finished = QuestProgress("picnic", Quest.END_NODE, availableAtMillis = now, status = QuestStatus.FINISHED)
+
+        val availability = QuestEngine.availabilityOf(quest, listOf(finished), 1_000, now + TimeUnit.DAYS.toMillis(30))
+
+        assertFalse(availability.canStart)
+        assertEquals(QuestUnavailableReason.ONE_TIME_DONE, availability.reason)
+        assertNull(availability.availableAtMillis)
+    }
+
+    @Test
+    fun `enabling a finished quest again lifts both the one-time lock and the cooldown`() {
+        val quest = TestQuests.PICNIC.copy(repeatable = false)
+        val finished = QuestProgress("picnic", Quest.END_NODE, availableAtMillis = now, status = QuestStatus.FINISHED)
+
+        val enabled = QuestEngine.enable(listOf(finished), "picnic")!!
+
+        assertTrue(enabled.single().enabledAgain)
+        assertTrue(QuestEngine.canStart(quest, enabled, 1_000, now))
+        val started = QuestEngine.start(quest, enabled, 1_000, now)!!
+        // Начатый заново квест — свежая запись без старого флага включения.
+        assertFalse(started.single().enabledAgain)
+    }
+
+    @Test
+    fun `enabling a quest that never finished does nothing`() {
+        assertNull(QuestEngine.enable(emptyList(), "picnic"))
+        assertNull(QuestEngine.enable(started(TestQuests.PICNIC), "picnic"))
+    }
+
+    @Test
+    fun `a random quest still on its own cooldown does not come up, even once six hours pass`() {
+        val onCooldown = QuestProgress(
+            "lost_wallet", Quest.END_NODE, availableAtMillis = now, status = QuestStatus.FINISHED
+        )
+        val cooldownEnd = now + TimeUnit.MINUTES.toMillis(TestQuests.WALLET.cooldownMinutes.toLong())
+        val catalog = QuestCatalog.of(listOf(TestQuests.WALLET))
+
+        // sinceMillis достаточно в прошлом, чтобы общие шесть часов между случайными квестами уже
+        // прошли — единственная причина отказа тут должна быть кулдаун самого кошелька.
+        val spawn = QuestEngine.maybeSpawnRandom(
+            catalog, listOf(onCooldown), 0, sinceMillis = now - sixHours,
+            nowMillis = cooldownEnd - 1, random = ScriptedRandom()
+        )
+
+        assertNull(spawn)
+    }
+
+    @Test
+    fun `a random quest done for good does not come up, but another one still can`() {
+        val doneForGood = QuestProgress(
+            "lost_wallet", Quest.END_NODE, availableAtMillis = now, status = QuestStatus.FINISHED
+        )
+        val catalog = QuestCatalog.of(listOf(TestQuests.WALLET.copy(repeatable = false), TestQuests.GUESTS))
+
+        val spawn = QuestEngine.maybeSpawnRandom(
+            catalog, listOf(doneForGood), 0, now, now + sixHours, ScriptedRandom(0, 0)
+        )!!
+
+        assertEquals(TestQuests.GUESTS, spawn.quest)
     }
 
     // --- Выбрать вариант ---
