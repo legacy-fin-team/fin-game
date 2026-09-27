@@ -6,9 +6,9 @@
             <variant id="white" />
         </variants>
     </animal>
-    <animal id="dog" name="Пёс" ages="2">
-        <variants path="animals/dog/">
-            <variant id="brown" />
+    <animal id="fish" name="Рыба" ages="3">
+        <variants path="animals/fish/">
+            <variant id="golden" />
         </variants>
     </animal>
 </animals>
