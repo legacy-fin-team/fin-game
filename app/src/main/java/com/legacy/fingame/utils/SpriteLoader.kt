@@ -59,7 +59,6 @@ class SpriteLoader(private val context: Context) {
         context.assets.open(fullPathOf(assetPath)).close()
         true
     } catch (_: IOException) {
-        Log.e(tag, "Sprite file missing from assets: /assets/${fullPathOf(assetPath)}")
         false
     }
 
