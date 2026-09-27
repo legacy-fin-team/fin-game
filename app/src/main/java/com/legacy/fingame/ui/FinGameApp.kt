@@ -20,6 +20,7 @@ import com.legacy.fingame.FinGameApplication
 import com.legacy.fingame.game.GameViewModel
 import com.legacy.fingame.game.Screen
 import com.legacy.fingame.game.items.Cart
+import com.legacy.fingame.game.items.Goals
 import com.legacy.fingame.game.items.Inventory
 import com.legacy.fingame.game.scene.GameScene
 import com.legacy.fingame.game.scene.SceneSprite
@@ -157,7 +158,9 @@ fun FinGameApp(
                         ),
                         // Patting the pet only makes it happy to see: hearts on the screen and a
                         // sound, no stats and no money.
-                        onPetTap = { onPlayAnimalSound(pet.animalId) }
+                        onPetTap = { onPlayAnimalSound(pet.animalId) },
+                        goals = Goals.linesOf(goals = state.goals, catalog = itemRegistry),
+                        onOpenGoal = vm::openGoal
                     )
 
                     Screen.SHOP -> ShopScreen(
@@ -172,6 +175,7 @@ fun FinGameApp(
                         onPickVariant = vm::pickVariant,
                         onIncrease = vm::increaseQty,
                         onDecrease = vm::decreaseQty,
+                        onToggleGoal = { selection -> vm.toggleGoal(selection) },
                         onBuy = vm::buyCart,
                         onClose = vm::closeScreen
                     )

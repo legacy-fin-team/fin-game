@@ -44,6 +44,12 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.IntrinsicMeasurable
+import androidx.compose.ui.layout.IntrinsicMeasureScope
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.layout.MultiContentMeasurePolicy
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
@@ -66,7 +72,9 @@ import com.legacy.fingame.DemoMode
 import com.legacy.fingame.game.GameUiState
 import com.legacy.fingame.game.Screen
 import com.legacy.fingame.game.economy.Economy
+import com.legacy.fingame.game.items.GoalLine
 import com.legacy.fingame.game.items.ItemCatalog
+import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.scene.GameLayer
 import com.legacy.fingame.game.scene.GameScene
 import com.legacy.fingame.game.scene.HeartBurst
@@ -78,7 +86,6 @@ import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.game.stats.StatKind
 import com.legacy.fingame.ui.DemoContent
 import com.legacy.fingame.ui.components.BalanceChip
-import com.legacy.fingame.ui.components.GoalCard
 import com.legacy.fingame.ui.components.PillButton
 import com.legacy.fingame.ui.components.PillStyle
 import com.legacy.fingame.ui.components.Sprite
@@ -214,15 +221,6 @@ internal val SceneOffsetSaver: Saver<SceneOffset, Any> = listSaver(
         if (moved.size == 2) SceneOffset(x = moved[0], y = moved[1]) else null
     }
 )
-
-// TODO: DemoGoalProgress is a hardcoded placeholder for the goal card progress bar. Replace with the real progress value once goal data is exposed from app logic.
-private const val DemoGoalProgress = 0.4f
-
-/**
- * Title the goal card carries until the goal itself is part of the game state.
- * TODO: replace with the player's own goal once app logic exposes one.
- */
-private const val DemoGoalTitle = "Текущая цель"
 
 /**
  * Stats shown beside the balance, in the order they are laid out: every stat the pet has, health
@@ -438,8 +436,9 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
  * [MainScreenStage] from the sizes the blocks actually come out at rather than from guesses about
  * them — a screen that has to say more, because the text is set larger or the pet has a long name,
  * hands the pet less room instead of running one thing over another.
- * - Top-start: the balance chip, the pet's stats ([PlayerStats]) in one strip under it and the goal
- *   progress card under them, the card exactly as wide as the chips above it ([PlayerCorner]).
+ * - Top-start: the balance chip, the pet's stats ([PlayerStats]) in one strip under it and the
+ *   player's goals under them — a row of cards scrolled sideways ([GoalsCarousel]), exactly as wide
+ *   as the chips above it ([PlayerCorner]).
  *   Every stat is a compact [StatChip] — an icon and a percentage — so the stats take a corner
  *   instead of half the screen.
  * - Top-end: the button for opening settings, and under it — in a demo build only — the button
@@ -476,6 +475,9 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
  * @param onPetTap called when the player pats the pet — taps it in the game area — and the pat
  *   counts, i.e. no more often than [PetTouchController.MIN_TAP_INTERVAL_MILLIS]; the hearts over
  *   the pet are the screen's own business, the sound of the pat is the caller's.
+ * @param goals цели игрока в том порядке, в каком он их отмечал, уже сведённые с каталогом
+ *   ([com.legacy.fingame.game.items.Goals.linesOf]); пустой список — карточка-подсказка на их месте.
+ * @param onOpenGoal вызывается с целью, по карточке которой нажали.
  */
 @Composable
 fun MainScreen(
@@ -488,7 +490,9 @@ fun MainScreen(
     scene: GameScene = DemoScene,
     // TODO: default pulls from demo content; replace with real sub-location names for the current location.
     subLocationTitles: List<String> = DemoContent.subLocationTitles,
-    onPetTap: () -> Unit = {}
+    onPetTap: () -> Unit = {},
+    goals: List<GoalLine> = emptyList(),
+    onOpenGoal: (ItemSelection) -> Unit = {}
 ) {
     BoxWithConstraints(
         modifier = modifier
@@ -524,6 +528,9 @@ fun MainScreen(
             topStart = {
                 PlayerCorner(
                     state = state,
+                    goals = goals,
+                    onOpenGoal = onOpenGoal,
+                    onOpenShop = { onOpenScreen(Screen.SHOP) },
                     clearance = if (controlsInRow) {
                         DpSize.Zero
                     } else {
@@ -746,6 +753,9 @@ private val Placeable.block: CornerBlock get() = CornerBlock(width = width, heig
  * was offered, most of it empty.
  *
  * @param state game state the chips and the card are filled from.
+ * @param goals цели игрока для ряда карточек под чипами ([GoalsCarousel]).
+ * @param onOpenGoal нажатие на карточку цели.
+ * @param onOpenShop нажатие на карточку-подсказку, пока целей нет.
  * @param clearance the room the settings button takes in the top end corner of the space the corner
  *   is given, gaps included; [DpSize.Zero] when there is nothing there to keep clear of.
  * @param modifier modifier applied to the corner.
@@ -753,6 +763,9 @@ private val Placeable.block: CornerBlock get() = CornerBlock(width = width, heig
 @Composable
 private fun PlayerCorner(
     state: GameUiState,
+    goals: List<GoalLine>,
+    onOpenGoal: (ItemSelection) -> Unit,
+    onOpenShop: () -> Unit,
     clearance: DpSize,
     modifier: Modifier = Modifier
 ) {
@@ -772,47 +785,86 @@ private fun PlayerCorner(
             }
         }
     }
+    // Ряд целей меряется ниже так же, как мерилась одна карточка, — ровно в ширину чипов; высоту
+    // он берёт у карточки, сколько бы целей в нём ни было.
     val goal: @Composable () -> Unit = {
-        GoalCard(progress = DemoGoalProgress, title = DemoGoalTitle)
+        GoalsCarousel(
+            goals = goals,
+            balance = state.balance,
+            onOpenGoal = onOpenGoal,
+            onOpenShop = onOpenShop
+        )
     }
 
-    Layout(contents = listOf(balance, stats, goal), modifier = modifier) { measurables, constraints ->
-        val gapPx = ChipGap.roundToPx()
-        val loose = constraints.copy(minWidth = 0, minHeight = 0)
-        val roomBeside = (constraints.maxWidth - clearance.width.roundToPx()).coerceAtLeast(0)
-        val clearanceBottom = clearance.height.roundToPx()
+    // Сцена спрашивает у угла его наименьшую/наибольшую ширину (intrinsic), а ряд целей — это
+    // LazyRow, который на такой вопрос падает. Ширину угла задают деньги и чипы (цели берут ровно
+    // их ширину), поэтому ответ собирается только из них, а ряд целей не спрашивается вовсе.
+    // Intrinsic-высоту угла не спрашивает никто ([MainScreenStage] меряет его обычным measure),
+    // и честно ответить на неё без ряда целей нельзя: высоту слоту даёт карточка внутри LazyRow.
+    // Поэтому высота не переопределена — если её когда-нибудь спросят, падение укажет сюда.
+    val measurePolicy = remember(clearance) {
+        object : MultiContentMeasurePolicy {
+            override fun MeasureScope.measure(
+                measurables: List<List<Measurable>>,
+                constraints: Constraints
+            ): MeasureResult {
+                val gapPx = ChipGap.roundToPx()
+                val loose = constraints.copy(minWidth = 0, minHeight = 0)
+                val roomBeside =
+                    (constraints.maxWidth - clearance.width.roundToPx()).coerceAtLeast(0)
+                val clearanceBottom = clearance.height.roundToPx()
 
-        // The money always fits beside the button: it is measured against what the button leaves.
-        val balancePlaced = measurables[0].first().measure(loose.copy(maxWidth = roomBeside))
-        val statsPlaced = measurables[1].first().measure(loose)
-        val chipsWidth = max(balancePlaced.width, statsPlaced.width)
-        // The card is handed the width the chips came out at, and no choice about it.
-        val goalPlaced = measurables[2].first().measure(
-            loose.copy(minWidth = chipsWidth, maxWidth = chipsWidth)
-        )
+                // The money always fits beside the button: it is measured against what the button
+                // leaves.
+                val balancePlaced =
+                    measurables[0].first().measure(loose.copy(maxWidth = roomBeside))
+                val statsPlaced = measurables[1].first().measure(loose)
+                val chipsWidth = max(balancePlaced.width, statsPlaced.width)
+                // The card is handed the width the chips came out at, and no choice about it.
+                val goalPlaced = measurables[2].first().measure(
+                    loose.copy(minWidth = chipsWidth, maxWidth = chipsWidth)
+                )
 
-        val statsTop = clearedTopOf(
-            top = balancePlaced.height + gapPx,
-            width = statsPlaced.width,
-            roomBeside = roomBeside,
-            clearanceBottom = clearanceBottom
-        )
-        val goalTop = clearedTopOf(
-            top = statsTop + statsPlaced.height + gapPx,
-            width = goalPlaced.width,
-            roomBeside = roomBeside,
-            clearanceBottom = clearanceBottom
-        )
+                val statsTop = clearedTopOf(
+                    top = balancePlaced.height + gapPx,
+                    width = statsPlaced.width,
+                    roomBeside = roomBeside,
+                    clearanceBottom = clearanceBottom
+                )
+                val goalTop = clearedTopOf(
+                    top = statsTop + statsPlaced.height + gapPx,
+                    width = goalPlaced.width,
+                    roomBeside = roomBeside,
+                    clearanceBottom = clearanceBottom
+                )
 
-        layout(
-            width = max(chipsWidth, goalPlaced.width),
-            height = goalTop + goalPlaced.height
-        ) {
-            balancePlaced.place(x = 0, y = 0)
-            statsPlaced.place(x = 0, y = statsTop)
-            goalPlaced.place(x = 0, y = goalTop)
+                return layout(
+                    width = max(chipsWidth, goalPlaced.width),
+                    height = goalTop + goalPlaced.height
+                ) {
+                    balancePlaced.place(x = 0, y = 0)
+                    statsPlaced.place(x = 0, y = statsTop)
+                    goalPlaced.place(x = 0, y = goalTop)
+                }
+            }
+
+            override fun IntrinsicMeasureScope.minIntrinsicWidth(
+                measurables: List<List<IntrinsicMeasurable>>,
+                height: Int
+            ): Int = measurables.take(2).maxOf { it.first().minIntrinsicWidth(height) }
+
+            override fun IntrinsicMeasureScope.maxIntrinsicWidth(
+                measurables: List<List<IntrinsicMeasurable>>,
+                height: Int
+            ): Int = measurables.take(2).maxOf { it.first().maxIntrinsicWidth(height) }
         }
     }
+
+    Layout(
+        contents = listOf(balance, stats, goal),
+        modifier = modifier,
+        measurePolicy = measurePolicy
+    )
 }
 
 /**
@@ -1496,7 +1548,8 @@ private fun MainScreenLightPreview() {
             MainScreen(
                 state = PreviewState,
                 onOpenScreen = {},
-                onClaimDailyBonus = {}
+                onClaimDailyBonus = {},
+                goals = PreviewGoalLines
             )
         }
     }
@@ -1539,7 +1592,8 @@ private fun MainScreenDarkPreview() {
                     )
                 ),
                 onOpenScreen = {},
-                onClaimDailyBonus = {}
+                onClaimDailyBonus = {},
+                goals = PreviewGoalLines.drop(1).take(1)
             )
         }
     }
@@ -1606,7 +1660,8 @@ private fun MainScreenLargeTextPreview() {
                 state = PreviewState,
                 onOpenScreen = {},
                 onClaimDailyBonus = {},
-                onFastForward = {}
+                onFastForward = {},
+                goals = PreviewGoalLines
             )
         }
     }
@@ -1648,7 +1703,8 @@ private fun MainScreenNarrowLandscapePreview() {
                 state = PreviewState,
                 onOpenScreen = {},
                 onClaimDailyBonus = {},
-                onFastForward = {}
+                onFastForward = {},
+                goals = PreviewGoalLines
             )
         }
     }
@@ -1668,7 +1724,8 @@ private fun MainScreenTabletPreview() {
                 state = PreviewState,
                 onOpenScreen = {},
                 onClaimDailyBonus = {},
-                onFastForward = {}
+                onFastForward = {},
+                goals = PreviewGoalLines
             )
         }
     }

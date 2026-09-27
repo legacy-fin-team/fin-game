@@ -90,7 +90,7 @@ import com.legacy.fingame.ui.theme.GameDimens
  */
 private val CloseButtonSize = 40.dp
 private val CategoryButtonSize = 56.dp
-private val StarButtonSize = 40.dp
+private val StarButtonSize = 30.dp
 private val VariantButtonSize = 36.dp
 
 /**
@@ -163,7 +163,7 @@ internal val ItemCellMinSize = 152.dp
  * given the room the screen turns out to have, see [shortScreenCardSpriteSize].
  */
 internal val ShortScreenItemCellMinSize = 288.dp
-private val ShortScreenStarButtonSize = 28.dp
+private val ShortScreenStarButtonSize = 20.dp
 private val ShortScreenVariantButtonSize = 32.dp
 private val ShortScreenCloseButtonSize = 48.dp
 
@@ -263,6 +263,9 @@ private enum class ShopWindow {
  * @param onPickVariant called with an item id and the id of the variant picked for it.
  * @param onIncrease called with the id of the item to put one more of into the cart.
  * @param onDecrease called with the id of the item to take one of out of the cart.
+ * @param onToggleGoal вызывается звёздочкой карточки с товаром в выбранном на ней варианте: товар
+ *   становится целью или перестаёт ею быть. Горит ли звёздочка, экран читает из
+ *   [GameUiState.isGoal].
  * @param onBuy called when the player confirms the purchase and pays for the cart; returns whether
  *   the purchase actually went through. False means the cart stopped being payable between opening
  *   the confirmation and confirming it, which is answered with [NotEnoughMoneyDialog] instead of a
@@ -281,6 +284,7 @@ fun ShopScreen(
     onPickVariant: (String, String) -> Unit,
     onIncrease: (String) -> Unit,
     onDecrease: (String) -> Unit,
+    onToggleGoal: (ItemSelection) -> Unit,
     onBuy: () -> Boolean,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
@@ -417,16 +421,30 @@ fun ShopScreen(
                             verticalArrangement = Arrangement.spacedBy(ShopGridGap)
                         ) {
                             items(items = items, key = { item -> item.id }) { item ->
+                                val mode = modeOf(item, state)
+                                val inGoals = state.isGoal(item)
                                 ShopItemCard(
                                     item = item,
                                     pickedVariantId = state.pickedVariantOf(item),
                                     quantity = state.quantities[item.id] ?: 0,
-                                    mode = modeOf(item, state),
+                                    mode = mode,
                                     reserveVariantRow = reserveVariantRow,
                                     reservedEffectRows = reservedEffectRows,
                                     effectChipsPerRow = effectChipsPerRow,
                                     horizontalLayout = isShortScreen,
                                     horizontalSpriteSize = spriteSize,
+                                    inGoals = inGoals,
+                                    // Купленную вещь копить не на что: звёздочки у неё нет, если
+                                    // только она не осталась целью — тогда её можно снять.
+                                    onToggleGoal = if (mode != ShopItemMode.PURCHASED || inGoals) {
+                                        {
+                                            onToggleGoal(
+                                                ItemSelection(item.id, state.pickedVariantOf(item))
+                                            )
+                                        }
+                                    } else {
+                                        null
+                                    },
                                     onPickVariant = { variantId -> onPickVariant(item.id, variantId) },
                                     onIncrease = { onIncrease(item.id) },
                                     onDecrease = { onDecrease(item.id) }
@@ -952,6 +970,9 @@ private fun modeOf(item: Item, state: GameUiState): ShopItemMode = when {
  * @param horizontalSpriteSize side of the sprite in that sideways layout, as the room the screen has
  *   left allows (see [shortScreenCardSpriteSize]); ignored by the stacked layout, where the sprite is
  *   as wide as the card itself.
+ * @param inGoals горит ли звёздочка: выбранный вариант товара — цель игрока.
+ * @param onToggleGoal нажатие на звёздочку, или null, когда звёздочки у карточки нет (купленная
+ *   вещь, которая не цель).
  * @param onPickVariant called with the id of the variant the player picked.
  * @param onIncrease called to put one more of this item into the cart.
  * @param onDecrease called to take one of this item out of the cart.
@@ -968,14 +989,13 @@ private fun ShopItemCard(
     effectChipsPerRow: Int,
     horizontalLayout: Boolean,
     horizontalSpriteSize: Dp,
+    inGoals: Boolean,
+    onToggleGoal: (() -> Unit)?,
     onPickVariant: (String) -> Unit,
     onIncrease: () -> Unit,
     onDecrease: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // TODO: "in goals" star state is local UI state; move it to the goals logic/data layer once the team defines where goals actually live.
-    var inGoals by remember { mutableStateOf(false) }
-
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -993,7 +1013,7 @@ private fun ShopItemCard(
                     item = item,
                     pickedVariantId = pickedVariantId,
                     inGoals = inGoals,
-                    onToggleGoals = { inGoals = !inGoals },
+                    onToggleGoals = onToggleGoal,
                     starButtonSize = ShortScreenStarButtonSize,
                     modifier = Modifier.size(horizontalSpriteSize)
                 )
@@ -1046,7 +1066,7 @@ private fun ShopItemCard(
                     item = item,
                     pickedVariantId = pickedVariantId,
                     inGoals = inGoals,
-                    onToggleGoals = { inGoals = !inGoals },
+                    onToggleGoals = onToggleGoal,
                     starButtonSize = StarButtonSize,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1122,7 +1142,7 @@ private fun ItemNameText(
  * @param item the item the sprite belongs to.
  * @param pickedVariantId variant of it the card is showing, the one whose icon is drawn.
  * @param inGoals whether the star is currently toggled on.
- * @param onToggleGoals called when the star is pressed.
+ * @param onToggleGoals called when the star is pressed, or null when the card has no star at all.
  * @param starButtonSize size of the star toggle.
  * @param modifier modifier applied to the sprite box; this is where the caller sizes it.
  */
@@ -1131,7 +1151,7 @@ private fun ItemSprite(
     item: Item,
     pickedVariantId: String,
     inGoals: Boolean,
-    onToggleGoals: () -> Unit,
+    onToggleGoals: (() -> Unit)?,
     starButtonSize: Dp,
     modifier: Modifier = Modifier
 ) {
@@ -1141,14 +1161,16 @@ private fun ItemSprite(
             contentDescription = item.name,
             modifier = Modifier.fillMaxSize()
         )
-        SpriteButton(
-            assetPath = if (inGoals) Sprites.STAR_ON else Sprites.STAR_OFF,
-            contentDescription = if (inGoals) "Убрать из целей" else "Добавить в цели",
-            onClick = onToggleGoals,
-            size = starButtonSize,
-            showIndicator = false,
-            modifier = Modifier.align(Alignment.TopEnd)
-        )
+        if (onToggleGoals != null) {
+            SpriteButton(
+                assetPath = if (inGoals) Sprites.STAR_ON else Sprites.STAR_OFF,
+                contentDescription = if (inGoals) "Убрать из целей" else "Добавить в цели",
+                onClick = onToggleGoals,
+                size = starButtonSize,
+                showIndicator = false,
+                modifier = Modifier.align(Alignment.TopEnd)
+            )
+        }
     }
 }
 
@@ -1532,6 +1554,7 @@ private fun ShopScreenLightPreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
+                onToggleGoal = {},
                 onBuy = { true },
                 onClose = {}
             )
@@ -1562,6 +1585,7 @@ private fun ShopScreenLandscapePreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
+                onToggleGoal = {},
                 onBuy = { true },
                 onClose = {}
             )
@@ -1590,6 +1614,7 @@ private fun ShopScreenNarrowPreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
+                onToggleGoal = {},
                 onBuy = { true },
                 onClose = {}
             )
@@ -1625,6 +1650,7 @@ private fun ShopScreenMediumFontScalePreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
+                onToggleGoal = {},
                 onBuy = { true },
                 onClose = {}
             )
@@ -1659,6 +1685,7 @@ private fun ShopScreenNarrowLargeFontScalePreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
+                onToggleGoal = {},
                 onBuy = { true },
                 onClose = {}
             )
@@ -1684,6 +1711,7 @@ private fun ShopScreenFoodShelfPreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
+                onToggleGoal = {},
                 onBuy = { true },
                 onClose = {}
             )
@@ -1714,6 +1742,7 @@ private fun ShopScreenFoodShelfLargeFontScalePreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
+                onToggleGoal = {},
                 onBuy = { true },
                 onClose = {}
             )
@@ -1754,6 +1783,7 @@ private fun ShopScreenFullCartPreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
+                onToggleGoal = {},
                 onBuy = { true },
                 onClose = {}
             )
@@ -1778,6 +1808,7 @@ private fun ShopScreenClothesShelfPreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
+                onToggleGoal = {},
                 onBuy = { true },
                 onClose = {}
             )
@@ -1804,6 +1835,7 @@ private fun ShopScreenLandscapeFoodPreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
+                onToggleGoal = {},
                 onBuy = { true },
                 onClose = {}
             )
@@ -1829,6 +1861,7 @@ private fun ShopScreenLandscapeNarrowPreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
+                onToggleGoal = {},
                 onBuy = { true },
                 onClose = {}
             )
@@ -1858,6 +1891,7 @@ private fun ShopScreenLandscapeNarrowClothesPreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
+                onToggleGoal = {},
                 onBuy = { true },
                 onClose = {}
             )
@@ -1885,6 +1919,7 @@ private fun ShopScreenDarkPreview() {
                 onPickVariant = { _, _ -> },
                 onIncrease = {},
                 onDecrease = {},
+                onToggleGoal = {},
                 onBuy = { true },
                 onClose = {}
             )
