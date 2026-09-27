@@ -46,7 +46,7 @@ class AudioReaderTest {
     }
 
     @Test
-    fun `the first declared track that exists wins`() {
+    fun `the declared track that exists is picked`() {
         val chosen = AudioManager.chooseBackgroundTrack(
             declared = listOf("music/background/missing.ogg", "music/background/b.ogg"),
             folderFiles = listOf("a.ogg", "b.ogg")
@@ -55,12 +55,13 @@ class AudioReaderTest {
     }
 
     @Test
-    fun `without declared tracks the first file of the folder by name is taken`() {
+    fun `without declared tracks a file of the folder is taken`() {
+        val folder = listOf("z.ogg", "b.ogg", "c.ogg")
         val chosen = AudioManager.chooseBackgroundTrack(
             declared = emptyList(),
-            folderFiles = listOf("z.ogg", "b.ogg", "c.ogg")
+            folderFiles = folder
         ) { true }
-        assertEquals("audio/music/background/b.ogg", chosen)
+        assertTrue(chosen != null && chosen in folder.map { "audio/music/background/$it" })
     }
 
     @Test

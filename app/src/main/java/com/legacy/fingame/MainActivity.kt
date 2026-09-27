@@ -23,7 +23,10 @@ import com.legacy.fingame.ui.theme.FinGameTheme
  */
 class MainActivity : ComponentActivity() {
 
-    private var audioManager: AudioManager? = null
+    companion object {
+        private var audioManager: AudioManager? = null
+    }
+
     private lateinit var settingsRepository: GameSettingsRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,12 +37,14 @@ class MainActivity : ComponentActivity() {
         settingsRepository = GameSettingsRepository(applicationContext)
         val savedSettings = settingsRepository.load()
 
-        // Аудио
-        val audio = AudioManager(applicationContext)
-        audio.init()
+        // Аудио: при повороте экрана сохраняем работающий AudioManager, чтобы музыка не прерывалась
+        val audio = audioManager ?: AudioManager(applicationContext).also {
+            it.init()
+            it.applySettings(savedSettings)
+            it.startMusic()
+            audioManager = it
+        }
         audio.applySettings(savedSettings)
-        audio.startMusic()
-        audioManager = audio
 
         // Щелчок кнопок слушается настройки «Звуки» с самого первого нажатия.
         ClickSound.enabled = savedSettings.soundEnabled
@@ -94,8 +99,10 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        audioManager?.release()
-        audioManager = null
+        if (!isChangingConfigurations) {
+            audioManager?.release()
+            audioManager = null
+        }
         super.onDestroy()
     }
 }

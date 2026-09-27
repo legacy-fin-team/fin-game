@@ -19,7 +19,9 @@ import kotlin.random.Random
  *   первый по имени файл из `audio/music/background/`
  * - Звуки животных: `audio/sounds/animal/`
  */
-class AudioManager(private val context: Context) {
+class AudioManager(context: Context) {
+
+    private val context: Context = context.applicationContext
 
     companion object {
         private const val TAG = "AudioManager"
@@ -30,7 +32,7 @@ class AudioManager(private val context: Context) {
         private const val MAX_STREAMS = 4
 
         /**
-         * Запасной звук «погладил» при нажатии на питомца (`audio/sounds/animal/pat.wav`) —
+         * Запасной звук «погладил» при нажатии на питомца (`audio/sounds/animal/pat.ogg`) —
          * для животного, у которого нет своих звуков.
          */
         const val SOUND_PAT = "pat"
@@ -53,21 +55,34 @@ class AudioManager(private val context: Context) {
         }
 
         /**
-         * Выбирает трек фоновой музыки.
+         * Выбирает случайный трек фоновой музыки.
          *
-         * @param declared треки из `data/audio.xml` (пути относительно `assets/audio/`), по порядку.
+         * @param declared треки из `data/audio.xml` (пути относительно `assets/audio/`).
          * @param folderFiles имена файлов в `audio/music/background/`.
+         * @param random источник случайности для выбора трека.
          * @param exists есть ли такой путь (относительно `assets/`) на самом деле.
-         * @return Путь относительно `assets/`: первый объявленный трек, который существует, иначе
-         *   первый по имени файл из папки, иначе null — музыки нет.
+         * @return Путь относительно `assets/`: случайный из объявленных треков, которые существуют,
+         *   иначе случайный файл из папки, иначе null — музыки нет.
          */
         fun chooseBackgroundTrack(
             declared: List<String>,
             folderFiles: List<String>,
+            random: Random = Random.Default,
             exists: (String) -> Boolean
-        ): String? =
-            declared.map { "$AUDIO_DIR/${it.trimStart('/')}" }.firstOrNull(exists)
-                ?: folderFiles.sorted().firstOrNull()?.let { "$MUSIC_BACKGROUND_DIR/$it" }
+        ): String? {
+            val validDeclared = declared
+                .map { "$AUDIO_DIR/${it.trimStart('/')}" }
+                .filter(exists)
+            if (validDeclared.isNotEmpty()) {
+                return validDeclared.random(random)
+            }
+            val validFolderFiles = folderFiles
+                .filter { exists("$MUSIC_BACKGROUND_DIR/$it") }
+            if (validFolderFiles.isNotEmpty()) {
+                return "$MUSIC_BACKGROUND_DIR/${validFolderFiles.random(random)}"
+            }
+            return null
+        }
     }
 
     private var mediaPlayer: MediaPlayer? = null
@@ -239,6 +254,7 @@ class AudioManager(private val context: Context) {
                 return
             }
             for (file in files) {
+                if (!file.endsWith(".ogg", ignoreCase = true)) continue
                 val path = "$SOUNDS_ANIMAL_DIR/$file"
                 try {
                     val afd = context.assets.openFd(path)
