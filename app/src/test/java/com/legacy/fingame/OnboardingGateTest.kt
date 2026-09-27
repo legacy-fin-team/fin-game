@@ -71,4 +71,41 @@ class OnboardingGateTest {
 
         assertEquals(0, store.markCalls)
     }
+
+    @Test
+    fun `a progress reset shows the window again`() {
+        val store = FakeOnboardingStore(seen = false)
+        val gate = OnboardingGate(store)
+        gate.dismiss()
+
+        gate.onProgressReset()
+
+        assertTrue(gate.isVisible.value)
+    }
+
+    @Test
+    fun `a progress reset clears the store, so the next launch shows the window too`() {
+        val store = FakeOnboardingStore(seen = false)
+        val gate = OnboardingGate(store)
+        gate.dismiss()
+
+        gate.onProgressReset()
+
+        assertFalse(store.hasSeenOnboarding())
+        // A fresh gate, built the way the next launch would build one, over the very same store.
+        assertTrue(OnboardingGate(store).isVisible.value)
+    }
+
+    @Test
+    fun `a progress reset shows the window even when it was never dismissed`() {
+        // The player resets progress right from the still-open onboarding window itself — an edge
+        // case, but one that should leave the window showing rather than throwing.
+        val store = FakeOnboardingStore(seen = false)
+        val gate = OnboardingGate(store)
+
+        gate.onProgressReset()
+
+        assertTrue(gate.isVisible.value)
+        assertFalse(store.hasSeenOnboarding())
+    }
 }

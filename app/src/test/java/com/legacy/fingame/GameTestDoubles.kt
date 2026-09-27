@@ -25,11 +25,20 @@ internal class FakeOnboardingStore(var seen: Boolean = false) : OnboardingStore 
     var markCalls: Int = 0
         private set
 
+    /** How many times [clearOnboardingSeen] was called. */
+    var clearCalls: Int = 0
+        private set
+
     override fun hasSeenOnboarding(): Boolean = seen
 
     override fun markOnboardingSeen() {
         markCalls++
         seen = true
+    }
+
+    override fun clearOnboardingSeen() {
+        clearCalls++
+        seen = false
     }
 }
 

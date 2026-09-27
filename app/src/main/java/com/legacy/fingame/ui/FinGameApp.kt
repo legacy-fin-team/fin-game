@@ -226,7 +226,12 @@ fun FinGameApp(
                         onSettingsChanged = vm::updateSettings,
                         onOpenAdultMode = { vm.openScreen(Screen.ADULT_MODE) },
                         onOpenHelp = { vm.openScreen(Screen.HELP) },
-                        onResetProgress = vm::resetProgress,
+                        // A reset makes the player new again in every sense, onboarding included:
+                        // the window they saw on the very first launch is shown once more.
+                        onResetProgress = {
+                            vm.resetProgress()
+                            onboardingGate.onProgressReset()
+                        },
                         onBack = vm::closeScreen
                     )
 

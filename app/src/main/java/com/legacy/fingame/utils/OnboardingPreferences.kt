@@ -8,11 +8,12 @@ import com.legacy.fingame.game.OnboardingStore
  * process being killed, exactly like the rest of the player's save.
  *
  * Kept in [PlayerPreferences.PREFERENCES_NAME] — the very same file [PlayerPreferences] itself
- * writes to — on purpose: the flag has no field of its own in [com.legacy.fingame.game.PlayerState],
- * so it is not touched by [PlayerPreferences.save] or [PlayerPreferences.load] at all, but a
- * player whose save is wiped by a future "reset progress" should still be shown the window again,
- * as if they were new. Sharing the file is what makes that automatic instead of asking a reset
- * feature to also remember this key by name.
+ * writes to — rather than a file of its own, since the flag is, in spirit, part of the player's
+ * save even though it has no field of its own in [com.legacy.fingame.game.PlayerState]:
+ * [PlayerPreferences.save] only ever rewrites the keys it knows about
+ * ([PlayerPreferences.LIVE_KEYS]), so it neither touches nor clears this one, and a "reset
+ * progress" is what calls [com.legacy.fingame.game.OnboardingGate.onProgressReset] to clear it in
+ * step with everything [PlayerPreferences.save] does reset.
  *
  * @param context current local application context. Used to get access to SharedPreferences.
  */
@@ -30,5 +31,9 @@ class OnboardingPreferences(context: Context) : OnboardingStore {
 
     override fun markOnboardingSeen() {
         preferences.edit().putBoolean(KEY_ONBOARDING_SEEN, true).apply()
+    }
+
+    override fun clearOnboardingSeen() {
+        preferences.edit().remove(KEY_ONBOARDING_SEEN).apply()
     }
 }
