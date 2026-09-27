@@ -61,7 +61,6 @@ import androidx.compose.ui.zIndex
 import com.legacy.fingame.DemoMode
 import com.legacy.fingame.game.GameUiState
 import com.legacy.fingame.game.Screen
-import com.legacy.fingame.game.economy.Economy
 import com.legacy.fingame.game.items.GoalLine
 import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.items.ItemSelection
@@ -558,6 +557,8 @@ fun MainScreen(
                         Dp.Unspecified
                     },
                     dailyBonusAvailable = state.dailyBonusAvailable,
+                    dailyIncome = state.dailyIncome,
+                    careHint = state.careHint,
                     onClaimDailyBonus = onClaimDailyBonus
                 )
             }
@@ -1048,6 +1049,9 @@ private fun PrimaryActions(
  *   width of the column.
  * @param dailyBonusAvailable whether the daily bonus is there to take, i.e. whether the button
  *   under the pet is shown at all.
+ * @param dailyIncome сколько монет даст бонус дня сейчас (см. [GameUiState.dailyIncome]).
+ * @param careHint подсказка, почему питомец растёт медленнее или бонус меньше, или null, когда
+ *   всё хорошо (см. [GameUiState.careHint]).
  * @param onClaimDailyBonus called when the player takes the bonus.
  * @param modifier modifier applied to the column.
  */
@@ -1057,6 +1061,8 @@ private fun PetColumn(
     title: String?,
     stageMaxWidth: Dp,
     dailyBonusAvailable: Boolean,
+    dailyIncome: Int,
+    careHint: String?,
     onClaimDailyBonus: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1076,12 +1082,17 @@ private fun PetColumn(
                 .widthIn(max = stageMaxWidth)
         )
 
+        if (careHint != null) {
+            Spacer(modifier = Modifier.height(StageGap))
+            CareHint(text = careHint, modifier = Modifier.widthIn(max = stageMaxWidth))
+        }
+
         if (dailyBonusAvailable) {
             Spacer(modifier = Modifier.height(StageGap))
             // The one filled button of the screen: taking the bonus is the thing the player is
             // meant to press here, and everything else on the screen is quieter than it.
             PillButton(
-                text = "Бонус дня +${Economy.DAILY_BONUS}",
+                text = "Бонус дня +$dailyIncome",
                 onClick = onClaimDailyBonus,
                 style = PillStyle.Primary
             )
@@ -1331,6 +1342,34 @@ private fun StageBadge(
             textAlign = TextAlign.Center,
             maxLines = StageBadgeMaxLines,
             overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * Подсказка под питомцем: почему он растёт медленнее и почему бонус меньше. Тихая, как и бейдж
+ * над питомцем, — она объясняет, а не ругает.
+ *
+ * @param text текст подсказки (см. [com.legacy.fingame.game.rules.PetCareRules.explain]).
+ * @param modifier модификатор подсказки.
+ */
+@Composable
+private fun CareHint(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, GameColors.cardStroke)
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
         )
     }
 }
