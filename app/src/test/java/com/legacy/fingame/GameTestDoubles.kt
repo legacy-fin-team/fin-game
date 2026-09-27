@@ -1,6 +1,7 @@
 package com.legacy.fingame
 
 import com.legacy.fingame.game.GameViewModel
+import com.legacy.fingame.game.OnboardingStore
 import com.legacy.fingame.game.PlayerState
 import com.legacy.fingame.game.PlayerStateStore
 import com.legacy.fingame.game.economy.GameClock
@@ -10,6 +11,27 @@ import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.scene.GameLayer
 import com.legacy.fingame.game.settings.GameSettings
 import com.legacy.fingame.game.stats.StatKind
+
+/**
+ * [OnboardingStore] that keeps the flag in memory instead of in SharedPreferences, so
+ * [com.legacy.fingame.game.OnboardingGate] can be tested without an Android device.
+ *
+ * @property seen whether the fake starts out as an already-seen player; `false` — a brand new
+ * player — by default.
+ */
+internal class FakeOnboardingStore(var seen: Boolean = false) : OnboardingStore {
+
+    /** How many times [markOnboardingSeen] was actually called, for tests that check it fires once. */
+    var markCalls: Int = 0
+        private set
+
+    override fun hasSeenOnboarding(): Boolean = seen
+
+    override fun markOnboardingSeen() {
+        markCalls++
+        seen = true
+    }
+}
 
 /**
  * [PlayerStateStore] that keeps the state in memory instead of in SharedPreferences, so the

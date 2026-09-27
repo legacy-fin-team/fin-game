@@ -11,6 +11,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -18,6 +19,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.legacy.fingame.DemoMode
 import com.legacy.fingame.FinGameApplication
 import com.legacy.fingame.game.GameViewModel
+import com.legacy.fingame.game.OnboardingGate
 import com.legacy.fingame.game.Screen
 import com.legacy.fingame.game.items.Cart
 import com.legacy.fingame.game.items.Goals
@@ -26,6 +28,7 @@ import com.legacy.fingame.game.scene.GameScene
 import com.legacy.fingame.game.scene.SceneSprite
 import com.legacy.fingame.game.settings.AudioManager
 import com.legacy.fingame.game.stats.PetStats
+import com.legacy.fingame.ui.components.OnboardingDialog
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.screens.AnimalSelectScreen
 import com.legacy.fingame.ui.screens.BudgetScreen
@@ -68,6 +71,9 @@ private const val TICK_POLLS_PER_TICK = 10L
  * main screen also gets the button that pushes that same clock forward, so a demo can show a day of
  * the pet's life without waiting one out.
  *
+ * The very first time the app is ever launched, [OnboardingDialog] is shown on top of whatever
+ * screen the player lands on first (always [Screen.MAIN]); see [OnboardingGate] for when.
+ *
  * @param modifier modifier applied to the root surface.
  * @param vm view model providing [GameUiState] and the navigation/action callbacks passed down
  *   to each screen; defaults to a [GameViewModel] scoped to this composable, restoring the
@@ -94,6 +100,9 @@ fun FinGameApp(
     val application = LocalContext.current.applicationContext as FinGameApplication
     val animalRegistry = application.animalRegistry
     val itemRegistry = application.itemRegistry
+
+    val onboardingGate = remember { OnboardingGate(application.onboardingPreferences) }
+    val onboardingVisible by onboardingGate.isVisible.collectAsStateWithLifecycle()
 
     val savedSelection = state.selection
     val pet = savedSelection?.takeIf { animalRegistry.hasVariant(it.animalId, it.variantId) }
@@ -232,6 +241,10 @@ fun FinGameApp(
                         onClose = { vm.openScreen(Screen.OPTIONS) }
                     )
                 }
+            }
+
+            if (onboardingVisible) {
+                OnboardingDialog(onDismiss = onboardingGate::dismiss)
             }
         }
     }
