@@ -29,6 +29,7 @@ import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.screens.AnimalSelectScreen
 import com.legacy.fingame.ui.screens.BudgetScreen
+import com.legacy.fingame.ui.screens.HelpScreen
 import com.legacy.fingame.ui.screens.InventoryScreen
 import com.legacy.fingame.ui.screens.LogScreen
 import com.legacy.fingame.ui.screens.MainScreen
@@ -57,9 +58,9 @@ private const val TICK_POLLS_PER_TICK = 10L
  * actually picked.
  *
  * Layout: a full-size [Surface] with an [AnimatedContent] that cross-fades between
- * [MainScreen], [ShopScreen], [InventoryScreen], [BudgetScreen], [LogScreen], [SettingsScreen]
- * and the [PlaceholderScreen] instances for the yet-unspecified sections (quests, adult mode), based on
- * [GameUiState.screen].
+ * [MainScreen], [ShopScreen], [InventoryScreen], [BudgetScreen], [LogScreen], [SettingsScreen],
+ * [HelpScreen] and the [PlaceholderScreen] instances for the yet-unspecified sections (quests,
+ * adult mode), based on [GameUiState.screen].
  *
  * While there is a pet to look after, this is also where its life goes on: a loop asks
  * [GameViewModel.tick] to catch up with the clock, so the stat bars fall and the pet grows up in
@@ -215,6 +216,7 @@ fun FinGameApp(
                         settings = state.settings,
                         onSettingsChanged = vm::updateSettings,
                         onOpenAdultMode = { vm.openScreen(Screen.ADULT_MODE) },
+                        onOpenHelp = { vm.openScreen(Screen.HELP) },
                         onResetProgress = vm::resetProgress,
                         onBack = vm::closeScreen
                     )
@@ -223,6 +225,11 @@ fun FinGameApp(
                         "Режим взрослого",
                         Sprites.SETTINGS,
                         vm::closeScreen
+                    )
+
+                    Screen.HELP -> HelpScreen(
+                        entries = application.helpRegistry.getEntries(),
+                        onClose = { vm.openScreen(Screen.OPTIONS) }
                     )
                 }
             }

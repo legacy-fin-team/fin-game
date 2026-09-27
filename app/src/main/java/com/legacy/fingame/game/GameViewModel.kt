@@ -52,7 +52,9 @@ enum class Screen {
     /** The options/settings screen. */
     OPTIONS,
     /** The adult mode screen (placeholder). */
-    ADULT_MODE
+    ADULT_MODE,
+    /** Экран справки: список игровых терминов, открывается из [OPTIONS]. */
+    HELP
 }
 
 /**
