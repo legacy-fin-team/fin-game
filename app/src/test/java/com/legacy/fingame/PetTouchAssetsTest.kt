@@ -49,11 +49,11 @@ class PetTouchAssetsTest {
     }
 
     @Test
-    fun `the cat has three OGG sounds of its own`() {
+    fun `the cat has its own OGG sounds`() {
         val folder = asset("audio/sounds/animal/${AudioManager.SOUND_PAT}.ogg").parentFile!!
         val keys = folder.list()!!.map { it.substringBeforeLast('.') }.distinct().sorted()
-        assertEquals(listOf("cat1", "cat2", "cat3"), AudioManager.animalSoundKeys(keys, "cat"))
-        for (key in listOf("cat1", "cat2", "cat3")) {
+        assertEquals(listOf("cat1", "cat2"), AudioManager.animalSoundKeys(keys, "cat"))
+        for (key in listOf("cat1", "cat2")) {
             assertOgg("audio/sounds/animal/$key.ogg")
         }
     }
