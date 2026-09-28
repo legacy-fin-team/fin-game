@@ -28,47 +28,93 @@
     начать снова.
 -->
 <quests>
-    <quest id="picnic" title="Пикник" kind="player" progress="true" min-balance="100"
-           start="food" image="quests/picnic.webp">
-        <description>Позови друзей на пикник. Чем лучше подготовка, тем веселее праздник.</description>
-        <node id="food" delay-minutes="1">
-            <text>Что возьмём из еды?</text>
-            <option label="Фрукты и сок" next="place" money="-40" progress="40">
-                <result>Вкусно и полезно. Все сыты и довольны.</result>
-                <effect stat="hunger" value="20" />
-                <effect stat="health" value="5" />
-            </option>
-            <option label="Чипсы" next="place" money="-15" progress="20">
-                <result>Дёшево и хрустит, но пользы мало.</result>
+    <quest id="picnic" title="Пикник" kind="player" progress="true" min-balance="300"
+           start="store" image="quests/picnic.webp">
+        <description>Позови друзей на пикник! Чем лучше подготовка, тем веселее праздник.</description>
+        <node id="store">
+            <text>Где закупимся продуктами на пикник?</text>
+            <option label="Гипермаркет" next="food_set" money="0" progress="20">
+                <result>Отличный выбор! В гипермаркете лучшие цены и большой выбор.</result>
+                <effect stat="pleasure" value="10" />
                 <effect stat="hunger" value="10" />
-                <effect stat="health" value="-5" />
             </option>
-            <option label="Ничего" next="place">
-                <result>Монеты целы, но на пикнике все голодные.</result>
-                <effect stat="hunger" value="-10" />
+            <option label="Рынок" next="food_set" money="-50" progress="15">
+                <result>Продукты свежие и полезные, но вышло накладно.</result>
+                <effect stat="health" value="15" />
+                <effect stat="pleasure" value="5" />
             </option>
-        </node>
-        <node id="place" delay-minutes="1">
-            <text>Где устроим пикник?</text>
-            <option label="В парке" next="games" progress="30">
-                <result>Тенистая поляна и свежий воздух.</result>
-                <effect stat="pleasure" value="15" />
-            </option>
-            <option label="Во дворе" next="games" progress="15">
-                <result>Близко и бесплатно, но шумно.</result>
+            <option label="Доставка" next="food_set" money="-80" progress="10">
+                <result>Удобно, но пришлось заплатить за курьера.</result>
                 <effect stat="pleasure" value="5" />
             </option>
         </node>
-        <node id="games">
-            <text>Чем займёмся на пикнике?</text>
-            <option label="Играть в мяч" next="end" progress="30">
-                <result>Играли до заката! Мяч свой, так что бесплатно.</result>
+        <node id="food_set">
+            <text>Какой набор продуктов брать?</text>
+            <option label="Мясо на шашлык" next="home_items" money="-40" progress="20">
+                <result>Сочный шашлык — классика пикника! Все будут сыты.</result>
+                <effect stat="hunger" value="25" />
+                <effect stat="pleasure" value="15" />
+            </option>
+            <option label="Овощи" next="home_items" money="0" progress="20">
+                <result>Свежие овощи и зелень — полезно, вкусно и не дорого!</result>
+                <effect stat="hunger" value="15" />
+                <effect stat="health" value="10" />
+            </option>
+            <option label="Деликатесы" next="home_items" money="-90" progress="15">
+                <result>Очень вкусно и изысканно, но деликатесы влетели в копеечку.</result>
+                <effect stat="hunger" value="15" />
+                <effect stat="pleasure" value="25" />
+            </option>
+        </node>
+        <node id="home_items">
+            <text>Что взять из дома?</text>
+            <option label="Плед" next="extra_items" money="0" progress="20">
+                <result>Мягкий плед сделает отдых на траве уютным и приятным!</result>
+                <effect stat="pleasure" value="15" />
+            </option>
+            <option label="Спички" next="extra_items" money="0" progress="20">
+                <result>Спички пригодились, чтобы легко развести костёр.</result>
+                <effect stat="pleasure" value="10" />
+            </option>
+            <option label="Шкаф" next="extra_items" money="0" progress="5">
+                <result>Тащить тяжеленный шкаф было плохой идеей... Все устали.</result>
+                <effect stat="pleasure" value="-15" />
+            </option>
+        </node>
+        <node id="extra_items">
+            <text>Что купить дополнительно?</text>
+            <option label="Палатка" next="transport" money="-60" progress="20">
+                <result>В палатке можно укрыться и спокойно поесть в уюте!</result>
                 <effect stat="pleasure" value="20" />
+                <effect stat="hunger" value="10" />
+            </option>
+            <option label="Посуда" next="transport" money="-20" progress="15">
+                <result>Одноразовая посуда пригодилась для удобного обеда.</result>
+                <effect stat="hunger" value="15" />
+            </option>
+            <option label="Игрушка" next="transport" money="-30" progress="10">
+                <result>Игрушка порадовала, но сытость убывает — животик урчит.</result>
+                <effect stat="pleasure" value="15" />
                 <effect stat="hunger" value="-10" />
             </option>
-            <option label="Бадминтон" next="end" money="-20" progress="30">
-                <result>Прокат стоил 20 монет, зато было весело.</result>
-                <effect stat="pleasure" value="25" />
+            <option label="Ничего" next="transport" money="0" progress="5">
+                <result>Решили ничего не докупать и сэкономить монеты.</result>
+            </option>
+        </node>
+        <node id="transport">
+            <text>На чём добираться до места пикника?</text>
+            <option label="Электричка" next="end" money="-10" progress="20">
+                <result>Поездка на электричке оказалась весёлым приключением!</result>
+                <effect stat="pleasure" value="20" />
+            </option>
+            <option label="Такси" next="end" money="-70" progress="10">
+                <result>Быстро доехали, но такси стоило очень дорого.</result>
+                <effect stat="pleasure" value="5" />
+            </option>
+            <option label="Пешком" next="end" money="0" progress="15">
+                <result>Прогулялись пешком бесплатно и с пользой для здоровья.</result>
+                <effect stat="pleasure" value="10" />
+                <effect stat="hunger" value="-5" />
             </option>
         </node>
     </quest>
