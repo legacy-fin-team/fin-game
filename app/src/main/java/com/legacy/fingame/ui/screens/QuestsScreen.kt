@@ -121,6 +121,8 @@ private const val CountdownStepMillis = 1_000L
  * @param depositAmount тело вклада — в шапке.
  * @param initiallyExpanded карточка, раскрытая при первом показе; для превью.
  * @param canRestart показывать ли «Ещё раз» у пройденного квеста игрока — только в демо-сборке.
+ * @param ignoreDelays ожидание в квестах снято (отладочная сборка, см.
+ * `GameViewModel.ignoreQuestDelays`): ни «Доступен через …», ни «Следующий шаг через …».
  */
 @Composable
 fun QuestsScreen(
@@ -135,7 +137,8 @@ fun QuestsScreen(
     balance: Int = 0,
     depositAmount: Int = 0,
     initiallyExpanded: String? = null,
-    canRestart: Boolean = false
+    canRestart: Boolean = false,
+    ignoreDelays: Boolean = false
 ) {
     var expandedId by rememberSaveable { mutableStateOf(initiallyExpanded) }
     // Момент берётся прямо из часов, когда меняются карточки (выбор, «Дальше») или приходит тик, —
@@ -143,7 +146,7 @@ fun QuestsScreen(
     // секунду, только пока какой-то квест ждёт шага; дождались — ключ меняется и тик стихает.
     var tick by remember { mutableIntStateOf(0) }
     val nowMillis = remember(tick, entries) { currentMillis() }
-    val hasWaiting = hasWaitingStep(entries, nowMillis)
+    val hasWaiting = hasWaitingStep(entries, nowMillis, ignoreDelays)
     LaunchedEffect(hasWaiting) {
         while (hasWaiting) {
             delay(CountdownStepMillis)
@@ -212,6 +215,7 @@ fun QuestsScreen(
                         balance = balance,
                         canRestart = canRestart,
                         nowMillis = nowMillis,
+                        ignoreDelays = ignoreDelays,
                         onToggle = { expandedId = nextExpandedQuest(expandedId, questId) },
                         onStart = { onStart(questId) },
                         onChoose = { index -> onChoose(questId, index) },
@@ -235,6 +239,7 @@ private fun QuestCard(
     balance: Int,
     canRestart: Boolean,
     nowMillis: Long,
+    ignoreDelays: Boolean,
     onToggle: () -> Unit,
     onStart: () -> Unit,
     onChoose: (Int) -> Unit,
@@ -285,9 +290,9 @@ private fun QuestCard(
                     )
                     // У раскрытой карточки отсчёт и «завершён» уже внизу — шапка их не повторяет.
                     val status = if (expanded) {
-                        expandedQuestStatusText(entry, balance, nowMillis)
+                        expandedQuestStatusText(entry, balance, nowMillis, ignoreDelays)
                     } else {
-                        questStatusText(entry, balance, nowMillis)
+                        questStatusText(entry, balance, nowMillis, ignoreDelays)
                     }
                     if (status != null) {
                         Text(
@@ -325,6 +330,7 @@ private fun QuestCard(
                         balance = balance,
                         canRestart = canRestart,
                         nowMillis = nowMillis,
+                        ignoreDelays = ignoreDelays,
                         onStart = onStart,
                         onChoose = onChoose,
                         onAdvance = onAdvance,
@@ -344,6 +350,7 @@ private fun QuestBody(
     balance: Int,
     canRestart: Boolean,
     nowMillis: Long,
+    ignoreDelays: Boolean,
     onStart: () -> Unit,
     onChoose: (Int) -> Unit,
     onAdvance: () -> Unit,
@@ -358,12 +365,13 @@ private fun QuestBody(
             balance = balance,
             canRestart = canRestart,
             nowMillis = nowMillis,
+            ignoreDelays = ignoreDelays,
             onRestart = onRestart
         )
         choice != null -> OutcomeBlock(
             quest = quest,
             outcome = choice,
-            availableAtMillis = progress.availableAtMillis,
+            availableAtMillis = QuestEngine.stepAvailableAtMillis(progress, nowMillis, ignoreDelays),
             nowMillis = nowMillis,
             onAdvance = onAdvance
         )
@@ -405,6 +413,7 @@ private fun FinishedBlock(
     balance: Int,
     canRestart: Boolean,
     nowMillis: Long,
+    ignoreDelays: Boolean,
     onRestart: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(CardGap)) {
@@ -415,7 +424,13 @@ private fun FinishedBlock(
         )
         if (canRestart && quest.kind == QuestKind.PLAYER) {
             val affordable = balance >= quest.minBalance
-            val availability = QuestEngine.availabilityOf(quest, listOf(progress), balance, nowMillis)
+            val availability = QuestEngine.availabilityOf(
+                quest,
+                listOf(progress),
+                balance,
+                nowMillis,
+                ignoreDelays
+            )
             PillButton(
                 text = "Ещё раз",
                 onClick = onRestart,

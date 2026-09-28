@@ -58,13 +58,15 @@ class GameViewModelQuestTest {
         clock: FakeGameClock = FakeGameClock(),
         random: Random = ScriptedRandom(),
         allowRestart: Boolean = true,
-        catalog: QuestCatalog = TestQuests.CATALOG
+        catalog: QuestCatalog = TestQuests.CATALOG,
+        ignoreQuestDelays: Boolean = false
     ): GameViewModel = testGameViewModel(
         store = store,
         clock = clock,
         questCatalog = catalog,
         random = random,
-        allowRestart = allowRestart
+        allowRestart = allowRestart,
+        ignoreQuestDelays = ignoreQuestDelays
     )
 
     /** [TestQuests.CATALOG], но без кулдауна — для тестов, которым сам кулдаун не интересен. */
@@ -222,6 +224,21 @@ class GameViewModelQuestTest {
         assertFalse(vm.advanceQuest("picnic"))
         assertEquals(waiting, vm.state.value.questProgressOf("picnic"))
         assertTrue(vm.nowMillis() >= start)
+    }
+
+    @Test
+    fun `in a debug build a quest neither waits between steps nor cools down`() {
+        val vm = vmOver(storeWith(balance = 150), ignoreQuestDelays = true)
+        vm.startQuest("picnic")
+        vm.chooseQuestOption("picnic", 0)
+
+        assertTrue(vm.advanceQuest("picnic"))
+        assertTrue(vm.chooseQuestOption("picnic", 0))
+        assertTrue(vm.advanceQuest("picnic"))
+        assertEquals(QuestStatus.FINISHED, vm.state.value.questProgressOf("picnic")!!.status)
+
+        assertTrue(vm.startQuest("picnic"))
+        assertEquals("food", vm.state.value.questProgressOf("picnic")!!.nodeId)
     }
 
     @Test

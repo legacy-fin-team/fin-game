@@ -10,6 +10,12 @@ import kotlin.random.Random
  * квестов, баланс и момент времени и возвращает новое состояние — или null, когда действие сейчас
  * невозможно. Применить исход к питомцу и журналу денег — дело
  * [com.legacy.fingame.game.GameViewModel].
+ *
+ * Флаг `ignoreDelays` у функций снимает ожидание: кулдаун пройденного квеста
+ * ([Quest.cooldownMinutes]) и паузу между шагами ([QuestNode.delayMinutes]) — всё доступно сразу.
+ * Это для отладочной сборки, чтобы проверять квесты без ожидания; откуда он берётся, решает
+ * вызывающий, само ядро о сборке ничего не знает. Шесть часов между случайными квестами флаг не
+ * трогает: это не ожидание действия игрока, а редкость случайных событий.
  */
 object QuestEngine {
 
@@ -47,8 +53,22 @@ object QuestEngine {
     /**
      * @return Можно ли начать [quest] сейчас; см. [availabilityOf] для причины, когда нельзя.
      */
-    fun canStart(quest: Quest, quests: List<QuestProgress>, balance: Int, nowMillis: Long): Boolean =
-        availabilityOf(quest, quests, balance, nowMillis).canStart
+    fun canStart(
+        quest: Quest,
+        quests: List<QuestProgress>,
+        balance: Int,
+        nowMillis: Long,
+        ignoreDelays: Boolean = false
+    ): Boolean = availabilityOf(quest, quests, balance, nowMillis, ignoreDelays).canStart
+
+    /**
+     * @param progress запись идущего квеста.
+     * @param ignoreDelays снять паузу между шагами (см. описание [QuestEngine]).
+     * @return Момент, с которого доступен следующий шаг: [QuestProgress.availableAtMillis], а без
+     * ожидания — не позже [nowMillis], даже если пауза была назначена раньше, до включения флага.
+     */
+    fun stepAvailableAtMillis(progress: QuestProgress, nowMillis: Long, ignoreDelays: Boolean): Long =
+        if (ignoreDelays) minOf(progress.availableAtMillis, nowMillis) else progress.availableAtMillis
 
     /**
      * Единственное место, где решается, можно ли начать квест: идёт ли он уже, хватает ли денег,
@@ -56,13 +76,16 @@ object QuestEngine {
      * [QuestProgress.enabledAgain] снимает обе последние проверки разом — это то, что делает
      * [enable].
      *
+     * @param ignoreDelays не ждать кулдауна (см. описание [QuestEngine]); одноразовый квест всё
+     * равно остаётся закрытым до [enable].
      * @return Ответ и причина отказа, если начать нельзя.
      */
     fun availabilityOf(
         quest: Quest,
         quests: List<QuestProgress>,
         balance: Int,
-        nowMillis: Long
+        nowMillis: Long,
+        ignoreDelays: Boolean = false
     ): QuestAvailability {
         val progress = progressOf(quests, quest.id)
         if (progress?.isActive == true) {
@@ -73,7 +96,7 @@ object QuestEngine {
                 return QuestAvailability(canStart = false, reason = QuestUnavailableReason.ONE_TIME_DONE)
             }
             val cooldownEndsAtMillis = progress.availableAtMillis + quest.cooldownMinutes * MINUTE_MILLIS
-            if (nowMillis < cooldownEndsAtMillis) {
+            if (!ignoreDelays && nowMillis < cooldownEndsAtMillis) {
                 return QuestAvailability(
                     canStart = false,
                     reason = QuestUnavailableReason.COOLDOWN,
@@ -118,9 +141,10 @@ object QuestEngine {
         quest: Quest,
         quests: List<QuestProgress>,
         balance: Int,
-        nowMillis: Long
+        nowMillis: Long,
+        ignoreDelays: Boolean = false
     ): List<QuestProgress>? {
-        if (!canStart(quest, quests, balance, nowMillis)) return null
+        if (!canStart(quest, quests, balance, nowMillis, ignoreDelays)) return null
         val started = QuestProgress(
             questId = quest.id,
             nodeId = quest.firstNodeId,
@@ -134,7 +158,7 @@ object QuestEngine {
      * выбирается; трата всё равно урезается до баланса — на случай, если счёт поменялся между
      * проверкой и списанием, ниже нуля он не уходит. Прогресс держится в 0..100 и двигается только
      * у квестов с прогрессом. Следующий шаг откроется через задержку узла; после последнего
-     * варианта ждать нечего.
+     * варианта ждать нечего; с [ignoreDelays] не ждать и между шагами.
      *
      * @param optionIndex номер варианта на узле.
      * @param balance текущий счёт игрока.
@@ -147,11 +171,12 @@ object QuestEngine {
         quests: List<QuestProgress>,
         optionIndex: Int,
         balance: Int,
-        nowMillis: Long
+        nowMillis: Long,
+        ignoreDelays: Boolean = false
     ): Choice? {
         val current = progressOf(quests, quest.id) ?: return null
         if (!current.isActive || current.lastChoice != null) return null
-        if (nowMillis < current.availableAtMillis) return null
+        if (nowMillis < stepAvailableAtMillis(current, nowMillis, ignoreDelays)) return null
         val node = quest.node(current.nodeId) ?: return null
         val option = node.options.getOrNull(optionIndex) ?: return null
         if (!canAfford(option, balance)) return null
@@ -174,7 +199,7 @@ object QuestEngine {
             moneyDelta = moneyDelta,
             progressDelta = progress - current.progress
         )
-        val waitMillis = if (outcome.isFinal) 0L else node.delayMinutes * MINUTE_MILLIS
+        val waitMillis = if (outcome.isFinal || ignoreDelays) 0L else node.delayMinutes * MINUTE_MILLIS
         val updated = current.copy(
             progress = progress,
             availableAtMillis = nowMillis + waitMillis,
@@ -192,7 +217,12 @@ object QuestEngine {
      * @return Новое состояние, или null, когда идти дальше пока нельзя: выбор ещё не сделан (а
      * текущий узел при этом есть в данных) или задержка после выбора ещё не прошла.
      */
-    fun advance(quest: Quest, quests: List<QuestProgress>, nowMillis: Long): List<QuestProgress>? {
+    fun advance(
+        quest: Quest,
+        quests: List<QuestProgress>,
+        nowMillis: Long,
+        ignoreDelays: Boolean = false
+    ): List<QuestProgress>? {
         val current = progressOf(quests, quest.id) ?: return null
         if (!current.isActive) return null
 
@@ -207,7 +237,7 @@ object QuestEngine {
             )
             return quests.replaced(updated)
         }
-        if (nowMillis < current.availableAtMillis) return null
+        if (nowMillis < stepAvailableAtMillis(current, nowMillis, ignoreDelays)) return null
 
         val next = quest.node(choice.nextNodeId)
         val updated = if (choice.isFinal || next == null) {
@@ -227,7 +257,8 @@ object QuestEngine {
      * Проверка на случайный квест, раз в тик. Выпадает, только если сейчас не идёт ни один
      * случайный квест, с [sinceMillis] прошло не меньше [RANDOM_QUEST_COOLDOWN_MILLIS] и бросок
      * [random] попал в один шанс из [RANDOM_QUEST_CHANCE]. Кандидаты — случайные квесты каталога,
-     * которые можно начать ([canStart]); бросок не делается, пока до него не дошло.
+     * которые можно начать ([canStart]); бросок не делается, пока до него не дошло. [ignoreDelays]
+     * снимает кулдаун самих случайных квестов, но не шесть часов между ними.
      *
      * @param sinceMillis момент последнего случайного квеста или, если их не было, момент, когда
      * игрок завёл питомца.
@@ -239,7 +270,8 @@ object QuestEngine {
         balance: Int,
         sinceMillis: Long,
         nowMillis: Long,
-        random: Random
+        random: Random,
+        ignoreDelays: Boolean = false
     ): Spawn? {
         val randomRunning = quests.any { progress ->
             progress.isActive && catalog.findQuestById(progress.questId)?.kind == QuestKind.RANDOM
@@ -250,13 +282,13 @@ object QuestEngine {
         }
 
         val candidates = catalog.quests.filter {
-            it.kind == QuestKind.RANDOM && canStart(it, quests, balance, nowMillis)
+            it.kind == QuestKind.RANDOM && canStart(it, quests, balance, nowMillis, ignoreDelays)
         }
         if (candidates.isEmpty()) return null
         if (random.nextInt(RANDOM_QUEST_CHANCE) != 0) return null
 
         val quest = candidates[random.nextInt(candidates.size)]
-        val started = start(quest, quests, balance, nowMillis) ?: return null
+        val started = start(quest, quests, balance, nowMillis, ignoreDelays) ?: return null
         return Spawn(started, quest)
     }
 

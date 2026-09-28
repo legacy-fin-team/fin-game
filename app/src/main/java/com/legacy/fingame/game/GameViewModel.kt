@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.legacy.fingame.BuildConfig
 import com.legacy.fingame.DemoMode
 import com.legacy.fingame.game.animals.Animal
 import com.legacy.fingame.game.animals.AnimalSelection
@@ -254,6 +255,9 @@ data class GameUiState(
  * @param random кости для случайных квестов; в тестах — заранее заданные.
  * @param allowRestart можно ли пройти пройденный квест ещё раз ([restartQuest]); только в
  * демо-сборке, иначе монеты «Копилки» можно было бы собирать без конца.
+ * @param ignoreQuestDelays не ждать ни кулдауна квестов, ни паузы между шагами — всё доступно
+ * сразу (см. [QuestEngine]). В приложении это отладочная сборка (см. [factory]); по умолчанию
+ * выключено, так что тесты сами решают, нужно ли им ожидание.
  * @param settings the settings the app starts with, as they were saved: they are in the state from
  * its very first value, so nothing that follows the state — the music, the click sound, the theme —
  * ever sees the defaults for a frame.
@@ -265,7 +269,8 @@ class GameViewModel(
     private val questCatalog: QuestCatalog = QuestCatalog.EMPTY,
     private val random: Random = Random.Default,
     private val allowRestart: Boolean = DemoMode.ENABLED,
-    settings: GameSettings = GameSettings()
+    settings: GameSettings = GameSettings(),
+    val ignoreQuestDelays: Boolean = false
 ) : ViewModel() {
 
     /**
@@ -301,6 +306,8 @@ class GameViewModel(
          * @param questCatalog какие квесты есть в игре.
          * @param allowRestart можно ли проходить квесты ещё раз; по умолчанию — только в демо.
          * @param settings the saved settings the app starts with.
+         * @param ignoreQuestDelays снять ожидание в квестах; по умолчанию — в отладочной сборке
+         * (`BuildConfig.DEBUG`: debug и releaseDebuggable), в обычном release ожидание действует.
          * @return A factory creating a [GameViewModel] backed by [store] and [catalog].
          */
         fun factory(
@@ -309,7 +316,8 @@ class GameViewModel(
             clock: GameClock = GameClock.DEVICE,
             questCatalog: QuestCatalog = QuestCatalog.EMPTY,
             allowRestart: Boolean = DemoMode.ENABLED,
-            settings: GameSettings = GameSettings()
+            settings: GameSettings = GameSettings(),
+            ignoreQuestDelays: Boolean = BuildConfig.DEBUG
         ): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 GameViewModel(
@@ -318,7 +326,8 @@ class GameViewModel(
                     clock,
                     questCatalog,
                     allowRestart = allowRestart,
-                    settings = settings
+                    settings = settings,
+                    ignoreQuestDelays = ignoreQuestDelays
                 )
             }
         }
@@ -544,8 +553,14 @@ class GameViewModel(
         val quest = questCatalog.findQuestById(questId) ?: return false
         val current = _state.value
         val now = clock.nowMillis()
-        val choice = QuestEngine.choose(quest, current.quests, optionIndex, current.balance, now)
-            ?: return false
+        val choice = QuestEngine.choose(
+            quest,
+            current.quests,
+            optionIndex,
+            current.balance,
+            now,
+            ignoreQuestDelays
+        ) ?: return false
 
         _state.value = current.copy(quests = choice.quests)
             .applyQuestEffects(quest, choice.outcome)
@@ -564,7 +579,7 @@ class GameViewModel(
         val quest = questCatalog.findQuestById(questId) ?: return false
         val current = _state.value
         val now = clock.nowMillis()
-        val quests = QuestEngine.advance(quest, current.quests, now) ?: return false
+        val quests = QuestEngine.advance(quest, current.quests, now, ignoreQuestDelays) ?: return false
 
         _state.value = current.copy(quests = quests).withQuestsLookedAt(now)
         persist()
@@ -583,7 +598,8 @@ class GameViewModel(
     private fun beginQuest(quest: Quest): Boolean {
         val current = _state.value
         val now = clock.nowMillis()
-        val quests = QuestEngine.start(quest, current.quests, current.balance, now) ?: return false
+        val quests = QuestEngine.start(quest, current.quests, current.balance, now, ignoreQuestDelays)
+            ?: return false
 
         _state.value = current.copy(quests = quests).withQuestsLookedAt(now)
         persist()
@@ -628,8 +644,15 @@ class GameViewModel(
         if (selection == null || petBornAtMillis == Growth.NOT_BORN) return this
         val since = lastRandomQuestAtMillis.takeUnless { it == PlayerState.NO_RANDOM_QUEST }
             ?: petBornAtMillis
-        val spawn = QuestEngine.maybeSpawnRandom(questCatalog, quests, balance, since, now, random)
-            ?: return this
+        val spawn = QuestEngine.maybeSpawnRandom(
+            questCatalog,
+            quests,
+            balance,
+            since,
+            now,
+            random,
+            ignoreQuestDelays
+        ) ?: return this
         return copy(quests = spawn.quests, lastRandomQuestAtMillis = now)
     }
 

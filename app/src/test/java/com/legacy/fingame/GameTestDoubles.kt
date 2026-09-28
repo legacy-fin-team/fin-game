@@ -170,6 +170,8 @@ internal class FakeGameClock(
  * @param random dice for random quests; by default dice that fail the test the moment they are
  * rolled, so a test that does not script them proves they were never needed.
  * @param settings the saved settings the app starts with.
+ * @param ignoreQuestDelays whether quests skip their waits, as in a debug build; off by default, so
+ * the tests about cooldowns and delays see them — a unit test runs the debug build itself.
  * @return A view model backed by the given doubles.
  */
 internal fun testGameViewModel(
@@ -179,7 +181,8 @@ internal fun testGameViewModel(
     questCatalog: QuestCatalog = QuestCatalog.EMPTY,
     random: Random = ScriptedRandom(),
     allowRestart: Boolean = true,
-    settings: GameSettings = GameSettings()
+    settings: GameSettings = GameSettings(),
+    ignoreQuestDelays: Boolean = false
 ): GameViewModel = GameViewModel(
     store = store,
     catalog = catalog,
@@ -187,7 +190,8 @@ internal fun testGameViewModel(
     questCatalog = questCatalog,
     random = random,
     allowRestart = allowRestart,
-    settings = settings
+    settings = settings,
+    ignoreQuestDelays = ignoreQuestDelays
 )
 
 /**

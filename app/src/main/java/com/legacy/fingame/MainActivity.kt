@@ -59,7 +59,10 @@ class MainActivity : ComponentActivity() {
                         store = playerPreferences,
                         catalog = itemRegistry,
                         questCatalog = questRegistry,
-                        settings = savedSettings
+                        settings = savedSettings,
+                        // Отладочная сборка (debug и releaseDebuggable) проверяет квесты без
+                        // ожидания; в обычном release кулдаун и паузы между шагами действуют.
+                        ignoreQuestDelays = BuildConfig.DEBUG
                     )
                 }
             )
