@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<attributions>
+    <attribution>
+        <files>
+            <file>cat1.ogg</file>
+        </files>
+        <license>CC-BY-3.0</license>
+        <copyright>Modified from 'Meow 4.wav' by freesound user 'TRNGLE'. The original audio was trimmed, split to mono, and converted from WAV to OGG format</copyright>
+        <source>https://freesound.org/people/TRNGLE/sounds/368006/</source>
+    </attribution>
+    <attribution>
+        <files>
+            <file>cat2.ogg</file>
+        </files>
+        <license>CC-BY-3.0</license>
+        <copyright>Created by freesound user 'TRNGLE'. The original audio split to mono, and converted from WAV to OGG format</copyright>
+        <source>https://freesound.org/people/TRNGLE/sounds/362652/</source>
+    </attribution>
+    <attribution>
+        <files>
+            <file>pat1.ogg</file>
+        </files>
+        <license>CC0-1.0</license>
+        <copyright>"pop.ogg" by mirrorcult of GitHub.com</copyright>
+        <source>https://github.com/space-wizards/space-station-14/blob/9168fc629c555b8c395d695d291faea1eeda1db6/Resources/Audio/Effects/pop.ogg</source>
+    </attribution>
+    <attribution>
+        <files>
+            <file>pat2.ogg</file>
+        </files>
+        <license>CC-BY-4.0</license>
+        <copyright>"Pop, High, A (H1).wav" by InspectorJ (www.jshaw.co.uk) of Freesound.org. Mixed from stereo to mono.</copyright>
+        <source>https://freesound.org/people/InspectorJ/sounds/411642/</source>
+    </attribution>
+</attributions>
