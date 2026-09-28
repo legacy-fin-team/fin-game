@@ -32,8 +32,22 @@ object AdultMoney {
     fun validate(amount: Int, add: Boolean, reason: String, balance: Int): List<String> {
         val errors = mutableListOf<String>()
         if (amount !in 1..AMOUNT_MAX) errors += "Сумма — от 1 до $AMOUNT_MAX"
-        if (!add && amount > balance) errors += "Можно убрать не больше, чем есть на счёте: $balance"
+        if (insufficientBalance(amount, add, balance)) {
+            errors += "Можно убрать не больше, чем есть на счёте: $balance"
+        }
         if (cleanReason(reason).isEmpty()) errors += "Впиши причину"
         return errors
     }
+
+    /**
+     * @return Убирают ли больше, чем сейчас есть на счёте, — для подсказки под суммой в форме.
+     */
+    fun insufficientBalance(amount: Int, add: Boolean, balance: Int): Boolean =
+        !add && amount > balance
+
+    /**
+     * @return Можно ли нажать «Сохранить»: true, когда изменение проходит все проверки.
+     */
+    fun canSave(amount: Int, add: Boolean, reason: String, balance: Int): Boolean =
+        validate(amount, add, reason, balance).isEmpty()
 }

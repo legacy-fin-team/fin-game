@@ -27,6 +27,16 @@ class AdultMoneyTest {
     }
 
     @Test
+    fun `can not save when removing more than the balance`() {
+        assertFalse(AdultMoney.canSave(31, add = false, reason = "чашка", balance = 30))
+        assertTrue(AdultMoney.insufficientBalance(31, add = false, balance = 30))
+        assertTrue(AdultMoney.canSave(30, add = false, reason = "чашка", balance = 30))
+        assertFalse(AdultMoney.insufficientBalance(30, add = false, balance = 30))
+        // Добавить деньги можно и сверх текущего счёта — тут ограничения нет.
+        assertFalse(AdultMoney.insufficientBalance(1000, add = true, balance = 0))
+    }
+
+    @Test
     fun `the reason is cleaned and cut`() {
         assertEquals("за уборку", AdultMoney.cleanReason("  за уборку\n "))
         assertEquals(AdultMoney.REASON_MAX, AdultMoney.cleanReason("а".repeat(100)).length)

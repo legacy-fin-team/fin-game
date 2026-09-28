@@ -56,6 +56,8 @@ internal fun AdultMoneyForm(
     val focusManager = LocalFocusManager.current
     val amount = amountText.toIntOrNull() ?: 0
     val errors = AdultMoney.validate(amount, add, reason, balance)
+    val canSave = AdultMoney.canSave(amount, add, reason, balance)
+    val insufficientBalance = AdultMoney.insufficientBalance(amount, add, balance)
 
     Column(
         modifier = Modifier
@@ -98,6 +100,13 @@ internal fun AdultMoneyForm(
         }
         FormLabel("Сколько монет (1–${AdultMoney.AMOUNT_MAX})")
         PriceBox(amountText)
+        if (insufficientBalance) {
+            Text(
+                text = "На счёте только ${coinsText(balance)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         Keypad(
             onDigit = { digit ->
                 if (amountText.length < AdultMoney.AMOUNT_MAX.toString().length) {
@@ -141,9 +150,10 @@ internal fun AdultMoneyForm(
             onClick = {
                 focusManager.clearFocus()
                 tried = true
-                if (errors.isEmpty()) onSave(amount, add, reason)
+                if (canSave) onSave(amount, add, reason)
             },
             style = PillStyle.Primary,
+            enabled = canSave,
             modifier = Modifier.fillMaxWidth()
         )
     }
