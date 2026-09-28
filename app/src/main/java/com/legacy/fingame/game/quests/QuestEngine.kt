@@ -45,11 +45,60 @@ object QuestEngine {
         quests.find { it.questId == questId }
 
     /**
-     * @return Можно ли начать [quest] сейчас: на счёте есть его минимум и он не идёт уже.
-     * Пройденный квест начать можно — это «Ещё раз».
+     * @return Можно ли начать [quest] сейчас; см. [availabilityOf] для причины, когда нельзя.
      */
-    fun canStart(quest: Quest, quests: List<QuestProgress>, balance: Int): Boolean =
-        balance >= quest.minBalance && progressOf(quests, quest.id)?.isActive != true
+    fun canStart(quest: Quest, quests: List<QuestProgress>, balance: Int, nowMillis: Long): Boolean =
+        availabilityOf(quest, quests, balance, nowMillis).canStart
+
+    /**
+     * Единственное место, где решается, можно ли начать квест: идёт ли он уже, хватает ли денег,
+     * не заблокирован ли он навсегда как одноразовый и не остывает ли ещё после кулдауна.
+     * [QuestProgress.enabledAgain] снимает обе последние проверки разом — это то, что делает
+     * [enable].
+     *
+     * @return Ответ и причина отказа, если начать нельзя.
+     */
+    fun availabilityOf(
+        quest: Quest,
+        quests: List<QuestProgress>,
+        balance: Int,
+        nowMillis: Long
+    ): QuestAvailability {
+        val progress = progressOf(quests, quest.id)
+        if (progress?.isActive == true) {
+            return QuestAvailability(canStart = false, reason = QuestUnavailableReason.ACTIVE)
+        }
+        if (progress != null && progress.isFinished && !progress.enabledAgain) {
+            if (!quest.repeatable) {
+                return QuestAvailability(canStart = false, reason = QuestUnavailableReason.ONE_TIME_DONE)
+            }
+            val cooldownEndsAtMillis = progress.availableAtMillis + quest.cooldownMinutes * MINUTE_MILLIS
+            if (nowMillis < cooldownEndsAtMillis) {
+                return QuestAvailability(
+                    canStart = false,
+                    reason = QuestUnavailableReason.COOLDOWN,
+                    availableAtMillis = cooldownEndsAtMillis
+                )
+            }
+        }
+        if (balance < quest.minBalance) {
+            return QuestAvailability(canStart = false, reason = QuestUnavailableReason.NOT_ENOUGH_MONEY)
+        }
+        return QuestAvailability(canStart = true)
+    }
+
+    /**
+     * Взрослый включает пройденный квест снова: снимает и одноразовую блокировку, и кулдаун —
+     * ровно на один следующий раз, пока квест не начнётся и [QuestProgress.enabledAgain] не
+     * потеряется вместе со старой записью (см. [start]).
+     *
+     * @return Новое состояние, или null, когда квест не начинался или ещё идёт — включать нечего.
+     */
+    fun enable(quests: List<QuestProgress>, questId: String): List<QuestProgress>? {
+        val progress = progressOf(quests, questId) ?: return null
+        if (!progress.isFinished) return null
+        return quests.replaced(progress.copy(enabledAgain = true))
+    }
 
     /**
      * @param option вариант на шаге квеста.
@@ -71,7 +120,7 @@ object QuestEngine {
         balance: Int,
         nowMillis: Long
     ): List<QuestProgress>? {
-        if (!canStart(quest, quests, balance)) return null
+        if (!canStart(quest, quests, balance, nowMillis)) return null
         val started = QuestProgress(
             questId = quest.id,
             nodeId = quest.firstNodeId,
@@ -201,7 +250,7 @@ object QuestEngine {
         }
 
         val candidates = catalog.quests.filter {
-            it.kind == QuestKind.RANDOM && canStart(it, quests, balance)
+            it.kind == QuestKind.RANDOM && canStart(it, quests, balance, nowMillis)
         }
         if (candidates.isEmpty()) return null
         if (random.nextInt(RANDOM_QUEST_CHANCE) != 0) return null

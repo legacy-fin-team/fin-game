@@ -103,17 +103,45 @@ class QuestFormatTest {
 
     @Test
     fun `a finished quest shows its final progress when it has one`() {
+        // Кулдаун снят копией квеста — тест смотрит только на «Завершён», не на отсчёт.
+        val noCooldown = TestQuests.PICNIC.copy(cooldownMinutes = 0)
         val picnic = QuestEntry(
-            TestQuests.PICNIC,
+            noCooldown,
             QuestProgress("picnic", Quest.END_NODE, now, progress = 80, status = QuestStatus.FINISHED)
         )
         val piggy = QuestEntry(
-            TestQuests.PIGGY_BANK,
+            TestQuests.PIGGY_BANK.copy(cooldownMinutes = 0),
             QuestProgress("piggy_bank", Quest.END_NODE, now, status = QuestStatus.FINISHED)
         )
 
         assertEquals("Завершён${nbsp}· 80%", questStatusText(picnic, 0, now))
         assertEquals("Завершён", questStatusText(piggy, 0, now))
+    }
+
+    @Test
+    fun `a finished quest on cooldown counts down to when it can be taken again`() {
+        val entry = QuestEntry(
+            TestQuests.PIGGY_BANK,
+            QuestProgress("piggy_bank", Quest.END_NODE, now, status = QuestStatus.FINISHED)
+        )
+        val cooldownEnd = now + TestQuests.PIGGY_BANK.cooldownMinutes * 60_000L
+
+        assertEquals("Доступен через 1:00:00", questStatusText(entry, 0, cooldownEnd - 3_600_000L))
+        assertEquals("Доступен через 0:42", expandedQuestStatusText(entry, 0, cooldownEnd - 42_000L))
+        // Кулдаун прошёл — снова «Завершён», а не бесконечный отсчёт.
+        assertEquals("Завершён", questStatusText(entry, 0, cooldownEnd))
+    }
+
+    @Test
+    fun `a one-time quest that is done for good just says it is finished`() {
+        val onceQuest = TestQuests.PIGGY_BANK.copy(repeatable = false)
+        val entry = QuestEntry(
+            onceQuest,
+            QuestProgress("piggy_bank", Quest.END_NODE, now, status = QuestStatus.FINISHED)
+        )
+
+        assertEquals("Завершён", questStatusText(entry, 0, now + 1_000_000_000L))
+        assertNull(expandedQuestStatusText(entry, 0, now + 1_000_000_000L))
     }
 
     @Test
@@ -142,8 +170,9 @@ class QuestFormatTest {
             QuestProgress("picnic", "food", now + 42_000L, lastChoice = toGames)
         )
         val choosing = QuestEntry(TestQuests.PICNIC, QuestProgress("picnic", "games", now))
+        // Кулдаун снят копией квеста — этот тест не про отсчёт до повтора, у него свой тест ниже.
         val finished = QuestEntry(
-            TestQuests.PICNIC,
+            TestQuests.PICNIC.copy(cooldownMinutes = 0),
             QuestProgress("picnic", Quest.END_NODE, now, progress = 80, status = QuestStatus.FINISHED)
         )
         val untaken = QuestEntry(TestQuests.PICNIC, null)

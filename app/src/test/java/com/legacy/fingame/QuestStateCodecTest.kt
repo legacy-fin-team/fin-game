@@ -7,6 +7,7 @@ import com.legacy.fingame.game.quests.QuestStatus
 import com.legacy.fingame.game.stats.StatKind
 import com.legacy.fingame.utils.QuestStateCodec
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 
 /** Кодек квестов: состояние квестов переживает превращение в строку и обратно без потерь. */
@@ -53,6 +54,31 @@ class QuestStateCodecTest {
         val quests = listOf(waiting, atChoice, finished)
 
         assertEquals(quests, QuestStateCodec.decode(QuestStateCodec.encode(quests)))
+    }
+
+    @Test
+    fun `enabled again round-trips too`() {
+        val reenabled = finished.copy(enabledAgain = true)
+
+        assertEquals(listOf(reenabled), QuestStateCodec.decode(QuestStateCodec.encode(listOf(reenabled))))
+    }
+
+    @Test
+    fun `a save from before enabledAgain existed still reads, defaulting it to false`() {
+        // Ровно то, что писал encode() до появления тринадцатого поля: двенадцать полей записи.
+        val legacy = "guests\u001Fend\u001F${now}\u001F80\u001FFINISHED\u001F0\u001F\u001F\u001F\u001F\u001F0\u001F0"
+
+        val decoded = QuestStateCodec.decode(legacy).single()
+
+        assertEquals(finished, decoded)
+        assertFalse(decoded.enabledAgain)
+    }
+
+    @Test
+    fun `a broken enabledAgain field drops the record`() {
+        val broken = QuestStateCodec.encode(listOf(finished)).let { it.dropLast(1) + "9" }
+
+        assertEquals(emptyList<QuestProgress>(), QuestStateCodec.decode(broken))
     }
 
     @Test

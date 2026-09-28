@@ -76,6 +76,18 @@ data class QuestNode(
  * @property hasProgress есть ли у квеста прогресс 0..100 %, который двигают выборы игрока.
  * @property minBalance сколько монет должно лежать на счёте, чтобы взять квест. Не тратится.
  * @property imagePath картинка квеста относительно `assets/textures/`, или null.
+ * @property repeatable можно ли брать квест снова после того, как он пройден. У квеста с
+ * `false` после первого прохождения [QuestEngine.canStart] откажет, пока взрослый не вызовет
+ * [QuestEngine.enable] — экран для этого будет в другой ветке.
+ * @property cooldownMinutes сколько реальных минут должно пройти с момента завершения квеста до
+ * следующей возможности его начать. Считается по настенным часам игры ([nowMillis] движка — тем
+ * же самым, каким устройство меряет реальное время, лишь бы демо-сборка его не подвинула), а не по
+ * условным «игровым» единицам: кулдаун нельзя обойти, ускорив квест другим способом. Действует
+ * только когда [repeatable] истинно; для одноразового квеста блокировка снимается не временем, а
+ * только через [QuestEngine.enable].
+ * @property stageDelayMinutes сколько реальных минут ждать по умолчанию между этапами квеста —
+ * то же самое время, что и [cooldownMinutes]. Это дефолт для узла, у которого нет своего
+ * [QuestNode.delayMinutes]; узел со своим значением задержки его переопределяет.
  */
 data class Quest(
     val id: String,
@@ -86,7 +98,10 @@ data class Quest(
     val nodes: Map<String, QuestNode>,
     val hasProgress: Boolean = false,
     val minBalance: Int = 0,
-    val imagePath: String? = null
+    val imagePath: String? = null,
+    val repeatable: Boolean = true,
+    val cooldownMinutes: Int = DEFAULT_COOLDOWN_MINUTES,
+    val stageDelayMinutes: Int = 0
 ) {
 
     /**
@@ -131,5 +146,8 @@ data class Quest(
 
         /** Наибольший прогресс квеста. */
         const val MAX_PROGRESS = 100
+
+        /** Дефолт [Quest.cooldownMinutes], когда `cooldown-minutes` нет в данных. */
+        const val DEFAULT_COOLDOWN_MINUTES = 60
     }
 }

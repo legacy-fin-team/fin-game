@@ -84,11 +84,33 @@ class QuestReader {
             }
         }
 
+        val repeatable = when (element.getAttribute("repeatable").trim().lowercase()) {
+            "", "true" -> true
+            "false" -> false
+            else -> {
+                Log.e(TAG, "Quest '$id' does not have proper 'repeatable' attribute.")
+                return null
+            }
+        }
+
+        val cooldownMinutes =
+            intAttributeOrDefault(element, "cooldown-minutes", Quest.DEFAULT_COOLDOWN_MINUTES)
+        if (cooldownMinutes == null || cooldownMinutes < 0) {
+            Log.e(TAG, "Quest '$id' has improper 'cooldown-minutes'.")
+            return null
+        }
+
+        val stageDelayMinutes = intAttributeOrDefault(element, "stage-delay-minutes", 0)
+        if (stageDelayMinutes == null || stageDelayMinutes < 0) {
+            Log.e(TAG, "Quest '$id' has improper 'stage-delay-minutes'.")
+            return null
+        }
+
         val nodes = linkedMapOf<String, QuestNode>()
         val nodeElements = element.getElementsByTagName("node")
         for (i in 0 until nodeElements.length) {
             val nodeElement = nodeElements.item(i) as? Element ?: continue
-            val node = readNode(nodeElement, id) ?: return null
+            val node = readNode(nodeElement, id, stageDelayMinutes) ?: return null
             if (nodes.containsKey(node.id)) {
                 Log.e(TAG, "Quest '$id' has two nodes with the same id: '${node.id}'")
                 return null
@@ -128,16 +150,21 @@ class QuestReader {
             nodes = nodes.toMap(),
             hasProgress = hasProgress,
             minBalance = minBalance,
-            imagePath = optionalAttribute(element, "image")
+            imagePath = optionalAttribute(element, "image"),
+            repeatable = repeatable,
+            cooldownMinutes = cooldownMinutes,
+            stageDelayMinutes = stageDelayMinutes
         )
     }
 
     /**
      * @param element тег `<node>`.
      * @param questId id квеста, для лога.
+     * @param defaultDelayMinutes чем считать задержку узла, у которого нет своего
+     * `delay-minutes` — квестовый [Quest.stageDelayMinutes].
      * @return Узел, или null, когда он сломан.
      */
-    private fun readNode(element: Element, questId: String): QuestNode? {
+    private fun readNode(element: Element, questId: String, defaultDelayMinutes: Int): QuestNode? {
         val id = element.getAttribute("id").trim()
         if (id.isEmpty() || id == Quest.END_NODE) {
             Log.e(TAG, "A node of quest '$questId' has no id or is called '${Quest.END_NODE}'.")
@@ -150,7 +177,11 @@ class QuestReader {
             return null
         }
 
-        val delayMinutes = intAttribute(element, "delay-minutes")
+        val delayMinutes = if (element.hasAttribute("delay-minutes")) {
+            intAttribute(element, "delay-minutes")
+        } else {
+            defaultDelayMinutes
+        }
         if (delayMinutes == null || delayMinutes < 0) {
             Log.e(TAG, "Node '$id' of quest '$questId' has improper 'delay-minutes'.")
             return null
@@ -257,6 +288,15 @@ class QuestReader {
     private fun intAttribute(element: Element, name: String): Int? {
         val raw = element.getAttribute(name).trim()
         if (raw.isEmpty()) return 0
+        return raw.toIntOrNull()
+    }
+
+    /**
+     * @return Число из атрибута; [default], когда атрибута нет; null, когда там не число.
+     */
+    private fun intAttributeOrDefault(element: Element, name: String, default: Int): Int? {
+        val raw = element.getAttribute(name).trim()
+        if (raw.isEmpty()) return default
         return raw.toIntOrNull()
     }
 

@@ -6,6 +6,7 @@ import com.legacy.fingame.game.Screen
 import com.legacy.fingame.game.animals.AnimalSelection
 import com.legacy.fingame.game.economy.BudgetState
 import com.legacy.fingame.game.quests.Quest
+import com.legacy.fingame.game.quests.QuestCatalog
 import com.legacy.fingame.game.quests.QuestProgress
 import com.legacy.fingame.game.quests.QuestStatus
 import com.legacy.fingame.game.stats.PetStats
@@ -56,14 +57,19 @@ class GameViewModelQuestTest {
         store: FakePlayerStateStore,
         clock: FakeGameClock = FakeGameClock(),
         random: Random = ScriptedRandom(),
-        allowRestart: Boolean = true
+        allowRestart: Boolean = true,
+        catalog: QuestCatalog = TestQuests.CATALOG
     ): GameViewModel = testGameViewModel(
         store = store,
         clock = clock,
-        questCatalog = TestQuests.CATALOG,
+        questCatalog = catalog,
         random = random,
         allowRestart = allowRestart
     )
+
+    /** [TestQuests.CATALOG], но без кулдауна — для тестов, которым сам кулдаун не интересен. */
+    private fun catalogWithoutCooldown(): QuestCatalog =
+        QuestCatalog.of(TestQuests.ALL.map { it.copy(cooldownMinutes = 0) })
 
     // --- Взять ---
 
@@ -219,7 +225,7 @@ class GameViewModelQuestTest {
     }
 
     @Test
-    fun `finishing a quest and playing it again`() {
+    fun `finishing a quest and playing it again once the cooldown passes`() {
         val vm = vmOver(storeWith(balance = 150))
         vm.startQuest("piggy_bank")
         vm.chooseQuestOption("piggy_bank", 0)
@@ -229,10 +235,59 @@ class GameViewModelQuestTest {
         assertEquals(QuestStatus.FINISHED, finished.status)
         assertEquals(Quest.END_NODE, finished.nodeId)
 
+        // Копилку нельзя ни взять заново, ни «Ещё раз» — она остывает после кулдауна.
         assertFalse(vm.startQuest("piggy_bank"))
+        assertFalse(vm.restartQuest("piggy_bank"))
+
+        vm.fastForward(TimeUnit.MINUTES.toMillis(TestQuests.PIGGY_BANK.cooldownMinutes.toLong()))
+
         assertTrue(vm.restartQuest("piggy_bank"))
-        assertEquals(QuestProgress("piggy_bank", "start", start), vm.state.value.questProgressOf("piggy_bank"))
+        assertEquals(vm.nowMillis(), vm.state.value.questProgressOf("piggy_bank")!!.availableAtMillis)
+        assertEquals("start", vm.state.value.questProgressOf("piggy_bank")!!.nodeId)
         assertEquals(180, vm.state.value.balance)
+    }
+
+    @Test
+    fun `a repeatable quest can also be started again through the normal button, once the cooldown passes`() {
+        val vm = vmOver(storeWith(balance = 150))
+        vm.startQuest("piggy_bank")
+        vm.chooseQuestOption("piggy_bank", 0)
+        vm.advanceQuest("piggy_bank")
+
+        assertFalse(vm.startQuest("piggy_bank"))
+
+        vm.fastForward(TimeUnit.MINUTES.toMillis(TestQuests.PIGGY_BANK.cooldownMinutes.toLong()))
+
+        assertTrue(vm.startQuest("piggy_bank"))
+        assertEquals("start", vm.state.value.questProgressOf("piggy_bank")!!.nodeId)
+    }
+
+    @Test
+    fun `a one-time quest stays locked no matter how long it waits, until an adult enables it again`() {
+        // Только квест игрока в каталоге — тридцать дней вперёд не должны будить случайные квесты
+        // и требовать от ScriptedRandom бросков, которых у него нет.
+        val onceCatalog = QuestCatalog.of(listOf(TestQuests.PIGGY_BANK.copy(repeatable = false)))
+        val vm = vmOver(storeWith(balance = 150), catalog = onceCatalog)
+        vm.startQuest("piggy_bank")
+        vm.chooseQuestOption("piggy_bank", 0)
+        vm.advanceQuest("piggy_bank")
+
+        vm.fastForward(TimeUnit.DAYS.toMillis(30))
+        assertFalse(vm.startQuest("piggy_bank"))
+        assertFalse(vm.restartQuest("piggy_bank"))
+
+        assertTrue(vm.enableQuest("piggy_bank"))
+
+        assertTrue(vm.startQuest("piggy_bank"))
+        assertEquals("start", vm.state.value.questProgressOf("piggy_bank")!!.nodeId)
+    }
+
+    @Test
+    fun `enabling a quest nobody ever finished changes nothing`() {
+        val vm = vmOver(storeWith())
+
+        assertFalse(vm.enableQuest("piggy_bank"))
+        assertFalse(vm.enableQuest("nowhere"))
     }
 
     @Test
@@ -256,7 +311,9 @@ class GameViewModelQuestTest {
         assertEquals(finished, player.state.value)
         assertEquals(QuestStatus.FINISHED, store.state.quests.single().status)
 
-        val demo = vmOver(store, allowRestart = true)
+        // Кулдаун одинаков для всех — и для игрока, и для демо-«Ещё раз»; ждём его здесь тоже.
+        val cooldownEnd = start + TimeUnit.MINUTES.toMillis(TestQuests.PIGGY_BANK.cooldownMinutes.toLong())
+        val demo = vmOver(store, clock = FakeGameClock(millis = cooldownEnd), allowRestart = true)
         assertTrue(demo.restartQuest("piggy_bank"))
         assertEquals(QuestStatus.ACTIVE, demo.state.value.questProgressOf("piggy_bank")!!.status)
     }
@@ -432,7 +489,9 @@ class GameViewModelQuestTest {
     fun `a saved quest whose step vanished is finished on load`() {
         val saved = listOf(QuestProgress("picnic", "vanished", start))
 
-        val vm = vmOver(storeWith(quests = saved))
+        // Кулдаун не в фокусе этого теста — он проверяет только автозавершение и что после него
+        // квест снова можно взять, как только это разрешают правила.
+        val vm = vmOver(storeWith(quests = saved), catalog = catalogWithoutCooldown())
 
         val progress = vm.state.value.questProgressOf("picnic")!!
         assertEquals(QuestStatus.FINISHED, progress.status)

@@ -114,6 +114,76 @@ class QuestReaderTest {
         assertEquals("", quest.description)
         assertNull(quest.imagePath)
         assertEquals(0, quest.node("only")!!.delayMinutes)
+        assertTrue(quest.repeatable)
+        assertEquals(Quest.DEFAULT_COOLDOWN_MINUTES, quest.cooldownMinutes)
+        assertEquals(0, quest.stageDelayMinutes)
+    }
+
+    @Test
+    fun `repeatable, cooldown and stage delay read from their attributes`() {
+        val quest = read(
+            """
+            <quest id="piggy" title="Копилка" kind="player" start="a" repeatable="false"
+                   cooldown-minutes="180" stage-delay-minutes="2">
+                <node id="a">
+                    <text>Текст.</text>
+                    <option label="Ок" next="end"><result>Готово.</result></option>
+                </node>
+            </quest>
+            """
+        ).single()
+
+        assertFalse(quest.repeatable)
+        assertEquals(180, quest.cooldownMinutes)
+        assertEquals(2, quest.stageDelayMinutes)
+    }
+
+    @Test
+    fun `a node without its own delay falls back to the quest's stage delay`() {
+        val quests = read(
+            """
+            <quest id="staged" title="Этапы" kind="player" start="a" stage-delay-minutes="3">
+                <node id="a">
+                    <text>Текст.</text>
+                    <option label="Дальше" next="b"><result>Готово.</result></option>
+                </node>
+                <node id="b" delay-minutes="7">
+                    <text>Текст.</text>
+                    <option label="Ок" next="end"><result>Готово.</result></option>
+                </node>
+            </quest>
+            """
+        )
+
+        val quest = quests.single()
+        // У узла "a" нет своей задержки — она берётся из stage-delay-minutes квеста.
+        assertEquals(3, quest.node("a")!!.delayMinutes)
+        // У узла "b" задержка своя — она главнее квестовой.
+        assertEquals(7, quest.node("b")!!.delayMinutes)
+    }
+
+    @Test
+    fun `an improper repeatable, cooldown or stage delay drops the quest`() {
+        val quests = read(
+            """
+            <quest id="bad-repeatable" title="А" kind="player" start="a" repeatable="maybe">
+                <node id="a"><text>Т.</text><option label="Ок" next="end"><result>Г.</result></option></node>
+            </quest>
+            """,
+            """
+            <quest id="bad-cooldown" title="Б" kind="player" start="a" cooldown-minutes="-1">
+                <node id="a"><text>Т.</text><option label="Ок" next="end"><result>Г.</result></option></node>
+            </quest>
+            """,
+            """
+            <quest id="bad-stage-delay" title="В" kind="player" start="a" stage-delay-minutes="слова">
+                <node id="a"><text>Т.</text><option label="Ок" next="end"><result>Г.</result></option></node>
+            </quest>
+            """,
+            goodQuest
+        )
+
+        assertEquals(listOf("good"), quests.map { it.id })
     }
 
     @Test
