@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.legacy.fingame.game.hints.Hint
+import com.legacy.fingame.ui.theme.DialogWindowMotion
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 
@@ -57,6 +58,9 @@ private val ScrollFadeHeight = 28.dp
  * каждый из способов считается «прочитал», так что подсказка не заслоняет экран дольше, чем игрок
  * того хочет, и больше сама не появляется.
  *
+ * С выключенной настройкой «Анимации» окно появляется и пропадает сразу, без всплывания
+ * ([DialogWindowMotion]), как и остальные окна игры.
+ *
  * Карточка не выше [CardMaxHeightFraction] экрана. Заголовок и кнопка «Понятно!» всегда на виду,
  * а прокручиваются только абзацы между ними: так на узком экране с крупным шрифтом и в альбомной
  * ориентации ребёнок сразу видит, как закрыть окно. Если текст не поместился, у его нижнего края
@@ -77,6 +81,7 @@ fun ScreenHint(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
+        DialogWindowMotion()
         val maxCardHeight = LocalConfiguration.current.screenHeightDp.dp * CardMaxHeightFraction
 
         Box(
