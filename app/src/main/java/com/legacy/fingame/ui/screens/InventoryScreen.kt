@@ -298,8 +298,11 @@ private fun InventoryCell(
             )
 
             if (entry.worn) {
+                // Небольшой зазор: без него строка состояния прилипает к названию, а на крупном
+                // шрифте почти налезает на него.
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Надето",
+                    text = entry.item.category.wornStateTitle(),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary
                 )

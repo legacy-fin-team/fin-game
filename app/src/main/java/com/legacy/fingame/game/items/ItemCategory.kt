@@ -49,6 +49,20 @@ enum class ItemCategory(
         else -> if (worn) "Снять" else "Надеть"
     }
 
+    /**
+     * What the inventory card of an item of this category says while the item is on the pet (or
+     * standing in the room): clothes are worn, a decoration stands — the same wording split as in
+     * [wearActionTitle], so the card and its button never disagree.
+     *
+     * Meaningful only for a category whose items are [ItemUse.WEARABLE].
+     *
+     * @return The Russian label of the state.
+     */
+    fun wornStateTitle(): String = when (this) {
+        DECOR -> "Стоит"
+        else -> "Надето"
+    }
+
     companion object {
         /**
          * @param categoryId an if of the category.
