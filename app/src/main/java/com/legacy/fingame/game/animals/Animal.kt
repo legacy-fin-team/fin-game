@@ -29,6 +29,11 @@ data class Animal(
     }
 
     /**
+     * Coerces [age] to the valid age stages of this animal (between [FIRST_AGE] and `ageCount - 1`).
+     */
+    fun coerceAge(age: Int): Int = age.coerceIn(FIRST_AGE, (ageCount - 1).coerceAtLeast(FIRST_AGE))
+
+    /**
      * Builds the path to the idle sprite of an animal variant at the given age stage.
      *
      * @param variantId id of an animal variant.
@@ -39,7 +44,7 @@ data class Animal(
      */
     fun getIdleSpritePath(variantId: String, age: Int): String {
         val variantPath = variants.getValue(variantId)
-        val ageStage = age.coerceIn(FIRST_AGE, ageCount - 1)
+        val ageStage = coerceAge(age)
         return "$variantPath/$ageStage/$IDLE_SPRITE_FILE"
     }
 }

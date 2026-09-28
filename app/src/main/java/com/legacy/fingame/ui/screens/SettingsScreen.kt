@@ -19,9 +19,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import kotlin.math.roundToInt
 import com.legacy.fingame.game.settings.GameSettings
 import com.legacy.fingame.game.settings.ThemeMode
 import com.legacy.fingame.ui.components.SpriteButton
@@ -121,17 +122,17 @@ fun SettingsScreen(
         }
 
         // --- Звуки ---
-        SettingCheckbox(
+        SettingSlider(
             label = "Звуки",
-            checked = settings.soundEnabled,
-            onCheckedChange = { onSettingsChanged(settings.copy(soundEnabled = it)) }
+            value = settings.soundVolume,
+            onValueChange = { onSettingsChanged(settings.copy(soundVolume = it)) }
         )
 
         // --- Музыка ---
-        SettingCheckbox(
+        SettingSlider(
             label = "Музыка",
-            checked = settings.musicEnabled,
-            onCheckedChange = { onSettingsChanged(settings.copy(musicEnabled = it)) }
+            value = settings.musicVolume,
+            onValueChange = { onSettingsChanged(settings.copy(musicVolume = it)) }
         )
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -210,33 +211,44 @@ fun SettingsScreen(
 }
 
 /**
- * Строка настройки с чекбоксом.
+ * Элемент настройки со слайдером уровня громкости в процентах (0..100).
  */
 @Composable
-private fun SettingCheckbox(
+private fun SettingSlider(
     label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
+    value: Int,
+    onValueChange: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier
-            .clickable { onCheckedChange(!checked) }
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Checkbox(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = CheckboxDefaults.colors(
-                checkedColor = MaterialTheme.colorScheme.primary,
-                uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                text = "$value%",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Slider(
+            value = value.toFloat(),
+            onValueChange = { onValueChange(it.roundToInt().coerceIn(0, 100)) },
+            valueRange = 0f..100f,
+            colors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         )
     }
@@ -333,7 +345,7 @@ private fun SettingsScreenDarkPreview() {
     FinGameTheme(darkTheme = true) {
         Surface(color = MaterialTheme.colorScheme.background) {
             SettingsScreen(
-                settings = GameSettings(soundEnabled = false, themeMode = ThemeMode.DARK),
+                settings = GameSettings(soundVolume = 0, themeMode = ThemeMode.DARK),
                 onSettingsChanged = {},
                 onOpenAdultMode = {},
                 onOpenHelp = {},

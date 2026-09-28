@@ -169,7 +169,7 @@ fun FinGameApp(
                             animalId = pet.animalId,
                             worn = state.worn,
                             catalog = itemRegistry,
-                            animalAge = state.petAge
+                            animalAge = animalRegistry.coerceAge(pet.animalId, state.petAge)
                         ),
                         // Patting the pet only makes it happy to see: hearts on the screen and a
                         // sound, no stats and no money.
