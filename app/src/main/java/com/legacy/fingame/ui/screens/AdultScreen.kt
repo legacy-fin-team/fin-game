@@ -175,6 +175,7 @@ fun AdultScreen(
     onRemoveItem: (String) -> Boolean = { false },
     onAddQuest: (CustomQuestDraft) -> Boolean = { false },
     onRemoveQuest: (String) -> Boolean = { false },
+    onEnableQuest: (String) -> Boolean = { false },
     initialTab: AdultTab = AdultTab.DAYS,
     initialQuestFormOpen: Boolean = false
 ) {
@@ -252,6 +253,7 @@ fun AdultScreen(
                     firstDay = firstDay,
                     onAddQuest = onAddQuest,
                     onRemoveQuest = onRemoveQuest,
+                    onEnableQuest = onEnableQuest,
                     initialFormOpen = initialQuestFormOpen
                 )
                 AdultTab.INVENTORY -> InventoryScreen(
@@ -723,6 +725,7 @@ private fun QuestsTab(
     firstDay: Long,
     onAddQuest: (CustomQuestDraft) -> Boolean,
     onRemoveQuest: (String) -> Boolean,
+    onEnableQuest: (String) -> Boolean,
     initialFormOpen: Boolean = false
 ) {
     var formOpen by rememberSaveable { mutableStateOf(initialFormOpen) }
@@ -783,7 +786,12 @@ private fun QuestsTab(
             }
         }
         items(items = history, key = { "history:${it.questId}" }) { entry ->
-            QuestHistoryCard(entry, state.questProgressOf(entry.questId), firstDay)
+            QuestHistoryCard(
+                entry = entry,
+                progress = state.questProgressOf(entry.questId),
+                firstDay = firstDay,
+                onEnable = { onEnableQuest(entry.questId) }
+            )
         }
     }
 
@@ -800,8 +808,17 @@ private fun QuestsTab(
     }
 }
 
+/**
+ * Квест в истории: название, статус и выборы ребёнка. Пройденный одноразовый квест можно
+ * «Включить снова» — один следующий раз ребёнок сможет взять его опять.
+ */
 @Composable
-private fun QuestHistoryCard(entry: QuestHistoryEntry, progress: QuestProgress?, firstDay: Long) {
+private fun QuestHistoryCard(
+    entry: QuestHistoryEntry,
+    progress: QuestProgress?,
+    firstDay: Long,
+    onEnable: () -> Unit
+) {
     AdultCard {
         Text(
             text = entry.quest?.title ?: "Квест удалён",
@@ -819,6 +836,23 @@ private fun QuestHistoryCard(entry: QuestHistoryEntry, progress: QuestProgress?,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+        if (entry.quest != null && !entry.quest.repeatable && progress?.isFinished == true) {
+            if (progress.enabledAgain) {
+                Text(
+                    text = "Включён снова: ребёнок может пройти его ещё раз",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                PillButton(
+                    text = "Включить снова",
+                    onClick = onEnable,
+                    style = PillStyle.Outlined,
+                    compact = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
         CardDivider()
         entry.choices.forEach { choice -> QuestChoiceRow(entry.quest, choice, firstDay) }
     }

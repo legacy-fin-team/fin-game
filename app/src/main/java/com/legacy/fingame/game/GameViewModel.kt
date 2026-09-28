@@ -679,15 +679,17 @@ class GameViewModel(
     }
 
     /**
-     * Взрослый включает пройденный квест снова: один следующий раз его можно начать, не дожидаясь
-     * кулдауна и не оглядываясь на `repeatable = false`. Экран для этого — в другой ветке, здесь
-     * только правило (см. [QuestEngine.enable]).
+     * Взрослый включает пройденный квест снова («Включить снова» во вкладке «Квесты» режима
+     * взрослого): один следующий раз его можно начать, не дожидаясь кулдауна и не оглядываясь на
+     * `repeatable = false` (см. [QuestEngine.enable]).
      *
      * @param questId id квеста.
-     * @return True, когда квест был пройден и включён; false, когда он не начинался или ещё идёт.
+     * @return True, когда квест был пройден и включён; false вне режима взрослого, когда квест не
+     * начинался или ещё идёт.
      */
     fun enableQuest(questId: String): Boolean {
         val current = _state.value
+        if (!current.adultMode) return false
         val quests = QuestEngine.enable(current.quests, questId) ?: return false
 
         _state.value = current.copy(quests = quests)

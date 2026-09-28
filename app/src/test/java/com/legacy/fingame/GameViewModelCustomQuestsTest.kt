@@ -27,7 +27,6 @@ class GameViewModelCustomQuestsTest {
         steps = listOf(
             CustomQuestStepDraft(
                 text = "Комната в беспорядке",
-                delayMinutes = 5,
                 options = listOf(
                     CustomQuestOptionDraft("Убрать сейчас", "Чисто", progressDelta = 25),
                     CustomQuestOptionDraft("Потом", "Беспорядок")
@@ -40,7 +39,8 @@ class GameViewModelCustomQuestsTest {
                     CustomQuestOptionDraft("Отказаться", "Грустно", moodDelta = -5)
                 )
             )
-        )
+        ),
+        stageDelayMinutes = 5
     )
 
     private fun store(balance: Int = 100) = FakePlayerStateStore(

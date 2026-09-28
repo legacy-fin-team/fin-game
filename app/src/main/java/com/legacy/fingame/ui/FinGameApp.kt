@@ -264,6 +264,7 @@ fun FinGameApp(
                         onRemoveItem = vm::removeCustomItem,
                         onAddQuest = vm::addCustomQuest,
                         onRemoveQuest = vm::removeCustomQuest,
+                        onEnableQuest = vm::enableQuest,
                         onClose = vm::exitAdultMode
                     )
                 }

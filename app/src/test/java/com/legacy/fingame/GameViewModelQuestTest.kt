@@ -276,7 +276,11 @@ class GameViewModelQuestTest {
         assertFalse(vm.startQuest("piggy_bank"))
         assertFalse(vm.restartQuest("piggy_bank"))
 
+        // Включает только взрослый, из своего режима.
+        assertFalse(vm.enableQuest("piggy_bank"))
+        vm.enterAdultMode()
         assertTrue(vm.enableQuest("piggy_bank"))
+        vm.exitAdultMode()
 
         assertTrue(vm.startQuest("piggy_bank"))
         assertEquals("start", vm.state.value.questProgressOf("piggy_bank")!!.nodeId)
@@ -285,6 +289,7 @@ class GameViewModelQuestTest {
     @Test
     fun `enabling a quest nobody ever finished changes nothing`() {
         val vm = vmOver(storeWith())
+        vm.enterAdultMode()
 
         assertFalse(vm.enableQuest("piggy_bank"))
         assertFalse(vm.enableQuest("nowhere"))

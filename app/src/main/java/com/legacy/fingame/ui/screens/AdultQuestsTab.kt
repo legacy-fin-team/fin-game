@@ -79,11 +79,25 @@ internal fun stepsText(count: Int): String = when {
     else -> "$count шагов"
 }
 
-/** Подпись кнопки задержки: «Нет», «5 мин», «1 ч». */
-private fun delayTitle(minutes: Int): String = when {
-    minutes == 0 -> "Нет"
+/** Страница «Правила» формы квеста — сразу после «Основного». */
+private const val RulesPageIndex = 1
+
+/** С этой страницы формы начинаются ситуации. */
+private const val FirstStepPage = 2
+
+/** Минут в сутках — для подписи длинных пауз и кулдаунов. */
+private const val MinutesPerDay = 24 * 60
+
+/** Столбец значения паузы и кулдауна: «1 ч 30 мин» не прыгает по ширине. */
+private val DurationValueWidth = 96.dp
+
+/** Длительность в минутах так, как её читает взрослый: «нет», «5 мин», «1 ч 30 мин», «2 сут». */
+internal fun minutesTitle(minutes: Int): String = when {
+    minutes <= 0 -> "нет"
+    minutes < 60 -> "$minutes мин"
+    minutes % MinutesPerDay == 0 -> "${minutes / MinutesPerDay} сут"
     minutes % 60 == 0 -> "${minutes / 60} ч"
-    else -> "$minutes мин"
+    else -> "${minutes / 60} ч ${minutes % 60} мин"
 }
 
 /** Текст поля: без переводов строк и служебных знаков, не длиннее [max]. */
@@ -131,6 +145,7 @@ internal fun CustomQuestCard(quest: Quest, onRemove: () -> Unit) {
                     text = buildString {
                         append(stepsText(quest.stepCount))
                         if (quest.minBalance > 0) append(" · от ${quest.minBalance} монет")
+                        if (!quest.repeatable) append(" · одноразовый")
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -213,9 +228,9 @@ internal fun CustomQuestForm(
     val scroll = rememberScrollState()
 
     val stepCount = draft.steps.size
-    val previewPage = stepCount + 1
+    val previewPage = stepCount + FirstStepPage
     val page = pageState.coerceIn(0, previewPage)
-    val stepIndex = page - 1
+    val stepIndex = page - FirstStepPage
 
     fun goTo(target: Int) {
         focusManager.clearFocus()
@@ -229,11 +244,13 @@ internal fun CustomQuestForm(
 
     val pageTitle = when (page) {
         0 -> "Основное"
+        RulesPageIndex -> "Правила"
         previewPage -> "Проверка"
-        else -> "Ситуация ${page} из $stepCount"
+        else -> "Ситуация ${stepIndex + 1} из $stepCount"
     }
     val pageErrors = when (page) {
         0 -> draft.headerErrors()
+        RulesPageIndex -> draft.rulesErrors()
         previewPage -> draft.validate(existingCount)
         else -> draft.stepErrors(stepIndex)
     }
@@ -278,17 +295,18 @@ internal fun CustomQuestForm(
                 }
             )
 
+            RulesPageIndex -> RulesPage(draft = draft, onDraftChange = { draft = it })
+
             previewPage -> PreviewPage(draft)
 
             else -> StepPage(
                 index = stepIndex,
                 step = draft.steps[stepIndex],
-                isLast = stepIndex == stepCount - 1,
                 onChange = { change -> updateStep(stepIndex, change) }
             )
         }
 
-        if (page in 1 until previewPage) {
+        if (page in FirstStepPage until previewPage) {
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -298,7 +316,7 @@ internal fun CustomQuestForm(
                         text = "Добавить шаг",
                         onClick = {
                             draft = draft.copy(steps = draft.steps + CustomQuestStepDraft())
-                            goTo(stepCount + 1)
+                            goTo(stepCount + FirstStepPage)
                         },
                         style = PillStyle.Outlined,
                         compact = true,
@@ -313,7 +331,8 @@ internal fun CustomQuestForm(
                             draft = draft.copy(steps = draft.steps.filterIndexed { i, _ -> i != stepIndex })
                             // Отметки проверенных страниц после удалённой сдвигаются вместе с ними.
                             checkedPages = checkedPages and ((1 shl page) - 1)
-                            pageState = page.coerceAtMost(stepCount - 1).coerceAtLeast(1)
+                            pageState = page.coerceAtMost(stepCount - 1 + FirstStepPage - 1)
+                                .coerceAtLeast(FirstStepPage)
                         },
                         style = PillStyle.Text,
                         compact = true,
@@ -404,12 +423,114 @@ private fun HeaderPage(
     )
 }
 
-/** Страница одной ситуации: текст, задержка до следующей, варианты. */
+/**
+ * Страница «Правила»: одноразовый квест или многоразовый, кулдаун многоразового и пауза между
+ * этапами. Числа меняются кнопками «−/+» по ряду удобных значений — без клавиатуры.
+ */
+@Composable
+private fun RulesPage(draft: CustomQuestDraft, onDraftChange: (CustomQuestDraft) -> Unit) {
+    FormLabel("Сколько раз можно пройти")
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        PillButton(
+            text = "Многоразовый",
+            onClick = { onDraftChange(draft.copy(repeatable = true)) },
+            selected = draft.repeatable,
+            compact = true,
+            modifier = Modifier.weight(1f)
+        )
+        PillButton(
+            text = "Одноразовый",
+            onClick = { onDraftChange(draft.copy(repeatable = false)) },
+            selected = !draft.repeatable,
+            compact = true,
+            modifier = Modifier.weight(1f)
+        )
+    }
+    FormHint(
+        if (draft.repeatable) {
+            "Пройденный квест можно взять снова, когда закончится кулдаун."
+        } else {
+            "Пройденный квест закроется. Открыть его ещё раз можно здесь, во вкладке «Квесты», " +
+                "кнопкой «Включить снова»."
+        }
+    )
+    if (draft.repeatable) {
+        DurationRow(
+            title = "Кулдаун, мин",
+            minutes = draft.cooldownMinutes,
+            presets = CustomQuests.COOLDOWNS,
+            max = CustomQuests.COOLDOWN_MAX,
+            onChange = { onDraftChange(draft.copy(cooldownMinutes = it)) }
+        )
+        FormHint("Столько ждать после прохождения, прежде чем взять квест снова.")
+    }
+    DurationRow(
+        title = "Пауза между этапами, мин",
+        minutes = draft.stageDelayMinutes,
+        presets = CustomQuests.STAGE_DELAYS,
+        max = CustomQuests.STAGE_DELAY_MAX,
+        onChange = { onDraftChange(draft.copy(stageDelayMinutes = it)) }
+    )
+    FormHint("Через столько после выбора откроется следующая ситуация.")
+}
+
+/** Пояснение под полем формы — мелко и тихо. */
+@Composable
+private fun FormHint(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+/** Строка «название, −, длительность, +»: шаги — по ряду [presets], не дальше [max]. */
+@Composable
+private fun DurationRow(title: String, minutes: Int, presets: List<Int>, max: Int, onChange: (Int) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        ShrinkText(
+            text = title,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            minSize = 10.dp
+        )
+        SpriteButton(
+            assetPath = Sprites.MINUS,
+            contentDescription = "$title меньше",
+            onClick = { onChange(CustomQuests.previousPreset(presets, minutes).coerceAtLeast(0)) },
+            size = StepperButtonSize,
+            enabled = minutes > 0,
+            showIndicator = false
+        )
+        Text(
+            text = minutesTitle(minutes),
+            modifier = Modifier.widthIn(min = DurationValueWidth),
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            softWrap = false,
+            textAlign = TextAlign.Center
+        )
+        SpriteButton(
+            assetPath = Sprites.PLUS,
+            contentDescription = "$title больше",
+            onClick = { onChange(CustomQuests.nextPreset(presets, minutes).coerceAtMost(max)) },
+            size = StepperButtonSize,
+            enabled = minutes < max && CustomQuests.nextPreset(presets, minutes) != minutes,
+            showIndicator = false
+        )
+    }
+}
+
+/** Страница одной ситуации: текст и варианты. */
 @Composable
 private fun StepPage(
     index: Int,
     step: CustomQuestStepDraft,
-    isLast: Boolean,
     onChange: ((CustomQuestStepDraft) -> CustomQuestStepDraft) -> Unit
 ) {
     val focusManager = LocalFocusManager.current
@@ -422,23 +543,6 @@ private fun StepPage(
         singleLine = false,
         onDone = { focusManager.clearFocus() }
     )
-    if (!isLast) {
-        FormLabel("Пауза до следующей ситуации")
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            CustomQuests.DELAYS.forEach { minutes ->
-                PillButton(
-                    text = delayTitle(minutes),
-                    onClick = { onChange { it.copy(delayMinutes = minutes) } },
-                    selected = step.delayMinutes == minutes,
-                    compact = true,
-                    autoShrink = false
-                )
-            }
-        }
-    }
     FormLabel("Варианты (${CustomQuests.OPTIONS_MIN}–${CustomQuests.OPTIONS_MAX})")
     step.options.forEachIndexed { optionIndex, option ->
         OptionEditor(
@@ -659,6 +763,11 @@ private fun PreviewPage(draft: CustomQuestDraft) {
                 color = MaterialTheme.colorScheme.onSurface
             )
         }
+        Text(
+            text = questRulesText(draft),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         draft.steps.forEachIndexed { index, step ->
             CardDivider()
             Text(
@@ -666,9 +775,9 @@ private fun PreviewPage(draft: CustomQuestDraft) {
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            if (index < draft.steps.lastIndex && step.delayMinutes > 0) {
+            if (index < draft.steps.lastIndex && draft.stageDelayMinutes > 0) {
                 Text(
-                    text = "Следующий шаг — через ${delayTitle(step.delayMinutes)}",
+                    text = "Следующий шаг — через ${minutesTitle(draft.stageDelayMinutes)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -692,6 +801,14 @@ private fun PreviewPage(draft: CustomQuestDraft) {
     }
 }
 
+/** «Многоразовый, кулдаун 1 ч» или «Одноразовый»; с паузой — «, пауза между этапами 5 мин». */
+internal fun questRulesText(draft: CustomQuestDraft): String = buildString {
+    append(if (draft.repeatable) "Многоразовый, кулдаун ${minutesTitle(draft.cooldownMinutes)}" else "Одноразовый")
+    if (draft.steps.size > 1 && draft.stageDelayMinutes > 0) {
+        append(", пауза между этапами ${minutesTitle(draft.stageDelayMinutes)}")
+    }
+}
+
 /**
  * «+20 монет, −5 настроения, +50 %», а без изменений — «без изменений». Число и слово соединены
  * неразрывным пробелом: «%» не уезжает на новую строку один.
@@ -711,7 +828,6 @@ internal val PreviewCleaningDraft = CustomQuestDraft(
     steps = listOf(
         CustomQuestStepDraft(
             text = "Комната в беспорядке",
-            delayMinutes = 5,
             options = listOf(
                 CustomQuestOptionDraft("Убрать сейчас", "Стало чисто!", progressDelta = 25),
                 CustomQuestOptionDraft("Потом", "Беспорядок остался")
@@ -724,7 +840,8 @@ internal val PreviewCleaningDraft = CustomQuestDraft(
                 CustomQuestOptionDraft("Отказаться", "Грустно", moodDelta = -5)
             )
         )
-    )
+    ),
+    stageDelayMinutes = 5
 )
 
 @Composable
@@ -746,7 +863,7 @@ private fun CustomQuestFormHeaderPreview() {
 @Composable
 private fun CustomQuestFormStepPreview() {
     FinGameTheme(darkTheme = true) {
-        FormPreviewSurface { CustomQuestForm({ true }, {}, 0, PreviewCleaningDraft, initialPage = 2) }
+        FormPreviewSurface { CustomQuestForm({ true }, {}, 0, PreviewCleaningDraft, initialPage = 3) }
     }
 }
 
@@ -760,7 +877,7 @@ private fun CustomQuestFormStepPreview() {
 @Composable
 private fun CustomQuestFormNarrowPreview() {
     FinGameTheme(darkTheme = false) {
-        FormPreviewSurface { CustomQuestForm({ true }, {}, 0, PreviewCleaningDraft, initialPage = 1) }
+        FormPreviewSurface { CustomQuestForm({ true }, {}, 0, PreviewCleaningDraft, initialPage = 2) }
     }
 }
 
@@ -768,7 +885,15 @@ private fun CustomQuestFormNarrowPreview() {
 @Composable
 private fun CustomQuestFormCheckPreview() {
     FinGameTheme(darkTheme = false) {
-        FormPreviewSurface { CustomQuestForm({ true }, {}, 0, PreviewCleaningDraft, initialPage = 3) }
+        FormPreviewSurface { CustomQuestForm({ true }, {}, 0, PreviewCleaningDraft, initialPage = 4) }
+    }
+}
+
+@Preview(name = "Quest form — rules, 360dp font 1.3", showBackground = true, widthDp = 360, heightDp = 900, fontScale = 1.3f)
+@Composable
+private fun CustomQuestFormRulesPreview() {
+    FinGameTheme(darkTheme = false) {
+        FormPreviewSurface { CustomQuestForm({ true }, {}, 0, PreviewCleaningDraft, initialPage = 1) }
     }
 }
 
@@ -776,6 +901,6 @@ private fun CustomQuestFormCheckPreview() {
 @Composable
 private fun CustomQuestFormLandscapePreview() {
     FinGameTheme(darkTheme = true) {
-        FormPreviewSurface { CustomQuestForm({ true }, {}, 0, PreviewCleaningDraft, initialPage = 1) }
+        FormPreviewSurface { CustomQuestForm({ true }, {}, 0, PreviewCleaningDraft, initialPage = 2) }
     }
 }

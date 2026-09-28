@@ -29,7 +29,6 @@ class CustomQuestsTest {
         steps = listOf(
             CustomQuestStepDraft(
                 text = "Комната в беспорядке",
-                delayMinutes = 30,
                 options = listOf(
                     CustomQuestOptionDraft("Убрать сейчас", "Чисто", progressDelta = 25),
                     CustomQuestOptionDraft("Потом", "Беспорядок")
@@ -42,7 +41,8 @@ class CustomQuestsTest {
                     CustomQuestOptionDraft("Отказаться", "Грустно", moodDelta = -5)
                 )
             )
-        )
+        ),
+        stageDelayMinutes = 30
     )
 
     @Test
@@ -86,8 +86,13 @@ class CustomQuestsTest {
         )
         assertTrue(oddMoney.validate().any { it.contains("монеты") })
 
-        val badDelay = cleaning.copy(steps = listOf(cleaning.steps[0].copy(delayMinutes = 7)))
-        assertTrue(badDelay.validate().any { it.contains("задержку") })
+        val badDelay = cleaning.copy(stageDelayMinutes = CustomQuests.STAGE_DELAY_MAX + 1)
+        assertTrue(badDelay.validate().any { it.startsWith("Пауза") })
+
+        val badCooldown = cleaning.copy(cooldownMinutes = -1)
+        assertTrue(badCooldown.validate().any { it.startsWith("Кулдаун") })
+        // У одноразового квеста кулдаун не используется и не проверяется.
+        assertEquals(emptyList<String>(), badCooldown.copy(repeatable = false).validate())
 
         val badProgress = cleaning.copy(
             steps = listOf(
@@ -114,6 +119,9 @@ class CustomQuestsTest {
         assertTrue(quest.node("s1")!!.options.all { it.nextNodeId == "s2" })
         assertTrue(quest.node("s2")!!.options.all { it.nextNodeId == Quest.END_NODE })
         assertEquals(30, quest.node("s1")!!.delayMinutes)
+        assertEquals(30, quest.stageDelayMinutes)
+        assertTrue(quest.repeatable)
+        assertEquals(Quest.DEFAULT_COOLDOWN_MINUTES, quest.cooldownMinutes)
         val help = quest.node("s2")!!.options[0]
         assertEquals(20, help.moneyDelta)
         assertEquals(50, help.progressDelta)
@@ -158,7 +166,7 @@ class CustomQuestsTest {
             good,
             good, // повтор id
             "\u001F" + good.substringAfter('\u001F'), // без id
-            good.replace("custom-1", "custom-2").replace("\u001F30\u001F", "\u001Fдесять\u001F")
+            good.replace("custom-1", "custom-2").replace("\u001F10\u001F", "\u001Fдесять\u001F")
         ).joinToString("\u001E")
 
         val decoded = CustomQuestsCodec.decode(raw)
@@ -166,6 +174,56 @@ class CustomQuestsTest {
         assertEquals(listOf("custom-1"), decoded.map { it.id })
         assertEquals(emptyList<Quest>(), CustomQuestsCodec.decode(null))
         assertEquals(emptyList<Quest>(), CustomQuestsCodec.decode(""))
+    }
+
+    @Test
+    fun `the codec keeps the rules of the quest`() {
+        val oneTime = cleaning.copy(repeatable = false, stageDelayMinutes = 90).toQuest("custom-1")
+        val slow = cleaning.copy(cooldownMinutes = 1440, stageDelayMinutes = 0).toQuest("custom-2")
+
+        val decoded = CustomQuestsCodec.decode(CustomQuestsCodec.encode(listOf(oneTime, slow)))
+
+        assertEquals(listOf(oneTime, slow), decoded)
+        assertFalse(decoded[0].repeatable)
+        assertEquals(90, decoded[0].stageDelayMinutes)
+        assertEquals(1440, decoded[1].cooldownMinutes)
+    }
+
+    @Test
+    fun `a record of the first version is read and migrated`() {
+        // Запись до правил квеста: у каждого шага своя задержка, у варианта — только настроение.
+        val legacy = listOf(
+            "custom-7", "Уборка", "Помоги дома", "10", "2",
+            "Комната в беспорядке", "30", "2",
+            "Убрать сейчас", "Чисто", "0", "0", "25",
+            "Потом", "Беспорядок", "0", "0", "0",
+            "Мама предлагает 20 монет", "5", "2",
+            "Помочь", "Мама довольна", "20", "0", "50",
+            "Отказаться", "Грустно", "0", "-5", "0"
+        ).joinToString("\u001F")
+
+        val quest = CustomQuestsCodec.decode(legacy).single()
+
+        assertEquals("custom-7", quest.id)
+        assertEquals(listOf("s1", "s2"), quest.stepOrder)
+        assertTrue(quest.repeatable)
+        assertEquals(Quest.DEFAULT_COOLDOWN_MINUTES, quest.cooldownMinutes)
+        // Пауза — задержка шагов, после которых что-то ещё есть; у последнего она ни на что не влияла.
+        assertEquals(30, quest.stageDelayMinutes)
+        assertEquals(mapOf(StatKind.PLEASURE to -5), quest.node("s2")!!.options[1].statEffects)
+        // Перезапись идёт уже в нынешнем виде и читается так же.
+        assertEquals(listOf(quest), CustomQuestsCodec.decode(CustomQuestsCodec.encode(listOf(quest))))
+    }
+
+    @Test
+    fun `presets step through the row and stop at its ends`() {
+        val row = listOf(0, 5, 30)
+
+        assertEquals(5, CustomQuests.nextPreset(row, 0))
+        assertEquals(30, CustomQuests.nextPreset(row, 7))
+        assertEquals(30, CustomQuests.nextPreset(row, 30))
+        assertEquals(5, CustomQuests.previousPreset(row, 7))
+        assertEquals(0, CustomQuests.previousPreset(row, 0))
     }
 
     @Test
