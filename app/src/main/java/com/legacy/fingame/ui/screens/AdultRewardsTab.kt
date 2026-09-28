@@ -49,7 +49,9 @@ internal fun RewardsTab(log: RewardUsageLog, seenAtMillis: Long, firstDay: Long,
         )
         return
     }
-    CardGrid(items = log.entries, key = { "${it.timestampMillis}:${it.itemId}" }) { usage ->
+    // Две награды могут прийтись на один момент — ключ дополняется местом в журнале.
+    val rows = remember(log) { log.entries.withIndex().toList() }
+    CardGrid(items = rows, key = { (index, it) -> "$index:${it.timestampMillis}:${it.itemId}" }) { (_, usage) ->
         AdultCard {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
