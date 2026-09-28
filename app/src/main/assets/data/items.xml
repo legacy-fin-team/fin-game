@@ -71,26 +71,40 @@
         </effects>
     </item>
     <item
-        id="hat"
+        id="bow"
         price="100"
-        name="Шляпа"
+        name="Бант"
         category="clothes"
     >
         <variants>
-            <variant id="black" />
-            <variant id="white" />
+            <variant id="red" />
+            <variant id="green" />
             <variant id="violet" />
         </variants>
     </item>
     <item
-        id="scarf"
-        name="Шарф"
+        id="tie"
+        name="Галстук"
+        price="80"
+        category="clothes"
+    >
+        <variants>
+            <variant id="orange" />
+            <variant id="green" />
+            <variant id="blue" />
+            <variant id="violet" />
+        </variants>
+    </item>
+    <item
+        id="bowtie"
+        name="Бабочка"
         price="80"
         category="clothes"
     >
         <variants>
             <variant id="red" />
             <variant id="green" />
+            <variant id="violet" />
         </variants>
     </item>
     <item
