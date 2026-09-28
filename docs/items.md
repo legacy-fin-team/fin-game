@@ -256,8 +256,10 @@
    [licenses.md](licenses.md)).
 
 3. **Тест.** В `app/src/test/java/com/legacy/fingame/ItemReaderTest.kt` уже есть проверки
-   поставляемого каталога (`the data the app ships with …`): каждый предмет читается, у каждого
-   варианта своя папка, у одежды и декора нет эффектов. Для новой еды стоит дописать ожидаемые
+   поставляемого каталога (`the data the app ships with …`): каждый предмет читается, путь иконки
+   каждого варианта строится как `items/<id>/<вариант>/icon.webp`, у одежды и декора нет эффектов.
+   Тест сверяет только строку пути — **отсутствие текстур тесты не ловят**: пропущенный файл
+   видно только в игре (заглушка `error.webp`) и в logcat (`SpriteLoader`). Для новой еды стоит дописать ожидаемые
    эффекты в тест `the data the app ships with gives the pet nothing to feel about what it wears`
    по образцу `kibble`:
 

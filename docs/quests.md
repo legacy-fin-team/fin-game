@@ -75,7 +75,7 @@
 | `<description>` | — | Описание на карточке |
 | `<node id delay-minutes image>` | — | Шаг (ситуация); `delay-minutes` — через сколько минут после выбора откроется следующий шаг |
 | `<text>` | — | Текст ситуации |
-| `<option label next money progress>` | `money` 0, `progress` 0 | Вариант: надпись на кнопке (до 16 символов), следующий узел или `end`, изменение монет и прогресса |
+| `<option label next money progress>` | `money` 0, `progress` 0 | Вариант: надпись на кнопке (до 16 символов — это проверяют `ShippedQuestsTest` и форма своих квестов, `QuestReader` длину не ограничивает), следующий узел или `end`, изменение монет и прогресса |
 | `<result>` | — | Что получилось после выбора |
 | `<effect stat value>` | — | Изменение шкалы `health`, `hunger`, `pleasure` |
 
@@ -89,7 +89,7 @@
 |---|---|---|
 | Можно ли взять | квест не идёт сейчас; одноразовый ещё не пройден (или включён снова); кулдаун истёк; `balance ≥ min-balance` | `QuestEngine.availabilityOf` |
 | Причина «нельзя» | `ACTIVE`, `ONE_TIME_DONE`, `COOLDOWN` (с моментом, когда станет можно), `NOT_ENOUGH_MONEY` | `QuestUnavailableReason` |
-| Кулдаун | `конец кулдауна = момент прохождения + cooldown-minutes`; на карточке «Доступен через N мин» | `availabilityOf` |
+| Кулдаун | `конец кулдауна = момент прохождения + cooldown-minutes`; на карточке отсчёт «Доступен через 1:02:03» или «Доступен через 0:42» (`QuestFormat.countdownText`) | `availabilityOf` |
 | Вариант с тратой | доступен, только если `−money ≤ balance` | `QuestEngine.canAfford` |
 | Деньги | `balance' = max(0, balance + money)`; трата дополнительно урезается до текущего баланса; строка журнала «Квест: <название>» | `QuestEngine.choose`, `GameViewModel.applyQuestEffects` |
 | Шкалы питомца | `шкала' = clamp(шкала + effect, 0, 100)` для каждого `<effect>` | `PetStats.changedBy` |
@@ -107,7 +107,7 @@
 
 ## 5. Случайные квесты
 
-Проверка идёт в каждом `tick()` (раз в 30 секунд, пока открыт экран с питомцем) —
+Проверка идёт в каждом `tick()` (раз в 30 секунд, пока приложение открыто и питомец выбран) —
 `QuestEngine.maybeSpawnRandom`:
 
 1. если уже идёт случайный квест — ничего;
