@@ -53,6 +53,16 @@ class AnimalRegistry(private val animalsMap: Map<String, Animal>) {
     }
 
     /**
+     * Coerces [age] to the valid age stages of [animalId] (between [Animal.FIRST_AGE] and `ageCount - 1`).
+     * If the animal is unknown, returns [age] clamped to at least [Animal.FIRST_AGE].
+     */
+    fun coerceAge(animalId: String?, age: Int): Int {
+        if (animalId == null) return age.coerceAtLeast(Animal.FIRST_AGE)
+        val animal = animalsMap[animalId] ?: return age.coerceAtLeast(Animal.FIRST_AGE)
+        return animal.coerceAge(age)
+    }
+
+    /**
      * Checks that an animal variant is still present in the data, e.g. before using the
      * animal the player picked during an earlier run.
      *
