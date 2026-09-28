@@ -118,11 +118,11 @@ internal fun AdultSectionTitle(text: String) {
 }
 
 /**
- * Свой квест в списке: иконка, название, число шагов и минимум; «Убрать» — строкой ниже, чтобы
- * название на узком экране с крупным шрифтом не рвалось посреди слова.
+ * Свой квест в списке: иконка, название, число шагов и минимум; «Изменить» и «Убрать» — строкой
+ * ниже, чтобы название на узком экране с крупным шрифтом не рвалось посреди слова.
  */
 @Composable
-internal fun CustomQuestCard(quest: Quest, onRemove: () -> Unit) {
+internal fun CustomQuestCard(quest: Quest, onEdit: () -> Unit, onRemove: () -> Unit) {
     AdultCard {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -152,13 +152,13 @@ internal fun CustomQuestCard(quest: Quest, onRemove: () -> Unit) {
                 )
             }
         }
-        PillButton(
-            text = "Убрать",
-            onClick = onRemove,
-            style = PillStyle.Outlined,
-            compact = true,
-            modifier = Modifier.align(Alignment.End)
-        )
+        Row(
+            modifier = Modifier.align(Alignment.End),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            PillButton(text = "Изменить", onClick = onEdit, style = PillStyle.Tonal, compact = true)
+            PillButton(text = "Убрать", onClick = onRemove, style = PillStyle.Outlined, compact = true)
+        }
     }
 }
 
@@ -205,9 +205,12 @@ internal fun RemoveCustomQuestDialog(quest: Quest, onConfirm: () -> Unit, onDism
  * @param onSave сохранить; true — сохранено, форма закрывается.
  * @param onCancel закрыть без сохранения.
  * @param existingCount сколько своих квестов уже есть — для предела.
- * @param initialDraft черновик при открытии (для превью).
- * @param initialPage страница при открытии (для превью): 0 — основное, дальше ситуации, в конце
- * проверка.
+ * @param initialDraft черновик при открытии: свой квест, который взрослый меняет, или пустой.
+ * @param initialPage страница при открытии (для превью): 0 — основное, 1 — правила, дальше
+ * ситуации, в конце проверка.
+ * @param title заголовок формы: «Новый квест» или «Изменить квест».
+ * @param notice предупреждение над страницами — например, что ребёнок этот квест сейчас
+ * проходит; null — предупреждать не о чем.
  */
 @Composable
 internal fun CustomQuestForm(
@@ -215,7 +218,9 @@ internal fun CustomQuestForm(
     onCancel: () -> Unit,
     existingCount: Int,
     initialDraft: CustomQuestDraft = CustomQuestDraft(),
-    initialPage: Int = 0
+    initialPage: Int = 0,
+    title: String = "Новый квест",
+    notice: String? = null
 ) {
     var draft by rememberSaveable(stateSaver = DraftSaver) { mutableStateOf(initialDraft) }
     var pageState by rememberSaveable { mutableIntStateOf(initialPage) }
@@ -270,7 +275,7 @@ internal fun CustomQuestForm(
         Row(verticalAlignment = Alignment.CenterVertically) {
             // На узком экране с крупным шрифтом заголовок ужимается целиком, а не переносится.
             ShrinkText(
-                text = "Новый квест",
+                text = title,
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground,
@@ -283,6 +288,13 @@ internal fun CustomQuestForm(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        if (notice != null) {
+            Text(
+                text = notice,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error
+            )
+        }
 
         when (page) {
             0 -> HeaderPage(
@@ -898,6 +910,24 @@ private fun CustomQuestFormCheckPreview() {
 private fun CustomQuestFormRulesPreview() {
     FinGameTheme(darkTheme = false) {
         FormPreviewSurface { CustomQuestForm({ true }, {}, 0, PreviewCleaningDraft, initialPage = 1) }
+    }
+}
+
+@Preview(name = "Quest form — edit an active quest", showBackground = true, widthDp = 360, heightDp = 900)
+@Composable
+private fun CustomQuestFormEditPreview() {
+    FinGameTheme(darkTheme = true) {
+        FormPreviewSurface {
+            CustomQuestForm(
+                onSave = { true },
+                onCancel = {},
+                existingCount = 0,
+                initialDraft = PreviewCleaningDraft,
+                title = "Изменить квест",
+                notice = "Ребёнок сейчас проходит этот квест. После сохранения прохождение начнётся " +
+                    "заново: прогресс сбросится, полученные монеты останутся."
+            )
+        }
     }
 }
 

@@ -126,6 +126,67 @@ class GameViewModelCustomQuestsTest {
     }
 
     @Test
+    fun `the adult edits a quest in place and it is saved`() {
+        val store = store()
+        val vm = testGameViewModel(store = store, clock = clock)
+        vm.enterAdultMode()
+        vm.addCustomQuest(cleaning)
+        vm.addCustomQuest(cleaning.copy(title = "Вторая"))
+        val (first, second) = vm.state.value.customQuests.map { it.id }
+
+        assertTrue(vm.updateCustomQuest(first, cleaning.copy(title = "Большая уборка", repeatable = false)))
+
+        val edited = vm.state.value.customQuests
+        assertEquals(listOf(first, second), edited.map { it.id })
+        assertEquals("Большая уборка", edited[0].title)
+        assertFalse(edited[0].repeatable)
+        assertEquals("Большая уборка", vm.questCatalog.findQuestById(first)?.title)
+        assertEquals("Большая уборка", store.state.customQuests[0].title)
+    }
+
+    @Test
+    fun `only valid edits of the adult's own quests are taken`() {
+        val vm = testGameViewModel(store = store(), clock = clock)
+        vm.enterAdultMode()
+        vm.addCustomQuest(cleaning)
+        val id = vm.state.value.customQuests.single().id
+
+        assertFalse(vm.updateCustomQuest(id, cleaning.copy(title = "")))
+        assertFalse(vm.updateCustomQuest("picnic", cleaning))
+        assertFalse(vm.updateCustomQuest("custom-nope", cleaning))
+        vm.exitAdultMode()
+        assertFalse(vm.updateCustomQuest(id, cleaning.copy(title = "Другое")))
+        assertEquals("Уборка", vm.state.value.customQuests.single().title)
+    }
+
+    @Test
+    fun `editing a quest the child is playing starts it over, a finished one stays finished`() {
+        val vm = testGameViewModel(store = store(), clock = clock)
+        vm.enterAdultMode()
+        vm.addCustomQuest(cleaning)
+        vm.addCustomQuest(cleaning.copy(title = "Короткая", steps = cleaning.steps.take(1)))
+        vm.exitAdultMode()
+        val (playing, done) = vm.state.value.customQuests.map { it.id }
+        vm.startQuest(playing)
+        vm.chooseQuestOption(playing, 0)
+        vm.startQuest(done)
+        vm.chooseQuestOption(done, 0)
+        vm.advanceQuest(done)
+        val balance = vm.state.value.balance
+
+        vm.enterAdultMode()
+        assertTrue(vm.updateCustomQuest(playing, cleaning.copy(title = "Новая уборка")))
+        assertTrue(vm.updateCustomQuest(done, cleaning.copy(title = "Короче")))
+        vm.exitAdultMode()
+
+        assertNull(vm.state.value.questProgressOf(playing))
+        assertTrue(vm.state.value.questProgressOf(done)!!.isFinished)
+        assertEquals(balance, vm.state.value.balance)
+        assertEquals(2, vm.state.value.questLog.entries.size)
+        assertTrue(vm.startQuest(playing))
+    }
+
+    @Test
     fun `a custom quest feeds and heals the pet`() {
         val vm = testGameViewModel(store = store(), clock = clock)
         val meal = cleaning.copy(

@@ -491,6 +491,39 @@ class GameViewModel(
     }
 
     /**
+     * Взрослый меняет свой квест. Id и место в списке остаются прежними, встроенные квесты не
+     * меняются. Если ребёнок этот квест сейчас проходит, его прохождение сбрасывается: старый шаг и
+     * прогресс могут не подходить к новым ситуациям, поэтому квест просто снова «не начат» — уже
+     * полученные монеты и изменения питомца остаются, выборы — в истории квестов. Пройденный
+     * квест остаётся пройденным: кулдаун и одноразовость продолжают действовать.
+     *
+     * @param questId id своего квеста.
+     * @param draft что набрано в форме.
+     * @return True, когда квест изменён; false вне режима взрослого, когда такого своего квеста
+     * нет и при ошибках в черновике.
+     */
+    fun updateCustomQuest(questId: String, draft: CustomQuestDraft): Boolean {
+        val current = _state.value
+        if (!current.adultMode) return false
+        if (current.customQuests.none { it.id == questId }) return false
+        if (draft.validate(existingCount = current.customQuests.size - 1).isNotEmpty()) return false
+        val quest = draft.toQuest(questId)
+        customQuests = current.customQuests.map { if (it.id == questId) quest else it }
+        val quests = current.quests.filterNot { it.questId == questId && it.isActive }
+        _state.value = current.copy(
+            customQuests = customQuests,
+            quests = quests,
+            hasUnseenQuestStep = QuestEngine.hasUnseenStep(
+                quests,
+                current.questsSeenAtMillis,
+                clock.nowMillis()
+            )
+        )
+        persist()
+        return true
+    }
+
+    /**
      * Взрослый убирает свой квест. Если ребёнок его проходит, прохождение снимается — квеста больше
      * нет; выборы остаются в истории квестов.
      *

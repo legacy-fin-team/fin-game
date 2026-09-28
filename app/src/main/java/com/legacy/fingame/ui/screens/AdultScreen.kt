@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -175,6 +176,7 @@ fun AdultScreen(
     onRemoveItem: (String) -> Boolean = { false },
     onAddQuest: (CustomQuestDraft) -> Boolean = { false },
     onRemoveQuest: (String) -> Boolean = { false },
+    onUpdateQuest: (String, CustomQuestDraft) -> Boolean = { _, _ -> false },
     onEnableQuest: (String) -> Boolean = { false },
     initialTab: AdultTab = AdultTab.DAYS,
     initialQuestFormOpen: Boolean = false
@@ -253,6 +255,7 @@ fun AdultScreen(
                     firstDay = firstDay,
                     onAddQuest = onAddQuest,
                     onRemoveQuest = onRemoveQuest,
+                    onUpdateQuest = onUpdateQuest,
                     onEnableQuest = onEnableQuest,
                     initialFormOpen = initialQuestFormOpen
                 )
@@ -725,11 +728,13 @@ private fun QuestsTab(
     firstDay: Long,
     onAddQuest: (CustomQuestDraft) -> Boolean,
     onRemoveQuest: (String) -> Boolean,
+    onUpdateQuest: (String, CustomQuestDraft) -> Boolean,
     onEnableQuest: (String) -> Boolean,
     initialFormOpen: Boolean = false
 ) {
     var formOpen by rememberSaveable { mutableStateOf(initialFormOpen) }
     var removingId by rememberSaveable { mutableStateOf<String?>(null) }
+    var editingId by rememberSaveable { mutableStateOf<String?>(null) }
     val custom = state.customQuests
 
     if (formOpen) {
@@ -738,6 +743,28 @@ private fun QuestsTab(
             onCancel = { formOpen = false },
             existingCount = custom.size
         )
+        return
+    }
+    val editing = custom.find { it.id == editingId }
+    if (editing != null) {
+        // Новый id — новая форма со своим черновиком, а не остатки прошлой.
+        key(editing.id) {
+            CustomQuestForm(
+                onSave = { draft ->
+                    onUpdateQuest(editing.id, draft).also { saved -> if (saved) editingId = null }
+                },
+                onCancel = { editingId = null },
+                existingCount = custom.size - 1,
+                initialDraft = CustomQuestDraft.of(editing),
+                title = "Изменить квест",
+                notice = if (state.questProgressOf(editing.id)?.isActive == true) {
+                    "Ребёнок сейчас проходит этот квест. После сохранения прохождение начнётся " +
+                        "заново: прогресс сбросится, полученные монеты останутся."
+                } else {
+                    null
+                }
+            )
+        }
         return
     }
 
@@ -762,7 +789,11 @@ private fun QuestsTab(
             }
         }
         items(items = custom, key = { "custom:${it.id}" }) { quest ->
-            CustomQuestCard(quest = quest, onRemove = { removingId = quest.id })
+            CustomQuestCard(
+                quest = quest,
+                onEdit = { editingId = quest.id },
+                onRemove = { removingId = quest.id }
+            )
         }
         item(key = "custom-add", span = StaggeredGridItemSpan.FullLine) {
             PillButton(
