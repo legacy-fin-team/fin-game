@@ -138,6 +138,7 @@ private val CardGap = 12.dp
  * @property title подпись на кнопке вкладки.
  */
 enum class AdultTab(val title: String) {
+    PROGRESS("Прогресс"),
     DAYS("Дни"),
     PURCHASES("Покупки"),
     QUESTS("Квесты"),
@@ -149,9 +150,11 @@ enum class AdultTab(val title: String) {
 }
 
 /**
- * Хаб взрослого: что ребёнок планировал и как прошли его дни, что он купил, как проходил квесты,
- * что у него в инвентаре, на что он копит и весь его журнал денег. Только смотреть — всё, что меняет
- * игру, модель в режиме взрослого не пускает.
+ * Хаб взрослого: какие темы ребёнок уже прошёл («Прогресс»), что он планировал и как прошли его
+ * дни, что он купил, как проходил квесты, что у него в инвентаре, на что он копит, какие награды
+ * из жизни использовал и весь его журнал денег. Игру ребёнка взрослый не трогает — модель в
+ * режиме взрослого не пускает ни покупки, ни квесты, — зато сам: проверяет этапы квестов,
+ * включает снова одноразовые квесты, меняет монеты с причиной и ведёт свои товары и квесты.
  *
  * Шапка — заголовок, крестик и ряд вкладок, который прокручивается вбок, если не помещается. В
  * альбоме шапка укладывается в одну строку, а карточки встают в две колонки, если ширины хватает.
@@ -185,7 +188,7 @@ fun AdultScreen(
     onRejectCheck: (String) -> Boolean = { false },
     onAdjustMoney: (amount: Int, add: Boolean, reason: String) -> Boolean = { _, _, _ -> false },
     onRewardsSeen: () -> Unit = {},
-    initialTab: AdultTab = AdultTab.DAYS,
+    initialTab: AdultTab = AdultTab.PROGRESS,
     initialQuestFormOpen: Boolean = false
 ) {
     var tab by rememberSaveable { mutableStateOf(initialTab) }
@@ -261,6 +264,7 @@ fun AdultScreen(
                 .fillMaxWidth()
         ) {
             when (tab) {
+                AdultTab.PROGRESS -> ProgressTab(state, questCatalog)
                 AdultTab.DAYS -> DaysTab(state, itemCatalog, firstDay)
                 AdultTab.PURCHASES -> PurchasesTab(state, itemCatalog, firstDay)
                 AdultTab.QUESTS -> QuestsTab(

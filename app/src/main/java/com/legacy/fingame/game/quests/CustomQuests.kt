@@ -199,6 +199,7 @@ data class CustomQuestStepDraft(
  * @property stageDelayMinutes пауза между этапами, в минутах ([Quest.stageDelayMinutes]): через
  * столько после выбора откроется следующая ситуация.
  * @property requiresAdultCheck проверяет ли выполнение взрослый ([Quest.requiresAdultCheck]).
+ * @property topic тема финансовой грамотности ([Quest.topic]), или null — без темы.
  */
 data class CustomQuestDraft(
     val title: String = "",
@@ -208,7 +209,8 @@ data class CustomQuestDraft(
     val repeatable: Boolean = true,
     val cooldownMinutes: Int = Quest.DEFAULT_COOLDOWN_MINUTES,
     val stageDelayMinutes: Int = 0,
-    val requiresAdultCheck: Boolean = false
+    val requiresAdultCheck: Boolean = false,
+    val topic: QuestTopic? = null
 ) {
 
     /** @return Что не так в правилах квеста — паузе и кулдауне; пусто, когда всё верно. */
@@ -347,7 +349,8 @@ data class CustomQuestDraft(
             repeatable = repeatable,
             cooldownMinutes = cooldownMinutes,
             stageDelayMinutes = stageDelayMinutes,
-            requiresAdultCheck = requiresAdultCheck
+            requiresAdultCheck = requiresAdultCheck,
+            topic = topic
         )
     }
 
@@ -365,6 +368,7 @@ data class CustomQuestDraft(
             cooldownMinutes = quest.cooldownMinutes,
             stageDelayMinutes = quest.stageDelayMinutes,
             requiresAdultCheck = quest.requiresAdultCheck,
+            topic = quest.topic,
             steps = quest.stepOrder.mapNotNull { quest.node(it) }.map { node ->
                 CustomQuestStepDraft(
                     text = node.text,
@@ -389,7 +393,7 @@ data class CustomQuestDraft(
  *
  * Запись нынешнего вида (v2): id, метка версии [VERSION_2], свойства квеста (`ключ=значение`
  * через `;`: многоразовый, кулдаун, пауза между этапами), название, описание, минимум, число
- * шагов (свойства: многоразовый, кулдаун, пауза между этапами, проверка взрослым); затем у каждого
+ * шагов (свойства: многоразовый, кулдаун, пауза между этапами, проверка взрослым, тема); затем у каждого
  * шага — текст и число вариантов; у каждого варианта — надпись, результат,
  * монеты, эффекты на шкалы питомца (`pleasure=-5;hunger=10`) и прогресс. Свойство или эффект с
  * незнакомым ключом пропускается: так новые свойства добавляются без новой версии записи.
@@ -420,6 +424,7 @@ object CustomQuestsCodec {
     private const val KEY_COOLDOWN = "cooldown"
     private const val KEY_STAGE_DELAY = "stage-delay"
     private const val KEY_ADULT_CHECK = "adult-check"
+    private const val KEY_TOPIC = "topic"
 
     /**
      * @param quests свои квесты.
@@ -482,7 +487,8 @@ object CustomQuestsCodec {
         KEY_REPEATABLE to if (draft.repeatable) "1" else "0",
         KEY_COOLDOWN to draft.cooldownMinutes.toString(),
         KEY_STAGE_DELAY to draft.stageDelayMinutes.toString(),
-        KEY_ADULT_CHECK to if (draft.requiresAdultCheck) "1" else "0"
+        KEY_ADULT_CHECK to if (draft.requiresAdultCheck) "1" else "0",
+        KEY_TOPIC to draft.topic?.xmlName.orEmpty()
     )
 
     private fun effectsOf(option: CustomQuestOptionDraft): List<Pair<String, String>> =
@@ -553,6 +559,8 @@ object CustomQuestsCodec {
             repeatable = flagOf(properties[KEY_REPEATABLE], defaults.repeatable) ?: return null,
             requiresAdultCheck = flagOf(properties[KEY_ADULT_CHECK], defaults.requiresAdultCheck)
                 ?: return null,
+            // Тема, которой больше нет в игре, читается как «без темы»: квест от этого не теряется.
+            topic = properties[KEY_TOPIC]?.let { QuestTopic.fromString(it) },
             cooldownMinutes = properties[KEY_COOLDOWN]?.let { it.toIntOrNull() ?: return null }
                 ?: defaults.cooldownMinutes,
             stageDelayMinutes = properties[KEY_STAGE_DELAY]?.let { it.toIntOrNull() ?: return null }

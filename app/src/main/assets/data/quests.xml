@@ -7,7 +7,7 @@
 
     <quest id kind="player|random" title progress="true|false" min-balance="N" start="<id узла>"
            image repeatable="true|false" cooldown-minutes="N" stage-delay-minutes="N"
-           requires-adult-check="true|false">
+           requires-adult-check="true|false" topic="planning|needs-wants|saving|deposit|goals|honesty">
         <description>Описание квеста</description>
         <node id delay-minutes="N" image>
             <text>Описание ситуации</text>
@@ -31,10 +31,14 @@
     requires-adult-check (по умолчанию false) — выполнение проверяет взрослый: выбор варианта
     ждёт «Засчитать» в режиме взрослого, награда (money, effect, progress) выдаётся только
     после неё, а «Не засчитано» возвращает этап в работу.
+
+    topic (необязателен) — тема финансовой грамотности, которой учит квест: planning —
+    планирование, needs-wants — обязательное и желаемое, saving — накопление, deposit — вклад,
+    goals — цели, honesty — честность. По ней взрослый видит пройденные темы в разделе «Прогресс».
 -->
 <quests>
     <quest id="picnic" title="Пикник" kind="player" progress="true" min-balance="100"
-           start="food" image="quests/picnic.webp">
+           start="food" image="quests/picnic.webp" topic="planning">
         <description>Позови друзей на пикник. Чем лучше подготовка, тем веселее праздник.</description>
         <node id="food" delay-minutes="1">
             <text>Что возьмём из еды?</text>
@@ -79,7 +83,7 @@
     </quest>
 
     <quest id="piggy_bank" title="Копилка" kind="player" start="gift" cooldown-minutes="180"
-           image="quests/piggy_bank.webp">
+           image="quests/piggy_bank.webp" topic="saving">
         <description>Научись откладывать: терпение приносит монеты.</description>
         <node id="gift" delay-minutes="2">
             <text>Бабушка подарила монетки. Потратить сразу или отложить?</text>
@@ -105,7 +109,7 @@
     </quest>
 
     <quest id="lost_wallet" title="Потерянный кошелёк" kind="random" start="found"
-           image="quests/lost_wallet.webp">
+           image="quests/lost_wallet.webp" topic="honesty">
         <description>На дорожке лежит чужой кошелёк.</description>
         <node id="found">
             <text>Внутри 30 монет и визитка хозяина. Как поступить?</text>
@@ -121,7 +125,7 @@
     </quest>
 
     <quest id="guests" title="Гости" kind="random" progress="true" start="treat"
-           image="quests/guests.webp">
+           image="quests/guests.webp" topic="needs-wants">
         <description>Скоро придут гости. Подготовься к встрече!</description>
         <node id="treat" delay-minutes="2">
             <text>Чем угостим гостей?</text>

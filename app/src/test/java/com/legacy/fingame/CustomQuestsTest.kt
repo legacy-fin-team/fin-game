@@ -11,6 +11,7 @@ import com.legacy.fingame.game.quests.QuestCatalog
 import com.legacy.fingame.game.quests.QuestKind
 import com.legacy.fingame.game.quests.QuestNode
 import com.legacy.fingame.game.quests.QuestOption
+import com.legacy.fingame.game.quests.QuestTopic
 import com.legacy.fingame.game.stats.StatKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -217,7 +218,8 @@ class CustomQuestsTest {
     fun `the codec keeps the rules of the quest`() {
         val oneTime = cleaning.copy(repeatable = false, stageDelayMinutes = 90, requiresAdultCheck = true)
             .toQuest("custom-1")
-        val slow = cleaning.copy(cooldownMinutes = 1440, stageDelayMinutes = 0).toQuest("custom-2")
+        val slow = cleaning.copy(cooldownMinutes = 1440, stageDelayMinutes = 0, topic = QuestTopic.SAVING)
+            .toQuest("custom-2")
 
         val decoded = CustomQuestsCodec.decode(CustomQuestsCodec.encode(listOf(oneTime, slow)))
 
@@ -227,6 +229,8 @@ class CustomQuestsTest {
         assertFalse(decoded[1].requiresAdultCheck)
         assertEquals(90, decoded[0].stageDelayMinutes)
         assertEquals(1440, decoded[1].cooldownMinutes)
+        assertEquals(QuestTopic.SAVING, decoded[1].topic)
+        assertNull(decoded[0].topic)
     }
 
     @Test

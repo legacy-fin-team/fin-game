@@ -199,6 +199,7 @@ data class GameUiState(
     val customQuests: List<Quest> = emptyList(),
     val rewardUsageLog: RewardUsageLog = RewardUsageLog.EMPTY,
     val rewardUsageSeenAtMillis: Long = RewardUsageLog.NEVER_SEEN,
+    val goalsReached: Int = 0,
     val settings: GameSettings = GameSettings()
 ) {
     /**
@@ -1226,6 +1227,7 @@ class GameViewModel(
             balance = current.balance - (spentMust + spentWant),
             owned = owned.toMap(),
             goals = current.goals.filterNot { goal -> goal in bought },
+            goalsReached = current.goalsReached + current.goals.count { goal -> goal in bought },
             quantities = emptyMap(),
             pickedVariants = emptyMap(),
             cartPrice = 0,
@@ -1597,6 +1599,7 @@ class GameViewModel(
             customQuests = customQuests,
             rewardUsageLog = saved.rewardUsageLog,
             rewardUsageSeenAtMillis = saved.rewardUsageSeenAtMillis,
+            goalsReached = saved.goalsReached,
             settings = settings
         )
     }
@@ -1690,7 +1693,8 @@ class GameViewModel(
                 customItems = current.customItems,
                 customQuests = current.customQuests,
                 rewardUsageLog = current.rewardUsageLog,
-                rewardUsageSeenAtMillis = current.rewardUsageSeenAtMillis
+                rewardUsageSeenAtMillis = current.rewardUsageSeenAtMillis,
+                goalsReached = current.goalsReached
             )
         )
     }

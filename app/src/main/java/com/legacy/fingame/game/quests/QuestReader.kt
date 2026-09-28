@@ -102,6 +102,13 @@ class QuestReader {
             }
         }
 
+        val topicName = element.getAttribute("topic").trim()
+        val topic = if (topicName.isEmpty()) null else QuestTopic.fromString(topicName)
+        if (topicName.isNotEmpty() && topic == null) {
+            Log.e(TAG, "Quest '$id' has an unknown 'topic': '$topicName'.")
+            return null
+        }
+
         val cooldownMinutes =
             intAttributeOrDefault(element, "cooldown-minutes", Quest.DEFAULT_COOLDOWN_MINUTES)
         if (cooldownMinutes == null || cooldownMinutes < 0) {
@@ -163,7 +170,8 @@ class QuestReader {
             repeatable = repeatable,
             cooldownMinutes = cooldownMinutes,
             stageDelayMinutes = stageDelayMinutes,
-            requiresAdultCheck = requiresAdultCheck
+            requiresAdultCheck = requiresAdultCheck,
+            topic = topic
         )
     }
 

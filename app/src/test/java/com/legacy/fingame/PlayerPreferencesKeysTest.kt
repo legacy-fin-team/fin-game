@@ -83,4 +83,10 @@ class PlayerPreferencesKeysTest {
         assertEquals("reward_usage_log", PlayerPreferences.KEY_REWARD_USAGE_LOG)
         assertEquals("reward_usage_seen_at", PlayerPreferences.KEY_REWARD_USAGE_SEEN_AT)
     }
+
+    @Test
+    fun `the reached goals are among the live keys`() {
+        assertTrue(PlayerPreferences.KEY_GOALS_REACHED in PlayerPreferences.LIVE_KEYS)
+        assertEquals("goals_reached", PlayerPreferences.KEY_GOALS_REACHED)
+    }
 }

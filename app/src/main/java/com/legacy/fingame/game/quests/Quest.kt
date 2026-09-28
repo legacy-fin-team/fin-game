@@ -92,6 +92,7 @@ data class QuestNode(
  * засчитывается сам: этап ждёт проверки ([QuestCheck.WAITING]), награда (деньги, шкалы питомца,
  * прогресс) выдаётся только после «Засчитать» во взрослом режиме ([QuestEngine.approve]), а «Не
  * засчитано» возвращает этап в работу ([QuestEngine.reject]).
+ * @property topic тема финансовой грамотности, которой учит квест, или null, когда её нет.
  */
 data class Quest(
     val id: String,
@@ -106,7 +107,8 @@ data class Quest(
     val repeatable: Boolean = true,
     val cooldownMinutes: Int = DEFAULT_COOLDOWN_MINUTES,
     val stageDelayMinutes: Int = 0,
-    val requiresAdultCheck: Boolean = false
+    val requiresAdultCheck: Boolean = false,
+    val topic: QuestTopic? = null
 ) {
 
     /**

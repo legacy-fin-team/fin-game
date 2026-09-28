@@ -45,6 +45,7 @@ import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestEntry
 import com.legacy.fingame.game.quests.QuestOutcome
 import com.legacy.fingame.game.quests.QuestProgress
+import com.legacy.fingame.game.quests.QuestTopic
 import com.legacy.fingame.game.stats.StatKind
 import com.legacy.fingame.ui.components.GameDialog
 import com.legacy.fingame.ui.components.GameDialogBlock
@@ -579,6 +580,29 @@ private fun RulesPage(draft: CustomQuestDraft, onDraftChange: (CustomQuestDraft)
             "Этап засчитывается сразу, как ребёнок выберет вариант."
         }
     )
+    FormLabel("Тема")
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        PillButton(
+            text = "Без темы",
+            onClick = { onDraftChange(draft.copy(topic = null)) },
+            selected = draft.topic == null,
+            compact = true,
+            autoShrink = false
+        )
+        QuestTopic.entries.forEach { topic ->
+            PillButton(
+                text = topic.title,
+                onClick = { onDraftChange(draft.copy(topic = topic)) },
+                selected = draft.topic == topic,
+                compact = true,
+                autoShrink = false
+            )
+        }
+    }
+    FormHint("Пройденный квест засчитает тему в разделе «Прогресс».")
 }
 
 /** Пояснение под полем формы — мелко и тихо. */

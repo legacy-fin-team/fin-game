@@ -91,6 +91,8 @@ import com.legacy.fingame.game.stats.PetStats
  * журнал «Использованные награды» для взрослого.
  * @property rewardUsageSeenAtMillis когда взрослый последний раз смотрел журнал наград, или
  * [RewardUsageLog.NEVER_SEEN]; записи новее — «новые», их число — на вкладке «Награды».
+ * @property goalsReached сколько целей ребёнок купил — цель после покупки из [goals] уходит, а
+ * раздел взрослого «Прогресс» помнит, что до цели дошли.
  */
 data class PlayerState(
     val selection: AnimalSelection? = null,
@@ -120,7 +122,8 @@ data class PlayerState(
     val customItems: List<Item> = emptyList(),
     val customQuests: List<Quest> = emptyList(),
     val rewardUsageLog: RewardUsageLog = RewardUsageLog.EMPTY,
-    val rewardUsageSeenAtMillis: Long = RewardUsageLog.NEVER_SEEN
+    val rewardUsageSeenAtMillis: Long = RewardUsageLog.NEVER_SEEN,
+    val goalsReached: Int = 0
 ) {
     companion object {
         /**

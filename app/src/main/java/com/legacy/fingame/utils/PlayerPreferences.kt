@@ -106,6 +106,9 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         /** Когда взрослый последний раз смотрел журнал наград. */
         internal const val KEY_REWARD_USAGE_SEEN_AT = "reward_usage_seen_at"
 
+        /** Сколько целей ребёнок купил, см. [PlayerState.goalsReached]. */
+        internal const val KEY_GOALS_REACHED = "goals_reached"
+
         /** Key the savings account was stored under, read once more to hand the money back. */
         private const val KEY_RETIRED_SAVINGS = "savings"
 
@@ -184,7 +187,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             KEY_CUSTOM_ITEMS,
             KEY_CUSTOM_QUESTS,
             KEY_REWARD_USAGE_LOG,
-            KEY_REWARD_USAGE_SEEN_AT
+            KEY_REWARD_USAGE_SEEN_AT,
+            KEY_GOALS_REACHED
         )
 
         /** Prefix of the key one stat bar is stored under, completed by [StatKind.xmlName]. */
@@ -265,7 +269,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             rewardUsageSeenAtMillis = preferences.getLong(
                 KEY_REWARD_USAGE_SEEN_AT,
                 defaults.rewardUsageSeenAtMillis
-            )
+            ),
+            goalsReached = preferences.getInt(KEY_GOALS_REACHED, defaults.goalsReached)
         )
     }
 
@@ -338,6 +343,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             .putString(KEY_CUSTOM_QUESTS, CustomQuestsCodec.encode(state.customQuests))
             .putString(KEY_REWARD_USAGE_LOG, RewardUsageLogCodec.encode(state.rewardUsageLog))
             .putLong(KEY_REWARD_USAGE_SEEN_AT, state.rewardUsageSeenAtMillis)
+            .putInt(KEY_GOALS_REACHED, state.goalsReached)
 
         StatKind.entries.forEach { stat ->
             editor.putInt(KEY_STAT_PREFIX + stat.xmlName, state.stats[stat])
