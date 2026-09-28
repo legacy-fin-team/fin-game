@@ -37,7 +37,7 @@ FILES = [
     'education.md',
     'ux-accessibility.md',
     'testing.md',
-    'requirements.md',
+    'tz-compliance.md',
     'licenses.md',
     'roadmap.md',
 ]

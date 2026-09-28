@@ -37,7 +37,7 @@
 | Настройки: громкость звуков и музыки, тема (светлая / тёмная / авто), сброс прогресса | [ux-accessibility.md](docs/ux-accessibility.md) |
 | Демо-сборка с кнопкой «+12 ч» для показа игры за несколько минут | [build.md](docs/build.md) |
 
-Соответствие требованиям ТЗ по пунктам — [requirements.md](docs/requirements.md).
+Соответствие ТЗ по каждому пункту со статусами — [tz-compliance.md](docs/tz-compliance.md).
 
 ## Состав репозитория
 
@@ -126,7 +126,7 @@
 | [docs/education.md](docs/education.md) | Образовательный контент, подсказки, словарик |
 | [docs/ux-accessibility.md](docs/ux-accessibility.md) | UX/UI, доступность, разрешения, данные, удаление профиля |
 | [docs/testing.md](docs/testing.md) | Тесты и ручные сценарии |
-| [docs/requirements.md](docs/requirements.md) | Матрица соответствия требованиям |
+| [docs/tz-compliance.md](docs/tz-compliance.md) | Соответствие ТЗ: все пункты со статусами, модулями и тестами |
 | [docs/licenses.md](docs/licenses.md) | Лицензии |
 | [docs/roadmap.md](docs/roadmap.md) | Ограничения и план развития |
 

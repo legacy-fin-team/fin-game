@@ -26,7 +26,7 @@
 | [education.md](education.md) | Образовательный контент: карта тем, подсказки по экранам, словарик «Помощь», темы прогресса взрослого |
 | [ux-accessibility.md](ux-accessibility.md) | Обоснование UX/UI, доступность, разрешения Android, хранимые данные, удаление профиля |
 | [testing.md](testing.md) | Юнит- и инструментальные тесты, ручные сценарии, шаблон отчёта о проверке на устройстве |
-| [requirements.md](requirements.md) | Матрица соответствия требованиям ТЗ со статусами, модулями и тестами |
+| [tz-compliance.md](tz-compliance.md) | Соответствие ТЗ: все 134 пункта со статусами «Реализовано / В процессе / Не начато», модулями, тестами и сводкой пробелов |
 | [licenses.md](licenses.md) | Лицензирование: правило для ассетов, формат `attributions.xml`, чужие звуки и шрифт, библиотеки |
 | [roadmap.md](roadmap.md) | Известные ограничения прототипа и план развития |
 
@@ -41,20 +41,22 @@
 
 ## Соответствие требованиям к документации ТЗ
 
-| Требование ТЗ | Где |
-|---|---|
-| README: назначение, состав, быстрый запуск | [../README.md](../README.md) |
-| Окружение, версии, сборка релизного APK | [build.md](build.md) |
-| Функциональная и компонентная архитектура | [architecture.md](architecture.md), [scene.md](scene.md) |
-| Структура данных профиля, экономики, заданий, прогресса | [architecture.md](architecture.md), [economy.md](economy.md), [quests.md](quests.md), [pet-growth.md](pet-growth.md) |
-| Матрица соответствия требованиям | [requirements.md](requirements.md) |
-| Формулы баланса, наград, состояния и роста питомца | [pet-growth.md](pet-growth.md), [economy.md](economy.md), [quests.md](quests.md) |
-| Карта образовательного контента | [education.md](education.md) |
-| UX/UI и настройки доступности | [ux-accessibility.md](ux-accessibility.md) |
-| Разрешения, данные, удаление профиля | [ux-accessibility.md](ux-accessibility.md) |
-| Тест-кейсы и отчёт о проверке на устройстве | [testing.md](testing.md) |
-| Ограничения и план развития | [roadmap.md](roadmap.md) |
-| Библиотеки, шрифты, изображения, звуки и их лицензии | [licenses.md](licenses.md) |
+Раздел 5 ТЗ; статусы по каждому пункту — в [tz-compliance.md](tz-compliance.md).
+
+| Пункт | Требование ТЗ | Где |
+|---|---|---|
+| 5.1 | README: назначение, состав, быстрый запуск | [../README.md](../README.md) |
+| 5.2 | Окружение, версии, сборка релизного APK | [build.md](build.md) |
+| 5.3 | Функциональная и компонентная архитектура | [architecture.md](architecture.md), [scene.md](scene.md) |
+| 5.4 | Структура данных профиля, экономики, заданий, прогресса | [architecture.md](architecture.md), [economy.md](economy.md), [quests.md](quests.md), [pet-growth.md](pet-growth.md) |
+| 5.5 | Матрица соответствия требованиям | [tz-compliance.md](tz-compliance.md) |
+| 5.6 | Формулы баланса, наград, состояния и роста питомца | [pet-growth.md](pet-growth.md), [economy.md](economy.md), [quests.md](quests.md) |
+| 5.7 | Карта образовательного контента | [education.md](education.md) |
+| 5.8 | UX/UI и настройки доступности | [ux-accessibility.md](ux-accessibility.md) |
+| 5.9 | Разрешения, данные, удаление профиля | [ux-accessibility.md](ux-accessibility.md) |
+| 5.10 | Тест-кейсы и отчёт о проверке на устройстве | [testing.md](testing.md) — тест-кейсы есть, отчёт об устройстве пока не заполнен |
+| 5.11 | Ограничения и план развития | [roadmap.md](roadmap.md) |
+| 5.12 | Библиотеки, шрифты, изображения, звуки и их лицензии | [licenses.md](licenses.md) |
 
 Отдельный документ для сдачи — `docs/FinGame-Документация.docx`, собирается из этих файлов
 (см. [build.md](build.md), раздел 6).
