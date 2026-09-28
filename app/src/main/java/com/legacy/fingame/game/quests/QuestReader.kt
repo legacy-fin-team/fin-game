@@ -93,6 +93,15 @@ class QuestReader {
             }
         }
 
+        val requiresAdultCheck = when (element.getAttribute("requires-adult-check").trim().lowercase()) {
+            "", "false" -> false
+            "true" -> true
+            else -> {
+                Log.e(TAG, "Quest '$id' does not have proper 'requires-adult-check' attribute.")
+                return null
+            }
+        }
+
         val cooldownMinutes =
             intAttributeOrDefault(element, "cooldown-minutes", Quest.DEFAULT_COOLDOWN_MINUTES)
         if (cooldownMinutes == null || cooldownMinutes < 0) {
@@ -153,7 +162,8 @@ class QuestReader {
             imagePath = optionalAttribute(element, "image"),
             repeatable = repeatable,
             cooldownMinutes = cooldownMinutes,
-            stageDelayMinutes = stageDelayMinutes
+            stageDelayMinutes = stageDelayMinutes,
+            requiresAdultCheck = requiresAdultCheck
         )
     }
 

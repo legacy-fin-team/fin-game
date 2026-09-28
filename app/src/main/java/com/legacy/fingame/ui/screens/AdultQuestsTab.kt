@@ -43,6 +43,8 @@ import com.legacy.fingame.game.quests.CustomQuests
 import com.legacy.fingame.game.quests.CustomQuestsCodec
 import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestEntry
+import com.legacy.fingame.game.quests.QuestOutcome
+import com.legacy.fingame.game.quests.QuestProgress
 import com.legacy.fingame.game.stats.StatKind
 import com.legacy.fingame.ui.components.GameDialog
 import com.legacy.fingame.ui.components.GameDialogBlock
@@ -146,6 +148,7 @@ internal fun CustomQuestCard(quest: Quest, onEdit: () -> Unit, onRemove: () -> U
                         append(stepsText(quest.stepCount))
                         if (quest.minBalance > 0) append(" · от ${quest.minBalance} монет")
                         if (!quest.repeatable) append(" · одноразовый")
+                        if (quest.requiresAdultCheck) append(" · с проверкой")
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -161,6 +164,73 @@ internal fun CustomQuestCard(quest: Quest, onEdit: () -> Unit, onRemove: () -> U
         }
     }
 }
+
+/**
+ * Этап, сданный ребёнком на проверку: квест, шаг и выбранный вариант, что ребёнок получит, и
+ * кнопки «Засчитать» / «Не засчитано».
+ */
+@Composable
+internal fun QuestCheckCard(
+    quest: Quest,
+    progress: QuestProgress,
+    onApprove: () -> Unit,
+    onReject: () -> Unit
+) {
+    val outcome = progress.lastChoice ?: return
+    AdultCard {
+        Text(
+            text = quest.title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = "Шаг ${quest.stepNumberOf(progress.nodeId).coerceAtLeast(1)}: ${outcome.optionLabel}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        if (outcome.resultText.isNotBlank()) {
+            Text(
+                text = outcome.resultText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Text(
+            text = "Награда: ${outcomeRewardText(outcome)}",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PillButton(
+                text = "Засчитать",
+                onClick = onApprove,
+                style = PillStyle.Primary,
+                compact = true,
+                modifier = Modifier.weight(1f)
+            )
+            PillButton(
+                text = "Не засчитано",
+                onClick = onReject,
+                style = PillStyle.Outlined,
+                compact = true,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+/** «+20 монет, +10 сытости, +50 %» — что даст засчитанный этап; без изменений — «без изменений». */
+internal fun outcomeRewardText(outcome: QuestOutcome): String = optionEffectsText(
+    CustomQuestOptionDraft.of(
+        label = outcome.optionLabel,
+        resultText = outcome.resultText,
+        moneyDelta = outcome.moneyDelta,
+        effects = outcome.statEffects,
+        progressDelta = outcome.progressDelta
+    )
+)
 
 /** Подтверждение «Убрать квест?». */
 @Composable
@@ -484,6 +554,31 @@ private fun RulesPage(draft: CustomQuestDraft, onDraftChange: (CustomQuestDraft)
         onChange = { onDraftChange(draft.copy(stageDelayMinutes = it)) }
     )
     FormHint("Через столько после выбора откроется следующая ситуация.")
+    FormLabel("Проверка взрослым")
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        PillButton(
+            text = "Сам",
+            onClick = { onDraftChange(draft.copy(requiresAdultCheck = false)) },
+            selected = !draft.requiresAdultCheck,
+            compact = true,
+            modifier = Modifier.weight(1f)
+        )
+        PillButton(
+            text = "Проверяю я",
+            onClick = { onDraftChange(draft.copy(requiresAdultCheck = true)) },
+            selected = draft.requiresAdultCheck,
+            compact = true,
+            modifier = Modifier.weight(1f)
+        )
+    }
+    FormHint(
+        if (draft.requiresAdultCheck) {
+            "Выбор ребёнка ждёт вашей проверки во вкладке «Квесты». Награда — только после " +
+                "«Засчитать», а «Не засчитано» вернёт этап в работу."
+        } else {
+            "Этап засчитывается сразу, как ребёнок выберет вариант."
+        }
+    )
 }
 
 /** Пояснение под полем формы — мелко и тихо. */
@@ -821,6 +916,7 @@ internal fun questRulesText(draft: CustomQuestDraft): String = buildString {
     if (draft.steps.size > 1 && draft.stageDelayMinutes > 0) {
         append(", пауза между этапами ${minutesTitle(draft.stageDelayMinutes)}")
     }
+    if (draft.requiresAdultCheck) append(", проверяет взрослый")
 }
 
 /**

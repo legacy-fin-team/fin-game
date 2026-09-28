@@ -198,6 +198,7 @@ data class CustomQuestStepDraft(
  * ([Quest.cooldownMinutes]); у одноразового не используется.
  * @property stageDelayMinutes пауза между этапами, в минутах ([Quest.stageDelayMinutes]): через
  * столько после выбора откроется следующая ситуация.
+ * @property requiresAdultCheck проверяет ли выполнение взрослый ([Quest.requiresAdultCheck]).
  */
 data class CustomQuestDraft(
     val title: String = "",
@@ -206,7 +207,8 @@ data class CustomQuestDraft(
     val steps: List<CustomQuestStepDraft> = listOf(CustomQuestStepDraft()),
     val repeatable: Boolean = true,
     val cooldownMinutes: Int = Quest.DEFAULT_COOLDOWN_MINUTES,
-    val stageDelayMinutes: Int = 0
+    val stageDelayMinutes: Int = 0,
+    val requiresAdultCheck: Boolean = false
 ) {
 
     /** @return Что не так в правилах квеста — паузе и кулдауне; пусто, когда всё верно. */
@@ -344,7 +346,8 @@ data class CustomQuestDraft(
             minBalance = minBalance,
             repeatable = repeatable,
             cooldownMinutes = cooldownMinutes,
-            stageDelayMinutes = stageDelayMinutes
+            stageDelayMinutes = stageDelayMinutes,
+            requiresAdultCheck = requiresAdultCheck
         )
     }
 
@@ -361,6 +364,7 @@ data class CustomQuestDraft(
             repeatable = quest.repeatable,
             cooldownMinutes = quest.cooldownMinutes,
             stageDelayMinutes = quest.stageDelayMinutes,
+            requiresAdultCheck = quest.requiresAdultCheck,
             steps = quest.stepOrder.mapNotNull { quest.node(it) }.map { node ->
                 CustomQuestStepDraft(
                     text = node.text,
@@ -385,7 +389,8 @@ data class CustomQuestDraft(
  *
  * Запись нынешнего вида (v2): id, метка версии [VERSION_2], свойства квеста (`ключ=значение`
  * через `;`: многоразовый, кулдаун, пауза между этапами), название, описание, минимум, число
- * шагов; затем у каждого шага — текст и число вариантов; у каждого варианта — надпись, результат,
+ * шагов (свойства: многоразовый, кулдаун, пауза между этапами, проверка взрослым); затем у каждого
+ * шага — текст и число вариантов; у каждого варианта — надпись, результат,
  * монеты, эффекты на шкалы питомца (`pleasure=-5;hunger=10`) и прогресс. Свойство или эффект с
  * незнакомым ключом пропускается: так новые свойства добавляются без новой версии записи.
  *
@@ -414,6 +419,7 @@ object CustomQuestsCodec {
     private const val KEY_REPEATABLE = "repeatable"
     private const val KEY_COOLDOWN = "cooldown"
     private const val KEY_STAGE_DELAY = "stage-delay"
+    private const val KEY_ADULT_CHECK = "adult-check"
 
     /**
      * @param quests свои квесты.
@@ -475,7 +481,8 @@ object CustomQuestsCodec {
     private fun propertiesOf(draft: CustomQuestDraft): List<Pair<String, String>> = listOf(
         KEY_REPEATABLE to if (draft.repeatable) "1" else "0",
         KEY_COOLDOWN to draft.cooldownMinutes.toString(),
-        KEY_STAGE_DELAY to draft.stageDelayMinutes.toString()
+        KEY_STAGE_DELAY to draft.stageDelayMinutes.toString(),
+        KEY_ADULT_CHECK to if (draft.requiresAdultCheck) "1" else "0"
     )
 
     private fun effectsOf(option: CustomQuestOptionDraft): List<Pair<String, String>> =
@@ -543,17 +550,22 @@ object CustomQuestsCodec {
             description = description,
             minBalance = minBalance,
             steps = steps,
-            repeatable = when (properties[KEY_REPEATABLE]) {
-                null -> defaults.repeatable
-                "1" -> true
-                "0" -> false
-                else -> return null
-            },
+            repeatable = flagOf(properties[KEY_REPEATABLE], defaults.repeatable) ?: return null,
+            requiresAdultCheck = flagOf(properties[KEY_ADULT_CHECK], defaults.requiresAdultCheck)
+                ?: return null,
             cooldownMinutes = properties[KEY_COOLDOWN]?.let { it.toIntOrNull() ?: return null }
                 ?: defaults.cooldownMinutes,
             stageDelayMinutes = properties[KEY_STAGE_DELAY]?.let { it.toIntOrNull() ?: return null }
                 ?: defaults.stageDelayMinutes
         )
+    }
+
+    /** @return Флаг из `1`/`0`; [default], когда его нет; null, когда там что-то другое. */
+    private fun flagOf(value: String?, default: Boolean): Boolean? = when (value) {
+        null -> default
+        "1" -> true
+        "0" -> false
+        else -> null
     }
 
     /** Запись прежнего вида: у каждого шага своя задержка, у варианта — только настроение. */

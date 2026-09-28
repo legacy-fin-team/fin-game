@@ -6,7 +6,8 @@
     показывается иконка квестов.
 
     <quest id kind="player|random" title progress="true|false" min-balance="N" start="<id узла>"
-           image repeatable="true|false" cooldown-minutes="N" stage-delay-minutes="N">
+           image repeatable="true|false" cooldown-minutes="N" stage-delay-minutes="N"
+           requires-adult-check="true|false">
         <description>Описание квеста</description>
         <node id delay-minutes="N" image>
             <text>Описание ситуации</text>
@@ -26,6 +27,10 @@
     "false" это разово, пока взрослый не включит его заново. cooldown-minutes (по умолчанию 60) —
     сколько реальных минут ждать после прохождения повторяемого квеста, прежде чем его можно
     начать снова.
+
+    requires-adult-check (по умолчанию false) — выполнение проверяет взрослый: выбор варианта
+    ждёт «Засчитать» в режиме взрослого, награда (money, effect, progress) выдаётся только
+    после неё, а «Не засчитано» возвращает этап в работу.
 -->
 <quests>
     <quest id="picnic" title="Пикник" kind="player" progress="true" min-balance="100"

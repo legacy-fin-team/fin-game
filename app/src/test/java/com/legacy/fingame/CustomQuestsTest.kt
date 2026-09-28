@@ -215,13 +215,16 @@ class CustomQuestsTest {
 
     @Test
     fun `the codec keeps the rules of the quest`() {
-        val oneTime = cleaning.copy(repeatable = false, stageDelayMinutes = 90).toQuest("custom-1")
+        val oneTime = cleaning.copy(repeatable = false, stageDelayMinutes = 90, requiresAdultCheck = true)
+            .toQuest("custom-1")
         val slow = cleaning.copy(cooldownMinutes = 1440, stageDelayMinutes = 0).toQuest("custom-2")
 
         val decoded = CustomQuestsCodec.decode(CustomQuestsCodec.encode(listOf(oneTime, slow)))
 
         assertEquals(listOf(oneTime, slow), decoded)
         assertFalse(decoded[0].repeatable)
+        assertTrue(decoded[0].requiresAdultCheck)
+        assertFalse(decoded[1].requiresAdultCheck)
         assertEquals(90, decoded[0].stageDelayMinutes)
         assertEquals(1440, decoded[1].cooldownMinutes)
     }

@@ -8,7 +8,9 @@ import com.legacy.fingame.game.economy.SpendKind
 import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestCatalog
 import com.legacy.fingame.game.quests.QuestChoice
+import com.legacy.fingame.game.quests.QuestEngine
 import com.legacy.fingame.game.quests.QuestLog
+import com.legacy.fingame.game.quests.QuestProgress
 
 /**
  * Один игровой день глазами взрослого: как он был спланирован и что в нём случилось с деньгами.
@@ -120,3 +122,13 @@ private fun BudgetState.preliminaryResult(balance: Int) = BudgetResult(
 
 private fun spentOn(entries: List<MoneyEntry>, kind: SpendKind): Int =
     entries.filter { it.spendKind == kind && it.delta < 0 }.sumOf { -it.delta }
+
+/**
+ * @param quests состояние квестов ребёнка.
+ * @param catalog квесты — чтобы найти сам квест; этап квеста, которого больше нет, не показывается.
+ * @return Этапы, которые ждут проверки взрослым: квест и где в нём ребёнок.
+ */
+fun questChecksOf(quests: List<QuestProgress>, catalog: QuestCatalog): List<Pair<Quest, QuestProgress>> =
+    QuestEngine.awaitingCheck(quests).mapNotNull { progress ->
+        catalog.findQuestById(progress.questId)?.let { it to progress }
+    }

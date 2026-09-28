@@ -2,6 +2,7 @@ package com.legacy.fingame
 
 import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestCatalog
+import com.legacy.fingame.game.quests.QuestCheck
 import com.legacy.fingame.game.quests.QuestEngine
 import com.legacy.fingame.game.quests.QuestOutcome
 import com.legacy.fingame.game.quests.QuestProgress
@@ -452,5 +453,79 @@ class QuestEngineTest {
         )
 
         assertFalse(QuestEngine.hasUnseenStep(quests, seenAtMillis = now - 1, nowMillis = now))
+    }
+    // --- Проверка взрослым ---
+
+    private val checked = TestQuests.PICNIC.copy(requiresAdultCheck = true)
+
+    @Test
+    fun `a choice in a checked quest waits for the adult and gives nothing yet`() {
+        val choice = QuestEngine.choose(checked, started(checked), 0, balance = 1_000, nowMillis = now)!!
+
+        assertTrue(choice.awaitingCheck)
+        val progress = choice.quests.single()
+        assertEquals(QuestCheck.WAITING, progress.check)
+        assertTrue(progress.isAwaitingCheck)
+        assertEquals(0, progress.progress)
+        assertEquals("Фрукты", progress.lastChoice?.optionLabel)
+        // Пока ждёт проверки — ни дальше, ни второго выбора.
+        assertNull(QuestEngine.advance(checked, choice.quests, now + sixHours))
+        assertNull(QuestEngine.choose(checked, choice.quests, 1, balance = 1_000, nowMillis = now))
+        assertEquals(listOf(progress), QuestEngine.awaitingCheck(choice.quests))
+    }
+
+    @Test
+    fun `approving gives the reward and opens the next step after the node delay`() {
+        val sent = QuestEngine.choose(checked, started(checked), 0, balance = 1_000, nowMillis = now)!!.quests
+
+        val approved = QuestEngine.approve(checked, sent, balance = 1_000, nowMillis = now + sixHours)!!
+
+        assertFalse(approved.awaitingCheck)
+        assertEquals(-40, approved.outcome.moneyDelta)
+        assertEquals(60, approved.outcome.progressDelta)
+        val progress = approved.quests.single()
+        assertEquals(QuestCheck.NONE, progress.check)
+        assertEquals(60, progress.progress)
+        assertEquals(now + sixHours + minute, progress.availableAtMillis)
+        assertNull(QuestEngine.advance(checked, approved.quests, now + sixHours))
+        assertEquals("games", QuestEngine.advance(checked, approved.quests, now + sixHours + minute)!!.single().nodeId)
+        assertNull(QuestEngine.approve(checked, approved.quests, balance = 1_000, nowMillis = now + sixHours))
+    }
+
+    @Test
+    fun `an approved spending is cut to the balance of the moment`() {
+        val sent = QuestEngine.choose(checked, started(checked), 0, balance = 1_000, nowMillis = now)!!.quests
+
+        val approved = QuestEngine.approve(checked, sent, balance = 25, nowMillis = now)!!
+
+        assertEquals(-25, approved.outcome.moneyDelta)
+    }
+
+    @Test
+    fun `rejecting returns the step to work without a reward`() {
+        val sent = QuestEngine.choose(checked, started(checked), 0, balance = 1_000, nowMillis = now)!!.quests
+
+        val rejected = QuestEngine.reject(sent, "picnic", now + minute)!!
+
+        val progress = rejected.single()
+        assertEquals(QuestCheck.REJECTED, progress.check)
+        assertNull(progress.lastChoice)
+        assertEquals("food", progress.nodeId)
+        assertEquals(0, progress.progress)
+        assertNull(QuestEngine.reject(rejected, "picnic", now + minute))
+        // Этап снова в работе: можно выбрать ещё раз, и он опять уйдёт на проверку.
+        val again = QuestEngine.choose(checked, rejected, 1, balance = 1_000, nowMillis = now + minute)!!
+        assertTrue(again.awaitingCheck)
+        assertEquals(QuestCheck.WAITING, again.quests.single().check)
+    }
+
+    @Test
+    fun `a quest without the check is counted at once`() {
+        val choice = QuestEngine.choose(TestQuests.PICNIC, started(TestQuests.PICNIC), 0, 1_000, now)!!
+
+        assertFalse(choice.awaitingCheck)
+        assertEquals(QuestCheck.NONE, choice.quests.single().check)
+        assertNull(QuestEngine.approve(TestQuests.PICNIC, choice.quests, 1_000, now))
+        assertNull(QuestEngine.reject(choice.quests, "picnic", now))
     }
 }

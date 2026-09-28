@@ -34,6 +34,7 @@ import com.legacy.fingame.game.quests.CompositeQuestCatalog
 import com.legacy.fingame.game.quests.CustomQuestDraft
 import com.legacy.fingame.game.quests.CustomQuests
 import com.legacy.fingame.game.quests.QuestCatalog
+import com.legacy.fingame.game.quests.QuestCheckEvent
 import com.legacy.fingame.game.quests.QuestChoice
 import com.legacy.fingame.game.quests.QuestEngine
 import com.legacy.fingame.game.quests.QuestKind
@@ -750,6 +751,9 @@ class GameViewModel(
      * Выбор варианта на текущем шаге квеста: полоски питомца и деньги меняются сразу, деньги —
      * через журнал с причиной «Квест: <название>», в бюджет периода это не идёт.
      *
+     * У квеста с проверкой взрослым ([Quest.requiresAdultCheck]) выбор — это «Готово»: этап ждёт
+     * проверки, награды пока нет, в истории квестов — запись о сдаче ([QuestCheckEvent.SENT]).
+     *
      * @param questId id квеста.
      * @param optionIndex номер варианта на шаге.
      * @return True, когда выбор сделан; false, когда выбирать сейчас нечего (см. [QuestEngine.choose]).
@@ -766,15 +770,86 @@ class GameViewModel(
             questId = questId,
             nodeId = nodeId,
             optionLabel = choice.outcome.optionLabel,
+            moneyDelta = if (choice.awaitingCheck) 0 else choice.outcome.moneyDelta,
+            progressDelta = if (choice.awaitingCheck) 0 else choice.outcome.progressDelta,
+            gameDay = clock.today(),
+            timestampMillis = now,
+            check = if (choice.awaitingCheck) QuestCheckEvent.SENT else null
+        )
+
+        val chosen = current.copy(quests = choice.quests, questLog = current.questLog.plus(logged))
+        _state.value = if (choice.awaitingCheck) chosen else chosen.applyQuestEffects(quest, choice.outcome)
+        _state.value = _state.value.withQuestsLookedAt(now)
+        persist()
+        return true
+    }
+
+    /**
+     * Взрослый «Засчитать»: сданный этап засчитан, ребёнок получает награду — деньги через журнал
+     * с причиной квеста, изменения питомца, прогресс (см. [QuestEngine.approve]). В истории
+     * квестов — запись [QuestCheckEvent.APPROVED] с тем, что реально выдано.
+     *
+     * @param questId id квеста.
+     * @return True, когда этап засчитан; false вне режима взрослого и когда он проверки не ждёт.
+     */
+    fun approveQuestCheck(questId: String): Boolean {
+        val current = _state.value
+        if (!current.adultMode) return false
+        val quest = questCatalog.findQuestById(questId) ?: return false
+        val progress = current.questProgressOf(questId) ?: return false
+        val now = clock.nowMillis()
+        val choice = QuestEngine.approve(quest, current.quests, current.balance, now) ?: return false
+        val logged = QuestChoice(
+            questId = questId,
+            nodeId = progress.nodeId,
+            optionLabel = choice.outcome.optionLabel,
             moneyDelta = choice.outcome.moneyDelta,
             progressDelta = choice.outcome.progressDelta,
             gameDay = clock.today(),
-            timestampMillis = now
+            timestampMillis = now,
+            check = QuestCheckEvent.APPROVED
         )
 
-        _state.value = current.copy(quests = choice.quests, questLog = current.questLog.plus(logged))
-            .applyQuestEffects(quest, choice.outcome)
-            .withQuestsLookedAt(now)
+        // Ребёнок увидит засчитанный этап как новый шаг — на кнопке квестов загорится точка.
+        _state.value = current.copy(
+            quests = choice.quests,
+            questLog = current.questLog.plus(logged),
+            hasUnseenQuestStep = QuestEngine.hasUnseenStep(choice.quests, current.questsSeenAtMillis, now)
+        ).applyQuestEffects(quest, choice.outcome)
+        persist()
+        return true
+    }
+
+    /**
+     * Взрослый «Не засчитано»: этап возвращается в работу, ребёнок выбирает на нём заново. Награды
+     * не было; в истории квестов — запись [QuestCheckEvent.REJECTED].
+     *
+     * @param questId id квеста.
+     * @return True, когда этап возвращён; false вне режима взрослого и когда он проверки не ждёт.
+     */
+    fun rejectQuestCheck(questId: String): Boolean {
+        val current = _state.value
+        if (!current.adultMode) return false
+        val progress = current.questProgressOf(questId) ?: return false
+        val sent = progress.lastChoice ?: return false
+        val now = clock.nowMillis()
+        val quests = QuestEngine.reject(current.quests, questId, now) ?: return false
+        val logged = QuestChoice(
+            questId = questId,
+            nodeId = progress.nodeId,
+            optionLabel = sent.optionLabel,
+            moneyDelta = 0,
+            progressDelta = 0,
+            gameDay = clock.today(),
+            timestampMillis = now,
+            check = QuestCheckEvent.REJECTED
+        )
+
+        _state.value = current.copy(
+            quests = quests,
+            questLog = current.questLog.plus(logged),
+            hasUnseenQuestStep = QuestEngine.hasUnseenStep(quests, current.questsSeenAtMillis, now)
+        )
         persist()
         return true
     }

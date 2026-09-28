@@ -1,5 +1,6 @@
 package com.legacy.fingame
 
+import com.legacy.fingame.game.quests.QuestCheckEvent
 import com.legacy.fingame.game.quests.QuestChoice
 import com.legacy.fingame.game.quests.QuestLog
 import com.legacy.fingame.utils.QuestLogCodec
@@ -40,6 +41,22 @@ class QuestLogCodecTest {
         )
 
         assertEquals(log, QuestLogCodec.decode(QuestLogCodec.encode(log)))
+    }
+
+    @Test
+    fun `adult checks round-trip, and a record from before them reads as a plain choice`() {
+        val log = QuestLog(
+            listOf(
+                choice("Убрал", millis = 1_700_000_300_000L, money = 20).copy(check = QuestCheckEvent.APPROVED),
+                choice("Убрал", millis = 1_700_000_200_000L, money = 0).copy(check = QuestCheckEvent.REJECTED),
+                choice("Убрал", millis = 1_700_000_100_000L, money = 0).copy(check = QuestCheckEvent.SENT)
+            )
+        )
+        assertEquals(log, QuestLogCodec.decode(QuestLogCodec.encode(log)))
+
+        val plain = QuestLog(listOf(choice()))
+        val legacy = QuestLogCodec.encode(plain).substringBeforeLast('\u001F')
+        assertEquals(plain, QuestLogCodec.decode(legacy))
     }
 
     @Test

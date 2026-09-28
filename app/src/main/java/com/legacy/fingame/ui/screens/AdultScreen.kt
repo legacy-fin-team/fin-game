@@ -60,6 +60,7 @@ import com.legacy.fingame.game.adult.DayReport
 import com.legacy.fingame.game.adult.QuestHistoryEntry
 import com.legacy.fingame.game.adult.dayReportsOf
 import com.legacy.fingame.game.adult.purchasesOf
+import com.legacy.fingame.game.adult.questChecksOf
 import com.legacy.fingame.game.adult.questHistoryOf
 import com.legacy.fingame.game.economy.BudgetResult
 import com.legacy.fingame.game.economy.BudgetState
@@ -79,6 +80,7 @@ import com.legacy.fingame.game.quests.CustomQuests
 import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestCatalog
 import com.legacy.fingame.game.quests.QuestChoice
+import com.legacy.fingame.game.quests.QuestEngine
 import com.legacy.fingame.game.quests.QuestKind
 import com.legacy.fingame.game.quests.QuestLog
 import com.legacy.fingame.game.quests.QuestNode
@@ -178,10 +180,14 @@ fun AdultScreen(
     onRemoveQuest: (String) -> Boolean = { false },
     onUpdateQuest: (String, CustomQuestDraft) -> Boolean = { _, _ -> false },
     onEnableQuest: (String) -> Boolean = { false },
+    onApproveCheck: (String) -> Boolean = { false },
+    onRejectCheck: (String) -> Boolean = { false },
     initialTab: AdultTab = AdultTab.DAYS,
     initialQuestFormOpen: Boolean = false
 ) {
     var tab by rememberSaveable { mutableStateOf(initialTab) }
+    // Счётчики на вкладках: что ждёт взрослого.
+    val badges = mapOf(AdultTab.QUESTS to QuestEngine.awaitingCheck(state.quests).size)
     val short = GameDimens.isShortScreen
     val firstDay = adultFirstDayOf(state.moneyLog, state.budgetHistory, state.todayDay, state.questLog)
     // Две колонки карточек нужны только лёжа: стоя — и на планшете — одна колонка читается легче.
@@ -215,6 +221,7 @@ fun AdultScreen(
                 AdultTabs(
                     tab = tab,
                     onSelect = { tab = it },
+                    badges = badges,
                     modifier = Modifier.weight(1f),
                     scrollState = tabsScroll
                 )
@@ -232,6 +239,7 @@ fun AdultScreen(
                 AdultTabs(
                     tab = tab,
                     onSelect = { tab = it },
+                    badges = badges,
                     modifier = Modifier.fillMaxWidth(),
                     wrap = true
                 )
@@ -257,6 +265,8 @@ fun AdultScreen(
                     onRemoveQuest = onRemoveQuest,
                     onUpdateQuest = onUpdateQuest,
                     onEnableQuest = onEnableQuest,
+                    onApproveCheck = onApproveCheck,
+                    onRejectCheck = onRejectCheck,
                     initialFormOpen = initialQuestFormOpen
                 )
                 AdultTab.INVENTORY -> InventoryScreen(
@@ -351,14 +361,17 @@ private fun AdultClose(onClose: () -> Unit) {
 private fun AdultTabs(
     tab: AdultTab,
     onSelect: (AdultTab) -> Unit,
+    badges: Map<AdultTab, Int>,
     modifier: Modifier = Modifier,
     wrap: Boolean = false,
     scrollState: ScrollState = rememberScrollState()
 ) {
+    fun labelOf(entry: AdultTab): String = adultTabLabel(entry.title, badges[entry] ?: 0)
+
     @Composable
     fun TabButton(entry: AdultTab, buttonModifier: Modifier = Modifier, shrink: Boolean = false) {
         PillButton(
-            text = entry.title,
+            text = labelOf(entry),
             onClick = { onSelect(entry) },
             selected = entry == tab,
             compact = true,
@@ -367,7 +380,7 @@ private fun AdultTabs(
         )
     }
     // Вес — по длине подписи: остаток строки достаётся длинным подписям.
-    fun weightOf(entry: AdultTab): Float = (entry.title.length + TabPaddingChars).toFloat()
+    fun weightOf(entry: AdultTab): Float = (labelOf(entry).length + TabPaddingChars).toFloat()
     val rows = listOf(AdultTab.entries.take(TabsInFirstRow), AdultTab.entries.drop(TabsInFirstRow))
     if (wrap) {
         BoxWithConstraints(modifier = modifier) {
@@ -730,6 +743,8 @@ private fun QuestsTab(
     onRemoveQuest: (String) -> Boolean,
     onUpdateQuest: (String, CustomQuestDraft) -> Boolean,
     onEnableQuest: (String) -> Boolean,
+    onApproveCheck: (String) -> Boolean,
+    onRejectCheck: (String) -> Boolean,
     initialFormOpen: Boolean = false
 ) {
     var formOpen by rememberSaveable { mutableStateOf(initialFormOpen) }
@@ -769,6 +784,7 @@ private fun QuestsTab(
     }
 
     val history = remember(state.questLog, custom) { questHistoryOf(state.questLog, questCatalog) }
+    val checks = remember(state.quests, custom) { questChecksOf(state.quests, questCatalog) }
     LazyVerticalStaggeredGrid(
         columns = StaggeredGridCells.Adaptive(AdultCardMinWidth),
         modifier = Modifier.fillMaxSize(),
@@ -776,6 +792,19 @@ private fun QuestsTab(
         horizontalArrangement = Arrangement.spacedBy(CardGap),
         verticalItemSpacing = CardGap
     ) {
+        if (checks.isNotEmpty()) {
+            item(key = "checks-title", span = StaggeredGridItemSpan.FullLine) {
+                AdultSectionTitle("На проверку")
+            }
+            items(items = checks, key = { "check:${it.second.questId}" }) { (quest, progress) ->
+                QuestCheckCard(
+                    quest = quest,
+                    progress = progress,
+                    onApprove = { onApproveCheck(quest.id) },
+                    onReject = { onRejectCheck(quest.id) }
+                )
+            }
+        }
         item(key = "custom-title", span = StaggeredGridItemSpan.FullLine) {
             AdultSectionTitle("Свои квесты")
         }

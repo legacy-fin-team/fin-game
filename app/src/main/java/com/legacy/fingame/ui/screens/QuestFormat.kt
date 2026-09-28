@@ -77,6 +77,12 @@ fun nextStepInText(remainingMillis: Long): String =
 fun finishedText(hasProgress: Boolean, progress: Int): String =
     if (hasProgress) "Завершён$DotSeparator$progress%" else "Завершён"
 
+/** Ребёнок сдал этап, взрослый ещё не проверил. */
+const val QuestAwaitingCheckText = "Ждём, пока взрослый проверит"
+
+/** Взрослый не засчитал этап — ребёнку, без упрёка. */
+const val QuestCheckRejectedText = "Взрослый пока не засчитал этот шаг. Попробуй ещё раз!"
+
 /** @return «Доступен через 1:02:03» — квест на кулдауне после прохождения. */
 fun availableInText(remainingMillis: Long): String =
     "Доступен через ${countdownText(remainingMillis)}"
@@ -121,6 +127,7 @@ fun questStatusText(entry: QuestEntry, balance: Int, nowMillis: Long): String {
     val choice = progress.lastChoice
     return when {
         progress.isFinished -> finishedStatusText(quest, progress, balance, nowMillis)
+        progress.isAwaitingCheck -> QuestAwaitingCheckText
         choice == null -> stepText(
             quest.stepNumberOf(progress.nodeId).coerceAtLeast(1),
             quest.stepCount.coerceAtLeast(1)

@@ -4,6 +4,7 @@ import com.legacy.fingame.game.adult.DayReport
 import com.legacy.fingame.game.economy.BudgetResult
 import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.quests.Quest
+import com.legacy.fingame.game.quests.QuestCheckEvent
 import com.legacy.fingame.game.quests.QuestChoice
 import com.legacy.fingame.game.quests.QuestLog
 import com.legacy.fingame.game.quests.QuestProgress
@@ -121,6 +122,7 @@ fun purchaseTitleText(name: String, quantity: Int): String =
 fun adultQuestStatusText(quest: Quest?, progress: QuestProgress?): String = when {
     progress == null -> "Не идёт"
     progress.isFinished -> finishedText(quest?.hasProgress == true, progress.progress)
+    progress.isAwaitingCheck -> "Ждёт вашей проверки"
     quest == null -> "Идёт"
     else -> buildString {
         append("Идёт")
@@ -136,6 +138,20 @@ fun adultQuestStatusText(quest: Quest?, progress: QuestProgress?): String = when
 }
 
 /**
+ * @param title подпись вкладки хаба взрослого.
+ * @param badge сколько там нового или ждущего взрослого.
+ * @return «Квесты · 2», а без нового — просто «Квесты».
+ */
+fun adultTabLabel(title: String, badge: Int): String = if (badge > 0) "$title$DotSeparator$badge" else title
+
+/** @return Как взрослый читает запись о проверке этапа. */
+fun questCheckEventText(event: QuestCheckEvent): String = when (event) {
+    QuestCheckEvent.SENT -> "Сдано на проверку"
+    QuestCheckEvent.APPROVED -> "Засчитано"
+    QuestCheckEvent.REJECTED -> "Не засчитано"
+}
+
+/**
  * @param quest квест, или null, когда его больше нет в данных.
  * @param choice выбор ребёнка.
  * @return «Шаг 1: Фрукты» — или только вариант, когда шага уже не найти.
@@ -148,9 +164,12 @@ fun questChoiceTitleText(quest: Quest?, choice: QuestChoice): String {
 /**
  * @param choice выбор ребёнка.
  * @param firstDay день, от которого считаются номера (см. [adultFirstDayOf]).
- * @return Что выбор принёс, и когда: «−40 монет · +60% · день 2»; нулевые части пропускаются.
+ * @return Что выбор принёс, и когда: «−40 монет · +60% · день 2»; нулевые части пропускаются. У
+ * квеста с проверкой впереди — что было с проверкой: «Сдано на проверку», «Засчитано», «Не
+ * засчитано».
  */
 fun questChoiceDetailText(choice: QuestChoice, firstDay: Long): String = listOfNotNull(
+    choice.check?.let { questCheckEventText(it) },
     choice.moneyDelta.takeIf { it != 0 }?.let { if (it > 0) "+${coinsText(it)}" else coinsText(it) },
     choice.progressDelta.takeIf { it != 0 }?.let { "${signedAmountText(it)}%" },
     "день$NoBreakSpace${dayNumberOf(choice.gameDay, firstDay)}"

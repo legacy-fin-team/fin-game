@@ -1,6 +1,7 @@
 package com.legacy.fingame.utils
 
 import android.util.Log
+import com.legacy.fingame.game.quests.QuestCheckEvent
 import com.legacy.fingame.game.quests.QuestChoice
 import com.legacy.fingame.game.quests.QuestLog
 
@@ -10,8 +11,9 @@ import com.legacy.fingame.game.quests.QuestLog
  * (`\u001E`), поле от поля — unit separator (`\u001F`); оба вычищаются из текстов при
  * кодировании.
  *
- * Поля записи, всегда семь: id квеста, шаг, надпись варианта, деньги, изменение прогресса,
- * игровой день, момент.
+ * Поля записи: id квеста, шаг, надпись варианта, деньги, изменение прогресса, игровой день, момент
+ * и проверка взрослым (имя [QuestCheckEvent] или пусто). Запись старого сейва — без последнего
+ * поля, семь полей — читается как выбор без проверки.
  */
 object QuestLogCodec {
 
@@ -20,7 +22,10 @@ object QuestLogCodec {
     private const val RECORD_SEPARATOR = '\u001E'
     private const val FIELD_SEPARATOR = '\u001F'
 
-    private const val FIELDS_PER_RECORD = 7
+    private const val FIELDS_PER_RECORD = 8
+
+    /** Сколько полей было до проверки взрослым. */
+    private const val LEGACY_FIELDS_PER_RECORD = 7
 
     /**
      * @param log журнал выборов.
@@ -35,7 +40,8 @@ object QuestLogCodec {
                 choice.moneyDelta,
                 choice.progressDelta,
                 choice.gameDay,
-                choice.timestampMillis
+                choice.timestampMillis,
+                choice.check?.name.orEmpty()
             ).joinToString(FIELD_SEPARATOR.toString())
         }
 
@@ -53,7 +59,11 @@ object QuestLogCodec {
 
     private fun decodeRecord(record: String): QuestChoice? {
         val fields = record.split(FIELD_SEPARATOR)
-        if (fields.size != FIELDS_PER_RECORD) return dropped(record)
+        if (fields.size != FIELDS_PER_RECORD && fields.size != LEGACY_FIELDS_PER_RECORD) return dropped(record)
+        val check = when {
+            fields.size == LEGACY_FIELDS_PER_RECORD || fields[7].isEmpty() -> null
+            else -> QuestCheckEvent.entries.find { it.name == fields[7] } ?: return dropped(record)
+        }
 
         val moneyDelta = fields[3].toIntOrNull()
         val progressDelta = fields[4].toIntOrNull()
@@ -72,7 +82,8 @@ object QuestLogCodec {
             moneyDelta = moneyDelta,
             progressDelta = progressDelta,
             gameDay = gameDay,
-            timestampMillis = timestampMillis
+            timestampMillis = timestampMillis,
+            check = check
         )
     }
 

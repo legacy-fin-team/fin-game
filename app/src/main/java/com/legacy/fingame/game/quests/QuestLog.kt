@@ -1,5 +1,17 @@
 package com.legacy.fingame.game.quests
 
+/** Что случилось с этапом, который проверяет взрослый ([Quest.requiresAdultCheck]). */
+enum class QuestCheckEvent {
+    /** Ребёнок сдал этап на проверку — награды пока нет. */
+    SENT,
+
+    /** Взрослый засчитал этап — награда выдана. */
+    APPROVED,
+
+    /** Взрослый не засчитал этап — он снова в работе. */
+    REJECTED
+}
+
 /**
  * Один выбор игрока в квесте — строка истории квестов, которую смотрит взрослый.
  *
@@ -12,6 +24,9 @@ package com.legacy.fingame.game.quests
  * @property gameDay игровой день выбора, как его называет
  * [com.legacy.fingame.game.economy.GameClock.today].
  * @property timestampMillis момент выбора по часам игры.
+ * @property check у квеста с проверкой взрослым — что это за запись: сдача этапа, «Засчитать» или
+ * «Не засчитано»; у обычного выбора — null. Деньги и прогресс у сдачи и отказа нулевые: награда
+ * приходит только с «Засчитать».
  */
 data class QuestChoice(
     val questId: String,
@@ -20,7 +35,8 @@ data class QuestChoice(
     val moneyDelta: Int,
     val progressDelta: Int,
     val gameDay: Long,
-    val timestampMillis: Long
+    val timestampMillis: Long,
+    val check: QuestCheckEvent? = null
 )
 
 /**

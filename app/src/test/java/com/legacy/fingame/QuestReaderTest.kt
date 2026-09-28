@@ -139,6 +139,25 @@ class QuestReaderTest {
     }
 
     @Test
+    fun `the adult check is read from its attribute and is off by default`() {
+        fun quest(attribute: String) = read(
+            """
+            <quest id="chores" title="Уборка" kind="player" start="a" $attribute>
+                <node id="a">
+                    <text>Текст.</text>
+                    <option label="Готово" next="end"><result>Чисто.</result></option>
+                </node>
+            </quest>
+            """
+        )
+
+        assertTrue(quest("requires-adult-check=\"true\"").single().requiresAdultCheck)
+        assertFalse(quest("requires-adult-check=\"false\"").single().requiresAdultCheck)
+        assertFalse(quest("").single().requiresAdultCheck)
+        assertEquals(emptyList<Quest>(), quest("requires-adult-check=\"maybe\""))
+    }
+
+    @Test
     fun `a node without its own delay falls back to the quest's stage delay`() {
         val quests = read(
             """

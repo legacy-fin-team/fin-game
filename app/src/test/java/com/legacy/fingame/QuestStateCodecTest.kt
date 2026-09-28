@@ -1,6 +1,7 @@
 package com.legacy.fingame
 
 import com.legacy.fingame.game.quests.Quest
+import com.legacy.fingame.game.quests.QuestCheck
 import com.legacy.fingame.game.quests.QuestOutcome
 import com.legacy.fingame.game.quests.QuestProgress
 import com.legacy.fingame.game.quests.QuestStatus
@@ -54,6 +55,20 @@ class QuestStateCodecTest {
         val quests = listOf(waiting, atChoice, finished)
 
         assertEquals(quests, QuestStateCodec.decode(QuestStateCodec.encode(quests)))
+    }
+
+    @Test
+    fun `the adult check round-trips, and a save from before it reads as no check`() {
+        val sent = waiting.copy(check = QuestCheck.WAITING)
+        val rejected = atChoice.copy(check = QuestCheck.REJECTED)
+
+        assertEquals(listOf(sent, rejected), QuestStateCodec.decode(QuestStateCodec.encode(listOf(sent, rejected))))
+
+        // Сейв до проверки взрослым: 13 полей, без последнего.
+        val legacy = QuestStateCodec.encode(listOf(waiting)).substringBeforeLast('\u001F')
+        assertEquals(listOf(waiting), QuestStateCodec.decode(legacy))
+        // Неизвестная проверка портит запись — она отбрасывается.
+        assertEquals(emptyList<QuestProgress>(), QuestStateCodec.decode("$legacy\u001FMAYBE"))
     }
 
     @Test

@@ -44,6 +44,7 @@ import androidx.compose.ui.tooling.preview.Devices
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.legacy.fingame.game.quests.Quest
+import com.legacy.fingame.game.quests.QuestCheck
 import com.legacy.fingame.game.quests.QuestEngine
 import com.legacy.fingame.game.quests.QuestEntry
 import com.legacy.fingame.game.quests.QuestKind
@@ -360,6 +361,7 @@ private fun QuestBody(
             nowMillis = nowMillis,
             onRestart = onRestart
         )
+        progress.isAwaitingCheck && choice != null -> AwaitingCheckBlock(outcome = choice)
         choice != null -> OutcomeBlock(
             quest = quest,
             outcome = choice,
@@ -368,8 +370,44 @@ private fun QuestBody(
             onAdvance = onAdvance
         )
         else -> quest.node(progress.nodeId)?.let { node ->
-            NodeBlock(node = node, balance = balance, onChoose = onChoose)
+            Column(verticalArrangement = Arrangement.spacedBy(CardGap)) {
+                if (progress.check == QuestCheck.REJECTED) {
+                    Text(
+                        text = QuestCheckRejectedText,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                NodeBlock(node = node, balance = balance, onChoose = onChoose)
+                if (quest.requiresAdultCheck) {
+                    Text(
+                        text = "Когда сделаешь — нажми свой вариант. Награду даст взрослый, " +
+                            "когда проверит.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
+    }
+}
+
+/** Этап сдан взрослому: что выбрано и что ждём проверки. Награды ещё нет, поэтому её не видно. */
+@Composable
+private fun AwaitingCheckBlock(outcome: QuestOutcome) {
+    Column(verticalArrangement = Arrangement.spacedBy(CardGap)) {
+        Text(
+            text = outcome.optionLabel,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = QuestAwaitingCheckText,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
     }
 }
 

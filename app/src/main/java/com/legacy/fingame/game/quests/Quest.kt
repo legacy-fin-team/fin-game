@@ -88,6 +88,10 @@ data class QuestNode(
  * @property stageDelayMinutes сколько реальных минут ждать по умолчанию между этапами квеста —
  * то же самое время, что и [cooldownMinutes]. Это дефолт для узла, у которого нет своего
  * [QuestNode.delayMinutes]; узел со своим значением задержки его переопределяет.
+ * @property requiresAdultCheck проверяет ли выполнение взрослый. Тогда выбор варианта не
+ * засчитывается сам: этап ждёт проверки ([QuestCheck.WAITING]), награда (деньги, шкалы питомца,
+ * прогресс) выдаётся только после «Засчитать» во взрослом режиме ([QuestEngine.approve]), а «Не
+ * засчитано» возвращает этап в работу ([QuestEngine.reject]).
  */
 data class Quest(
     val id: String,
@@ -101,7 +105,8 @@ data class Quest(
     val imagePath: String? = null,
     val repeatable: Boolean = true,
     val cooldownMinutes: Int = DEFAULT_COOLDOWN_MINUTES,
-    val stageDelayMinutes: Int = 0
+    val stageDelayMinutes: Int = 0,
+    val requiresAdultCheck: Boolean = false
 ) {
 
     /**
