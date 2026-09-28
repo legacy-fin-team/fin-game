@@ -11,8 +11,8 @@ import java.util.concurrent.TimeUnit
  * [com.legacy.fingame.game.rules.PetCareRules.growthMultiplier]).
  *
  * How many stages a pet actually has is the animal's own business: this object counts stages from
- * [Animal.FIRST_AGE] up without an upper bound, and [Animal.getIdleSpritePath] keeps the answer
- * within the stages that animal has.
+ * [Animal.FIRST_AGE] up without an upper bound, and [Animal.getAgeStage] keeps the answer within
+ * the stages that animal has — for its own sprite and for the clothes on it alike.
  */
 object Growth {
 

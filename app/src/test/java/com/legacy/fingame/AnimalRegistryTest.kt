@@ -38,4 +38,19 @@ class AnimalRegistryTest {
 
         assertFalse(registry.hasVariant("cat", "orange"))
     }
+
+    @Test
+    fun `a pet grown past its last stage is drawn at the last one`() {
+        val registry = AnimalRegistry(mapOf(cat.id to cat))
+
+        assertEquals(Animal.FIRST_AGE, registry.getAgeStage("cat", Animal.FIRST_AGE))
+        assertEquals(1, registry.getAgeStage("cat", 1))
+        assertEquals(2, registry.getAgeStage("cat", 2))
+        assertEquals(2, registry.getAgeStage("cat", 9))
+        assertEquals(Animal.FIRST_AGE, registry.getAgeStage("cat", -1))
+        assertEquals(
+            "animals/cat/orange/${registry.getAgeStage("cat", 9)}/idle.webp",
+            registry.getIdleSpritePath("cat", "orange", 9)
+        )
+    }
 }
