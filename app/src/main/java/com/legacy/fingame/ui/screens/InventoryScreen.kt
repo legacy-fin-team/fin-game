@@ -459,7 +459,7 @@ private fun ItemActionBlock(
                     }
                 } else if (entry.item.isWearable) {
                     PillButton(
-                        text = if (entry.worn) "Убрать" else "Надеть",
+                        text = entry.item.category.wearActionTitle(entry.worn),
                         onClick = onToggleWorn
                     )
                 } else {
