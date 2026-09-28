@@ -161,4 +161,46 @@ class HeartBurstTest {
             assertTrue(heart.x in 1.5f..4.5f)
         }
     }
+
+    @Test
+    fun `with the animations off every heart of a wave stands still until the wave is over`() {
+        val burst = controller().onTap(start, age = 2)!!
+
+        repeat(HeartBurst.HEARTS) { index ->
+            val first = burst.frameAt(index, elapsedMillis = 0, animated = false)
+            assertNotNull(first)
+            assertEquals(1f, first!!.alpha)
+            for (t in 0 until HeartBurst.LIFE_MILLIS.toInt() step 50) {
+                assertEquals(first, burst.frameAt(index, elapsedMillis = t.toLong(), animated = false))
+            }
+            assertEquals(first, burst.frameAt(index, HeartBurst.LIFE_MILLIS - 1, animated = false))
+            assertNull(burst.frameAt(index, HeartBurst.LIFE_MILLIS, animated = false))
+        }
+    }
+
+    @Test
+    fun `still hearts sit on the head in their lanes, the middle one a sprite higher`() {
+        val burst = HeartBurst(id = 0, startMillis = start, spreads = listOf(-7, 7, 0))
+
+        val hearts = (0 until HeartBurst.HEARTS).map { burst.stillHeartAt(it, elapsedMillis = 0)!! }
+
+        assertEquals(listOf(-7f, 7f, 0f), hearts.map { it.x })
+        assertEquals(burst.startY, hearts[0].y)
+        assertEquals(burst.startY, hearts[1].y)
+        assertEquals(burst.startY - HeartBurst.HEART_PIXELS, hearts[2].y)
+    }
+
+    @Test
+    fun `with the animations on the hearts rise exactly as before`() {
+        val burst = controller().onTap(start)!!
+
+        for (t in 0..HeartBurst.LIFE_MILLIS.toInt() step 25) {
+            repeat(HeartBurst.HEARTS) { index ->
+                assertEquals(
+                    burst.heartAt(index, t.toLong()),
+                    burst.frameAt(index, t.toLong(), animated = true)
+                )
+            }
+        }
+    }
 }

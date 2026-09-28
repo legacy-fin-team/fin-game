@@ -94,10 +94,12 @@ import com.legacy.fingame.ui.components.StatChip
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
+import com.legacy.fingame.ui.theme.LocalAnimationsEnabled
 import com.legacy.fingame.utils.SpriteLoader
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlinx.coroutines.delay
 
 private val ScreenPadding = 16.dp
 
@@ -1308,12 +1310,25 @@ private fun SceneLayers(
         }
     }
 
+    // With the animations off the hearts stand still ([HeartBurst.stillHeartAt]), so nothing has
+    // to be redrawn on every frame: the clock is only checked again when the oldest wave is over.
+    val animated = LocalAnimationsEnabled.current
+    val currentAnimated by rememberUpdatedState(animated)
+
     // The hearts move while there are any: once a frame the clock is read again and the waves that
     // are over are dropped, and once the last one is, the loop ends until the next pat.
     if (bursts.isNotEmpty()) {
         LaunchedEffect(Unit) {
             while (true) {
-                withFrameMillis { }
+                // The last wave may already be gone before this effect leaves the composition; then
+                // it waits for a frame, the way the moving hearts do.
+                val oldestStart = bursts.minOfOrNull { it.startMillis }
+                if (currentAnimated || oldestStart == null) {
+                    withFrameMillis { }
+                } else {
+                    val oldestEnd = oldestStart + HeartBurst.LIFE_MILLIS
+                    delay((oldestEnd - SystemClock.uptimeMillis()).coerceAtLeast(1L))
+                }
                 val now = SystemClock.uptimeMillis()
                 nowMillis = now
                 bursts = touch.alive(now)
@@ -1344,7 +1359,12 @@ private fun SceneLayers(
             )
         }
 
-        PetHearts(bursts = bursts, nowMillis = { nowMillis }, viewport = viewport)
+        PetHearts(
+            bursts = bursts,
+            nowMillis = { nowMillis },
+            viewport = viewport,
+            animated = animated
+        )
 
     }
 }
@@ -1363,12 +1383,15 @@ private fun SceneLayers(
  * @param bursts the waves still in the air.
  * @param nowMillis what time it is on the clock the waves were set off on.
  * @param viewport geometry of the scene, for how many screen pixels a pixel of the art is.
+ * @param animated whether the hearts rise ([HeartBurst.heartAt]) or, with the animations turned
+ *   off in the settings, stand still over the head ([HeartBurst.stillHeartAt]).
  */
 @Composable
 private fun PetHearts(
     bursts: List<HeartBurst>,
     nowMillis: () -> Long,
-    viewport: () -> SceneViewport
+    viewport: () -> SceneViewport,
+    animated: Boolean
 ) {
     bursts.forEach { burst ->
         key(burst.id) {
@@ -1380,7 +1403,7 @@ private fun PetHearts(
                         .zIndex(HeartsZIndex)
                         .loweredOntoFloor(enabled = true, viewport = viewport)
                         .offset {
-                            val heart = burst.heartAt(index, nowMillis() - burst.startMillis)
+                            val heart = burst.frameAt(index, nowMillis() - burst.startMillis, animated)
                             val scale = viewport().scale
                             IntOffset(
                                 x = ((heart?.x ?: 0f) * scale).roundToInt(),
@@ -1388,7 +1411,7 @@ private fun PetHearts(
                             )
                         }
                         .graphicsLayer {
-                            alpha = burst.heartAt(index, nowMillis() - burst.startMillis)
+                            alpha = burst.frameAt(index, nowMillis() - burst.startMillis, animated)
                                 ?.alpha ?: 0f
                         }
                         .fillMaxSize(HeartSizeFraction)
