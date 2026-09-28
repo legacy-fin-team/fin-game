@@ -11,7 +11,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -19,8 +18,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.legacy.fingame.DemoMode
 import com.legacy.fingame.FinGameApplication
 import com.legacy.fingame.game.GameViewModel
-import com.legacy.fingame.game.OnboardingGate
 import com.legacy.fingame.game.Screen
+import com.legacy.fingame.game.hints.HintKeys
 import com.legacy.fingame.game.items.Cart
 import com.legacy.fingame.game.items.Goals
 import com.legacy.fingame.game.items.Inventory
@@ -28,7 +27,7 @@ import com.legacy.fingame.game.scene.GameScene
 import com.legacy.fingame.game.scene.SceneSprite
 import com.legacy.fingame.game.settings.AudioManager
 import com.legacy.fingame.game.stats.PetStats
-import com.legacy.fingame.ui.components.OnboardingDialog
+import com.legacy.fingame.ui.components.ScreenHint
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.screens.AnimalSelectScreen
 import com.legacy.fingame.ui.screens.BudgetScreen
@@ -71,8 +70,12 @@ private const val TICK_POLLS_PER_TICK = 10L
  * main screen also gets the button that pushes that same clock forward, so a demo can show a day of
  * the pet's life without waiting one out.
  *
- * The very first time the app is ever launched, [OnboardingDialog] is shown on top of whatever
- * screen the player lands on first (always [Screen.MAIN]); see [OnboardingGate] for when.
+ * The game is explained in small steps rather than in one welcome window: the first time the player
+ * lands on the pet selection screen, on the main screen and on each of the other screens, a
+ * [ScreenHint] about that screen is shown on top of it, once. Which one is due is decided by
+ * [HintKeys.pending] out of [GameUiState.hintsSeen]; closing it is remembered by
+ * [GameViewModel.markHintSeen]. Only one hint is ever on screen, and the pet selection hint and the
+ * main screen one never follow each other without the player picking a pet in between.
  *
  * @param modifier modifier applied to the root surface.
  * @param vm view model providing [GameUiState] and the navigation/action callbacks passed down
@@ -101,11 +104,13 @@ fun FinGameApp(
     val animalRegistry = application.animalRegistry
     val itemRegistry = application.itemRegistry
 
-    val onboardingGate = remember { OnboardingGate(application.onboardingPreferences) }
-    val onboardingVisible by onboardingGate.isVisible.collectAsStateWithLifecycle()
-
     val savedSelection = state.selection
     val pet = savedSelection?.takeIf { animalRegistry.hasVariant(it.animalId, it.variantId) }
+    val pendingHint = HintKeys.pending(
+        hasPet = pet != null,
+        screen = state.screen,
+        seen = state.hintsSeen
+    )?.let(application.hintRegistry::find)
 
     BackHandler(enabled = state.screen != Screen.MAIN) { vm.closeScreen() }
 
@@ -226,12 +231,9 @@ fun FinGameApp(
                         onSettingsChanged = vm::updateSettings,
                         onOpenAdultMode = { vm.openScreen(Screen.ADULT_MODE) },
                         onOpenHelp = { vm.openScreen(Screen.HELP) },
-                        // A reset makes the player new again in every sense, onboarding included:
-                        // the window they saw on the very first launch is shown once more.
-                        onResetProgress = {
-                            vm.resetProgress()
-                            onboardingGate.onProgressReset()
-                        },
+                        // A reset makes the player new again in every sense: the screen hints come
+                        // back with it, starting with the one on the pet selection screen.
+                        onResetProgress = vm::resetProgress,
                         onBack = vm::closeScreen
                     )
 
@@ -248,9 +250,13 @@ fun FinGameApp(
                 }
             }
 
-            if (onboardingVisible) {
-                OnboardingDialog(onDismiss = onboardingGate::dismiss)
-            }
+        }
+
+        if (pendingHint != null) {
+            ScreenHint(
+                hint = pendingHint,
+                onDismiss = { vm.markHintSeen(pendingHint.key) }
+            )
         }
     }
 }

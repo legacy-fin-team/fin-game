@@ -3,7 +3,9 @@ package com.legacy.fingame
 import com.legacy.fingame.game.PlayerState
 import com.legacy.fingame.game.animals.AnimalSelection
 import com.legacy.fingame.game.hints.HintKeys
+import com.legacy.fingame.utils.PlayerPreferences
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -99,5 +101,12 @@ class HintsSeenTest {
                 seen = vm.state.value.hintsSeen
             )
         )
+    }
+
+    @Test
+    fun `hints are saved under a key of their own, the old welcome flag is dropped`() {
+        assertTrue("hints_seen" in PlayerPreferences.LIVE_KEYS)
+        assertTrue("onboarding_seen" in PlayerPreferences.RETIRED_KEYS)
+        assertFalse("onboarding_seen" in PlayerPreferences.LIVE_KEYS)
     }
 }

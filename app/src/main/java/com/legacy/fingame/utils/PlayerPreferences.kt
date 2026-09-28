@@ -31,14 +31,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
     companion object {
         private const val TAG = "PlayerPreferences"
 
-        /**
-         * Name of the SharedPreferences file the player's game is kept in. Widened to `internal`
-         * so `OnboardingPreferences` can share the very same file: the onboarding-seen flag has no
-         * `PlayerState` field of its own, but a future "reset progress" clearing this file should
-         * still make the onboarding window come back, and sharing the file is what guarantees that
-         * without the reset having to know about the flag by name.
-         */
-        internal const val PREFERENCES_NAME = "player"
+        /** Name of the SharedPreferences file the player's game is kept in. */
+        private const val PREFERENCES_NAME = "player"
         private const val KEY_ANIMAL_ID = "selected_animal_id"
         private const val KEY_ANIMAL_VARIANT_ID = "selected_animal_variant_id"
         private const val KEY_PET_NAME = "pet_name"
@@ -102,7 +96,9 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             "budget_draft_savings",
             "previous_budget_planned",
             "previous_budget_planned_savings",
-            "previous_budget_actual"
+            "previous_budget_actual",
+            // Флаг единого приветственного окна: его сменили подсказки по экранам (hints_seen).
+            "onboarding_seen"
         )
 
         /**
