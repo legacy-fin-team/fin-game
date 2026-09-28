@@ -47,15 +47,18 @@ class ShippedQuestsTest {
     }
 
     @Test
-    fun `the picnic needs 300 coins, has progress and has 5 steps`() {
+    fun `the picnic needs 300 coins, has progress and has 11 steps across 2 days`() {
         val picnic = readShippedQuests().single { it.id == "picnic" }
 
         assertEquals("Пикник", picnic.title)
         assertEquals(QuestKind.PLAYER, picnic.kind)
         assertTrue(picnic.hasProgress)
         assertEquals(300, picnic.minBalance)
-        assertEquals(5, picnic.stepCount)
-        assertEquals(listOf(0, 0, 0, 0, 0), picnic.stepOrder.map { picnic.node(it)!!.delayMinutes })
+        assertEquals(11, picnic.stepCount)
+        assertEquals(
+            listOf(0, 0, 0, 0, 1440, 0, 0, 0, 0, 0, 0),
+            picnic.stepOrder.map { picnic.node(it)!!.delayMinutes }
+        )
         assertTrue(picnic.nodes.values.flatMap { it.options }.any { it.moneyDelta < 0 })
     }
 
