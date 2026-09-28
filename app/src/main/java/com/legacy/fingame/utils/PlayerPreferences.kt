@@ -18,11 +18,12 @@ import com.legacy.fingame.game.stats.StatKind
  * the app being closed and the process being killed.
  *
  * Every value is stored under a key of its own rather than as one blob, so a state that grew a
- * new field still reads back on a device that saved it before the field existed. The exceptions
- * are [PlayerState.moneyLog] and [PlayerState.goals]: both are lists of variable length, and a key
- * per record would turn the preferences into a file of thousands of lines, so each is written as a
- * single string, by [MoneyLogCodec] and [GoalsCodec] respectively. The goals are a string rather
- * than a string set because their order is the player's own, and a set would lose it.
+ * new field still reads back on a device that saved it before the field existed. The
+ * exceptions are [PlayerState.moneyLog], [PlayerState.goals] and [PlayerState.quests]: all
+ * three are lists of variable length, and a key per record would turn the preferences into a
+ * file of thousands of lines, so each is written as a single string, by [MoneyLogCodec],
+ * [GoalsCodec] and [QuestStateCodec] respectively. The goals are a string rather than a string
+ * set because their order is the player's own, and a set would lose it.
  *
  * @param context current local application context. Used to get access to SharedPreferences.
  */
@@ -73,6 +74,15 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         private const val KEY_PLANNING_OPEN = "planning_open"
         private const val KEY_MONEY_LOG = "money_log"
         private const val KEY_GOALS = "goals"
+
+        /** Состояние квестов одной строкой, см. [QuestStateCodec]. */
+        internal const val KEY_QUESTS = "quests"
+
+        /** Момент последнего взгляда на экран квестов. */
+        internal const val KEY_QUESTS_SEEN_AT = "quests_seen_at"
+
+        /** Момент, когда выпал последний случайный квест. */
+        internal const val KEY_LAST_RANDOM_QUEST_AT = "last_random_quest_at"
 
         /** Key the savings account was stored under, read once more to hand the money back. */
         private const val KEY_RETIRED_SAVINGS = "savings"
@@ -142,7 +152,10 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             KEY_BUDGET_DRAFT_DEPOSIT_TERM_DAYS,
             KEY_PLANNING_OPEN,
             KEY_MONEY_LOG,
-            KEY_GOALS
+            KEY_GOALS,
+            KEY_QUESTS,
+            KEY_QUESTS_SEEN_AT,
+            KEY_LAST_RANDOM_QUEST_AT
         )
 
         /** Prefix of the key one stat bar is stored under, completed by [StatKind.xmlName]. */
@@ -203,7 +216,16 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             ),
             petBornAtMillis = preferences.getLong(KEY_PET_BORN_AT, defaults.petBornAtMillis),
             gameNowMillis = preferences.getLong(KEY_GAME_NOW, defaults.gameNowMillis),
-            clockShiftMillis = preferences.getLong(KEY_CLOCK_SHIFT, defaults.clockShiftMillis)
+            clockShiftMillis = preferences.getLong(KEY_CLOCK_SHIFT, defaults.clockShiftMillis),
+            quests = QuestStateCodec.decode(preferences.getString(KEY_QUESTS, null)),
+            questsSeenAtMillis = preferences.getLong(
+                KEY_QUESTS_SEEN_AT,
+                defaults.questsSeenAtMillis
+            ),
+            lastRandomQuestAtMillis = preferences.getLong(
+                KEY_LAST_RANDOM_QUEST_AT,
+                defaults.lastRandomQuestAtMillis
+            )
         )
     }
 
@@ -266,6 +288,9 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             .putBoolean(KEY_PLANNING_OPEN, state.planningOpen)
             .putString(KEY_MONEY_LOG, MoneyLogCodec.encode(state.moneyLog))
             .putString(KEY_GOALS, GoalsCodec.encode(state.goals))
+            .putString(KEY_QUESTS, QuestStateCodec.encode(state.quests))
+            .putLong(KEY_QUESTS_SEEN_AT, state.questsSeenAtMillis)
+            .putLong(KEY_LAST_RANDOM_QUEST_AT, state.lastRandomQuestAtMillis)
 
         StatKind.entries.forEach { stat ->
             editor.putInt(KEY_STAT_PREFIX + stat.xmlName, state.stats[stat])

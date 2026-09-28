@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.legacy.fingame.BuildConfig
+import com.legacy.fingame.DemoMode
 import com.legacy.fingame.game.animals.Animal
 import com.legacy.fingame.game.animals.AnimalSelection
 import com.legacy.fingame.game.animals.Growth
@@ -23,12 +25,19 @@ import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.items.ItemUse
+import com.legacy.fingame.game.quests.Quest
+import com.legacy.fingame.game.quests.QuestCatalog
+import com.legacy.fingame.game.quests.QuestEngine
+import com.legacy.fingame.game.quests.QuestKind
+import com.legacy.fingame.game.quests.QuestOutcome
+import com.legacy.fingame.game.quests.QuestProgress
 import com.legacy.fingame.game.settings.GameSettings
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.ui.DemoContent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlin.random.Random
 
 /**
  * The screens the player can navigate between.
@@ -117,6 +126,15 @@ enum class Screen {
  * @property todayDay the game day it is right now, on the same scale as [Deposit.maturityDay]: days
  * since the epoch, plus whatever a demo skipped. The screens turn it into the day number the player
  * reads (see [com.legacy.fingame.ui.screens.dayNumberOf]) rather than showing it as it is.
+ * @property quests где игрок в каждом квесте, восстановлено из [PlayerState.quests]; квесты, которых
+ * больше нет в данных, отброшены, а квест, ждавший выбора на пропавшем из данных шаге, завершён.
+ * @property questsSeenAtMillis когда игрок последний раз видел экран квестов, из
+ * [PlayerState.questsSeenAtMillis].
+ * @property lastRandomQuestAtMillis когда выпал последний случайный квест, из
+ * [PlayerState.lastRandomQuestAtMillis].
+ * @property hasUnseenQuestStep горит ли точка на кнопке квестов: есть шаг, ставший доступным после
+ * последнего взгляда на экран (см. [QuestEngine.hasUnseenStep]). Пересчитывается на каждом
+ * [GameViewModel.tick], не сохраняется.
  */
 data class GameUiState(
     val screen: Screen = Screen.MAIN,
@@ -144,8 +162,18 @@ data class GameUiState(
     val petBornAtMillis: Long = Growth.NOT_BORN,
     val subLocationIndex: Int = 0,
     val todayDay: Long = 0L,
+    val quests: List<QuestProgress> = emptyList(),
+    val questsSeenAtMillis: Long = PlayerState.QUESTS_NEVER_SEEN,
+    val lastRandomQuestAtMillis: Long = PlayerState.NO_RANDOM_QUEST,
+    val hasUnseenQuestStep: Boolean = false,
     val settings: GameSettings = GameSettings()
 ) {
+    /**
+     * @param questId id квеста.
+     * @return Где игрок в этом квесте, или null, когда квест не начинался.
+     */
+    fun questProgressOf(questId: String): QuestProgress? = quests.find { it.questId == questId }
+
     /**
      * Whether the player picked anything at all, i.e. whether there is a purchase to ask about.
      * Says nothing about the money: a cart the player cannot afford is still a cart.
@@ -223,6 +251,13 @@ data class GameUiState(
  * for the pet's stats and its growth. The view model reads it through a [FastForwardClock], so a
  * demo build can push the game's time forward (see [fastForward]) without the rest of the game
  * knowing about it.
+ * @param questCatalog какие квесты есть в игре; правила над ними — в [QuestEngine].
+ * @param random кости для случайных квестов; в тестах — заранее заданные.
+ * @param allowRestart можно ли пройти пройденный квест ещё раз ([restartQuest]); только в
+ * демо-сборке, иначе монеты «Копилки» можно было бы собирать без конца.
+ * @param ignoreQuestDelays не ждать ни кулдауна квестов, ни паузы между шагами — всё доступно
+ * сразу (см. [QuestEngine]). В приложении это отладочная сборка (см. [factory]); по умолчанию
+ * выключено, так что тесты сами решают, нужно ли им ожидание.
  * @param settings the settings the app starts with, as they were saved: they are in the state from
  * its very first value, so nothing that follows the state — the music, the click sound, the theme —
  * ever sees the defaults for a frame.
@@ -231,7 +266,11 @@ class GameViewModel(
     private val store: PlayerStateStore,
     private val catalog: ItemCatalog,
     clock: GameClock = GameClock.DEVICE,
-    settings: GameSettings = GameSettings()
+    private val questCatalog: QuestCatalog = QuestCatalog.EMPTY,
+    private val random: Random = Random.Default,
+    private val allowRestart: Boolean = DemoMode.ENABLED,
+    settings: GameSettings = GameSettings(),
+    val ignoreQuestDelays: Boolean = false
 ) : ViewModel() {
 
     /**
@@ -264,16 +303,33 @@ class GameViewModel(
          * @param store where the player's state is restored from and saved to.
          * @param catalog what is on sale.
          * @param clock where the current day comes from; defaults to the device's calendar day.
+         * @param questCatalog какие квесты есть в игре.
+         * @param allowRestart можно ли проходить квесты ещё раз; по умолчанию — только в демо.
          * @param settings the saved settings the app starts with.
+         * @param ignoreQuestDelays снять ожидание в квестах; по умолчанию — в отладочной сборке
+         * (`BuildConfig.DEBUG`: debug и releaseDebuggable), в обычном release ожидание действует.
          * @return A factory creating a [GameViewModel] backed by [store] and [catalog].
          */
         fun factory(
             store: PlayerStateStore,
             catalog: ItemCatalog,
             clock: GameClock = GameClock.DEVICE,
-            settings: GameSettings = GameSettings()
+            questCatalog: QuestCatalog = QuestCatalog.EMPTY,
+            allowRestart: Boolean = DemoMode.ENABLED,
+            settings: GameSettings = GameSettings(),
+            ignoreQuestDelays: Boolean = BuildConfig.DEBUG
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { GameViewModel(store, catalog, clock, settings) }
+            initializer {
+                GameViewModel(
+                    store,
+                    catalog,
+                    clock,
+                    questCatalog,
+                    allowRestart = allowRestart,
+                    settings = settings,
+                    ignoreQuestDelays = ignoreQuestDelays
+                )
+            }
         }
     }
 
@@ -299,7 +355,11 @@ class GameViewModel(
      */
     fun openScreen(screen: Screen) {
         settleMaturedDeposit()
+        val seesQuests = screen == Screen.QUESTS || _state.value.screen == Screen.QUESTS
         _state.value = stateForNavigatingTo(screen)
+        // Открыть экран квестов или уйти с него — это «игрок всё увидел»: момент запоминается
+        // сразу, чтобы точка на кнопке не загорелась снова после перезапуска.
+        if (seesQuests) persist()
     }
 
     /**
@@ -307,8 +367,7 @@ class GameViewModel(
      * If the player was on [Screen.SHOP], the unpaid shop cart is dropped.
      */
     fun closeScreen() {
-        settleMaturedDeposit()
-        _state.value = stateForNavigatingTo(Screen.MAIN)
+        openScreen(Screen.MAIN)
     }
 
     /**
@@ -321,7 +380,16 @@ class GameViewModel(
     private fun stateForNavigatingTo(screen: Screen): GameUiState {
         val previous = _state.value
         val leavingShop = previous.screen == Screen.SHOP && screen != Screen.SHOP
+        val openingQuests = screen == Screen.QUESTS
+        // Уходя с экрана квестов, игрок видел всё, что на нём было, — и шаг, открывшийся без тика.
+        val leavingQuests = previous.screen == Screen.QUESTS
         return previous.copy(
+            questsSeenAtMillis = if (openingQuests || leavingQuests) {
+                clock.nowMillis()
+            } else {
+                previous.questsSeenAtMillis
+            },
+            hasUnseenQuestStep = !openingQuests && !leavingQuests && previous.hasUnseenQuestStep,
             screen = screen,
             quantities = if (leavingShop) emptyMap() else previous.quantities,
             pickedVariants = if (leavingShop) emptyMap() else previous.pickedVariants,
@@ -365,6 +433,9 @@ class GameViewModel(
      * while the player is watching, so the bars go down in front of them. Calling it more often than
      * the pet actually changes costs nothing and changes nothing: the leftover time below one
      * [PetStats.TICK_MILLIS] is kept for the next call instead of being dropped.
+     *
+     * Здесь же проверяется случайный квест ([QuestEngine.maybeSpawnRandom]) и пересчитывается
+     * точка на кнопке квестов.
      */
     fun tick() {
         settleMaturedDeposit()
@@ -373,14 +444,21 @@ class GameViewModel(
         val now = clock.nowMillis()
         val ticks = PetStats.ticksBetween(current.statsUpdatedAtMillis, now)
         val age = Growth.ageAt(current.petBornAtMillis, now)
-        if (ticks == 0L && age == current.petAge) return
+        val lived = if (ticks == 0L && age == current.petAge) {
+            current
+        } else {
+            current.copy(
+                stats = current.stats.decayedBy(ticks),
+                statsUpdatedAtMillis = current.statsUpdatedAtMillis + ticks * PetStats.TICK_MILLIS,
+                petAge = age,
+                todayDay = clock.today()
+            )
+        }
+        // Квесты живут по тем же часам: может выпасть случайный, может кончиться задержка шага.
+        val next = lived.withQuestsCaughtUp(now)
+        if (next == current) return
 
-        _state.value = current.copy(
-            stats = current.stats.decayedBy(ticks),
-            statsUpdatedAtMillis = current.statsUpdatedAtMillis + ticks * PetStats.TICK_MILLIS,
-            petAge = age,
-            todayDay = clock.today()
-        )
+        _state.value = next
         persist()
     }
 
@@ -415,6 +493,167 @@ class GameViewModel(
         // The skipped time is remembered even when it moved neither a bar nor a stage, since the
         // next launch starts from the moment it was skipped to and not from the one before it.
         persist()
+    }
+
+    /**
+     * Игрок берёт квест кнопкой «Взять». Только квест игрока и только когда его можно начать —
+     * все условия у [QuestEngine.availabilityOf]: не идёт ли он уже, хватает ли минимума, не
+     * пройден ли одноразовый и не остывает ли ещё после кулдауна.
+     *
+     * @param questId id квеста.
+     * @return True, когда квест начат.
+     */
+    fun startQuest(questId: String): Boolean {
+        val quest = questCatalog.findQuestById(questId) ?: return false
+        if (quest.kind != QuestKind.PLAYER) return false
+        return beginQuest(quest)
+    }
+
+    /**
+     * Взрослый включает пройденный квест снова: один следующий раз его можно начать, не дожидаясь
+     * кулдауна и не оглядываясь на `repeatable = false`. Экран для этого — в другой ветке, здесь
+     * только правило (см. [QuestEngine.enable]).
+     *
+     * @param questId id квеста.
+     * @return True, когда квест был пройден и включён; false, когда он не начинался или ещё идёт.
+     */
+    fun enableQuest(questId: String): Boolean {
+        val current = _state.value
+        val quests = QuestEngine.enable(current.quests, questId) ?: return false
+
+        _state.value = current.copy(quests = quests)
+        persist()
+        return true
+    }
+
+    /**
+     * «Ещё раз» для пройденного квеста игрока: он начинается заново с первого узла и нулевого
+     * прогресса. Минимум на счёте нужен и здесь. Только в демо-сборке (см. `allowRestart`).
+     *
+     * @param questId id квеста.
+     * @return True, когда квест начат заново.
+     */
+    fun restartQuest(questId: String): Boolean {
+        if (!allowRestart) return false
+        val quest = questCatalog.findQuestById(questId) ?: return false
+        if (quest.kind != QuestKind.PLAYER) return false
+        if (_state.value.questProgressOf(questId)?.isFinished != true) return false
+        return beginQuest(quest)
+    }
+
+    /**
+     * Выбор варианта на текущем шаге квеста: полоски питомца и деньги меняются сразу, деньги —
+     * через журнал с причиной «Квест: <название>», в бюджет периода это не идёт.
+     *
+     * @param questId id квеста.
+     * @param optionIndex номер варианта на шаге.
+     * @return True, когда выбор сделан; false, когда выбирать сейчас нечего (см. [QuestEngine.choose]).
+     */
+    fun chooseQuestOption(questId: String, optionIndex: Int): Boolean {
+        val quest = questCatalog.findQuestById(questId) ?: return false
+        val current = _state.value
+        val now = clock.nowMillis()
+        val choice = QuestEngine.choose(
+            quest,
+            current.quests,
+            optionIndex,
+            current.balance,
+            now,
+            ignoreQuestDelays
+        ) ?: return false
+
+        _state.value = current.copy(quests = choice.quests)
+            .applyQuestEffects(quest, choice.outcome)
+            .withQuestsLookedAt(now)
+        persist()
+        return true
+    }
+
+    /**
+     * «Дальше» или «Завершить» после результата выбора — когда задержка шага прошла.
+     *
+     * @param questId id квеста.
+     * @return True, когда игрок перешёл на следующий шаг или квест завершён.
+     */
+    fun advanceQuest(questId: String): Boolean {
+        val quest = questCatalog.findQuestById(questId) ?: return false
+        val current = _state.value
+        val now = clock.nowMillis()
+        val quests = QuestEngine.advance(quest, current.quests, now, ignoreQuestDelays) ?: return false
+
+        _state.value = current.copy(quests = quests).withQuestsLookedAt(now)
+        persist()
+        return true
+    }
+
+    /**
+     * @return Момент по часам игры — с перемоткой демо-сборки. По нему экран квестов считает
+     * «Следующий шаг через …», по нему же модель решает, можно ли идти дальше.
+     */
+    fun nowMillis(): Long = clock.nowMillis()
+
+    /**
+     * @return True, когда квест начат; см. [QuestEngine.start].
+     */
+    private fun beginQuest(quest: Quest): Boolean {
+        val current = _state.value
+        val now = clock.nowMillis()
+        val quests = QuestEngine.start(quest, current.quests, current.balance, now, ignoreQuestDelays)
+            ?: return false
+
+        _state.value = current.copy(quests = quests).withQuestsLookedAt(now)
+        persist()
+        return true
+    }
+
+    /**
+     * Применяет исход выбора: полоски питомца двигаются в своих рамках, деньги идут через журнал.
+     * Сумма исхода уже урезана до баланса ([QuestEngine.choose]), так что счёт не уходит в минус.
+     */
+    private fun GameUiState.applyQuestEffects(quest: Quest, outcome: QuestOutcome): GameUiState {
+        val changed = copy(stats = stats.changedBy(outcome.statEffects))
+        if (outcome.moneyDelta == 0) return changed
+        return changed
+            .copy(balance = (changed.balance + outcome.moneyDelta).coerceAtLeast(0))
+            .logged(MoneyLog.questReason(quest.title), outcome.moneyDelta)
+    }
+
+    /** Игрок действует на экране квестов — значит, всё на нём видел. */
+    private fun GameUiState.withQuestsLookedAt(now: Long): GameUiState =
+        copy(questsSeenAtMillis = now, hasUnseenQuestStep = false)
+
+    /**
+     * Квесты догоняют часы: может выпасть случайный квест, а точка на кнопке загорается, когда
+     * есть непросмотренный шаг. Пока открыт экран квестов, новый шаг сразу считается увиденным.
+     */
+    private fun GameUiState.withQuestsCaughtUp(now: Long): GameUiState {
+        val spawned = withRandomQuestSpawned(now)
+        val unseen = QuestEngine.hasUnseenStep(spawned.quests, spawned.questsSeenAtMillis, now)
+        return when {
+            !unseen -> spawned.copy(hasUnseenQuestStep = false)
+            spawned.screen == Screen.QUESTS -> spawned.withQuestsLookedAt(now)
+            else -> spawned.copy(hasUnseenQuestStep = true)
+        }
+    }
+
+    /**
+     * Бросает кости на случайный квест. Шесть часов считаются от последнего случайного квеста, а
+     * пока их не было — от момента, когда игрок завёл питомца; без питомца квесты не выпадают.
+     */
+    private fun GameUiState.withRandomQuestSpawned(now: Long): GameUiState {
+        if (selection == null || petBornAtMillis == Growth.NOT_BORN) return this
+        val since = lastRandomQuestAtMillis.takeUnless { it == PlayerState.NO_RANDOM_QUEST }
+            ?: petBornAtMillis
+        val spawn = QuestEngine.maybeSpawnRandom(
+            questCatalog,
+            quests,
+            balance,
+            since,
+            now,
+            random,
+            ignoreQuestDelays
+        ) ?: return this
+        return copy(quests = spawn.quests, lastRandomQuestAtMillis = now)
     }
 
     /**
@@ -943,6 +1182,16 @@ class GameViewModel(
             it == Growth.NOT_BORN && saved.selection != null
         } ?: now
         val ticks = PetStats.ticksBetween(statsUpdatedAt, now)
+        // Квест, которого больше нет в данных, сыграть нельзя: его запись просто отбрасывается.
+        val known = saved.quests.filter { questCatalog.findQuestById(it.questId) != null }
+        // Квест, ждущий выбора на шаге, которого больше нет в данных, завершается тем же правилом,
+        // что и «Дальше» (см. [QuestEngine.advance]), — иначе он висел бы активным навсегда.
+        val quests = known.fold(known) { restored, progress ->
+            val quest = questCatalog.findQuestById(progress.questId) ?: return@fold restored
+            val stepVanished = progress.isActive && progress.lastChoice == null &&
+                quest.node(progress.nodeId) == null
+            if (stepVanished) QuestEngine.advance(quest, restored, now) ?: restored else restored
+        }
 
         return GameUiState(
             selection = saved.selection,
@@ -968,6 +1217,10 @@ class GameViewModel(
             petBornAtMillis = bornAt,
             subLocationIndex = existingSubLocation(saved.subLocationIndex),
             todayDay = clock.today(),
+            quests = quests,
+            questsSeenAtMillis = saved.questsSeenAtMillis,
+            lastRandomQuestAtMillis = saved.lastRandomQuestAtMillis,
+            hasUnseenQuestStep = QuestEngine.hasUnseenStep(quests, saved.questsSeenAtMillis, now),
             settings = settings
         )
     }
@@ -1052,7 +1305,10 @@ class GameViewModel(
                 statsUpdatedAtMillis = current.statsUpdatedAtMillis,
                 petBornAtMillis = current.petBornAtMillis,
                 gameNowMillis = clock.nowMillis(),
-                clockShiftMillis = clock.shiftMillis
+                clockShiftMillis = clock.shiftMillis,
+                quests = current.quests,
+                questsSeenAtMillis = current.questsSeenAtMillis,
+                lastRandomQuestAtMillis = current.lastRandomQuestAtMillis
             )
         )
     }
