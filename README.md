@@ -104,14 +104,18 @@
 Сборка релизного APK и его подпись описаны пошагово в
 [разделе 2 документации](docs/DOCUMENTATION.md#2-требования-к-окружению-и-сборка-релизного-apk).
 
-## Сборки
+## Варианты сборки
 
-| Сборка | Команда | Демо-режим | Подпись |
-|---|---|---|---|
-| debug | `./gradlew :app:assembleDebug` | включён | отладочный ключ |
-| release | `./gradlew :app:assembleRelease` | выключен | не подписан, подписывается вручную `apksigner` |
+| Вариант | Debuggable | Подпись | Минификация | `DEMO_MODE` | Чем отличается в игре | Команда | APK |
+|---|---|---|---|---|---|---|---|
+| debug | да | отладочный ключ Android SDK | нет | `true` | Есть кнопка «+12 ч» (перемотка времени, см. `DemoMode.kt`) | `./gradlew :app:assembleDebug` | `app/build/outputs/apk/debug/app-debug.apk` |
+| release | нет | не задана — APK неподписанный, подписывается вручную (`apksigner`) | выключена (`optimization { enable = false }`) | `false` | Кнопки перемотки нет, время идёт как у игрока | `./gradlew :app:assembleRelease` | `app/build/outputs/apk/release/app-release-unsigned.apk` |
+| releaseDebuggable | да (копия `release` + `isDebuggable = true`) | отладочный ключ Android SDK (как у debug) | выключена (копия `release`) | `false` | Как у release, но APK уже подписан отладочным ключом и ставится поверх debug-сборки, без удаления | `./gradlew :app:assembleReleaseDebuggable` | `app/build/outputs/apk/releaseDebuggable/app-releaseDebuggable.apk` |
 
-Демо-режим переопределяется для любой сборки свойством `-Pfingame.demoMode=true|false`.
+`DEMO_MODE` переопределяется для любого варианта свойством `-Pfingame.demoMode=true|false`
+(например, `./gradlew :app:assembleRelease -Pfingame.demoMode=true` — релизная сборка с кнопкой
+перемотки времени для показа жюри). Подробнее, включая правило для отладочных сборок в системе
+квестов, — в [разделе 2.2 документации](docs/DOCUMENTATION.md#22-типы-сборки-и-демо-режим).
 
 ## Документация
 

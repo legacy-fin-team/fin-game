@@ -105,19 +105,42 @@ Fin Game — игра для Android, которая в форме тамаго�
 
 ### 2.2. Типы сборки и демо-режим
 
-Флейворов (productFlavors) в проекте нет. Есть два типа сборки:
+Флейворов (productFlavors) в проекте нет. В `app/build.gradle.kts` объявлены три типа сборки:
+`debug` и `release` — обычные типы AGP, `releaseDebuggable` — третий, добавленный отдельно
+(`create("releaseDebuggable") { initWith(getByName("release")); isDebuggable = true;
+signingConfig = signingConfigs.getByName("debug") }`) специально для тестирования на устройстве
+поведения release-сборки (минификация, `DEMO_MODE`) с возможностью подключить отладчик/логи и без
+переустановки поверх debug.
 
-| Параметр | debug | release |
-|---|---|---|
-| `BuildConfig.DEMO_MODE` | `true` | `false` |
-| Кнопка «Вперёд на 12 часов» | есть | нет |
-| Минификация (R8) | нет | отключена (`optimization { enable = false }`) |
-| Подпись | отладочный ключ Android SDK | не задана (`signingConfig` отсутствует), APK подписывается вручную |
-| Выходной файл | `app/build/outputs/apk/debug/app-debug.apk` | `app/build/outputs/apk/release/app-release-unsigned.apk` |
+| Параметр | debug | release | releaseDebuggable |
+|---|---|---|---|
+| `isDebuggable` | `true` | `false` | `true` (`initWith(release)` + переопределение) |
+| `BuildConfig.DEMO_MODE` | `true` | `false` | `false` |
+| Кнопка «Вперёд на 12 часов» (`DemoMode.ENABLED`) | есть | нет | нет (пока не переопределено `-Pfingame.demoMode=true`) |
+| Минификация (R8) | нет | отключена (`optimization { enable = false }`) | отключена (наследуется от `release`) |
+| Подпись | отладочный ключ Android SDK (`signingConfig` по умолчанию) | не задана (`signingConfig` отсутствует), APK неподписанный | отладочный ключ Android SDK (`signingConfig = signingConfigs.getByName("debug")`, задан явно) |
+| Выходной файл | `app/build/outputs/apk/debug/app-debug.apk` | `app/build/outputs/apk/release/app-release-unsigned.apk` | `app/build/outputs/apk/releaseDebuggable/app-releaseDebuggable.apk` |
+| Команда | `./gradlew :app:assembleDebug` | `./gradlew :app:assembleRelease` | `./gradlew :app:assembleReleaseDebuggable` |
 
-Демо-режим можно переопределить для любого типа сборки без правки файлов:
+`BuildConfig.DEMO_MODE` в каждом типе берётся из `demoModeOverride` — значения gradle-свойства
+`fingame.demoMode` (`providers.gradleProperty("fingame.demoMode")`), если оно задано, иначе из
+значения по умолчанию для этого типа сборки (`true` для debug, `false` для release и
+releaseDebuggable). Свойство переопределяет демо-режим для любого типа без правки файлов:
 `./gradlew :app:assembleRelease -Pfingame.demoMode=true` — релизная сборка с кнопкой перемотки
-времени (удобно для показа жюри).
+времени (удобно для показа жюри), `./gradlew :app:assembleDebug -Pfingame.demoMode=false` —
+отладочная сборка без демо-кнопки.
+
+`app-release-unsigned.apk` не устанавливается через `adb install` без подписи (см. шаг 2.3);
+`app-debug.apk` и `app-releaseDebuggable.apk` подписаны отладочным ключом и ставятся сразу — но
+между собой они несовместимы с `app-release-*.apk`, подписанным релизным ключом (Android не даст
+обновить одну сборку другой при разных подписях, только переустановку, см. предупреждение в 2.3).
+
+<!-- TODO ревьюер: в системе квестов (ветка `stef-quests`, ещё не слита в `main`) вводится правило —
+в отладочных сборках (`BuildConfig.DEBUG == true`, т.е. debug и releaseDebuggable) кулдауны между
+квестами и паузы между их этапами отключены, чтобы квесты можно было проверять без ожидания; в
+release эти кулдауны и паузы действуют как задумано для игрока. В смёрженном на 28.09.2026 `main`
+использований `BuildConfig.DEBUG` ещё нет — уточнить формулировку и место действия после слияния
+`stef-quests`. -->
 
 ### 2.3. Пошаговая сборка релизного APK
 
