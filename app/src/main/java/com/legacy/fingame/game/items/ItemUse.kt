@@ -17,5 +17,12 @@ enum class ItemUse {
      * The item stays in the inventory and is put on and taken off instead of being used up: it is
      * drawn in the game area for as long as it is on (see [ItemCategory.defaultLayer]).
      */
-    WEARABLE
+    WEARABLE,
+
+    /**
+     * Награда из жизни, которую взрослый дарит за монеты игры («поход в кино», «час мультиков»):
+     * сама игра её никак не использует. Её можно только «Использовать» — один раз: она исчезает из
+     * инвентаря, а взрослый видит запись в журнале «Использованные награды».
+     */
+    REDEEMED
 }

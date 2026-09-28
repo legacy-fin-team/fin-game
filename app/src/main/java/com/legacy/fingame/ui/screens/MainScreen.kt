@@ -4,6 +4,7 @@ import android.os.SystemClock
 import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -70,7 +72,6 @@ import androidx.compose.ui.zIndex
 import com.legacy.fingame.DemoMode
 import com.legacy.fingame.game.GameUiState
 import com.legacy.fingame.game.Screen
-import com.legacy.fingame.game.economy.Economy
 import com.legacy.fingame.game.items.GoalLine
 import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.items.ItemSelection
@@ -472,7 +473,8 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
  *   from the pet, its age stage and what it wears (see [GameScene.of]), so this screen doesn't have
  *   to know how the assets are laid out. Defaults to the demo content pet alone.
  * @param subLocationTitles titles for each sub-location, indexed by
- *   [GameUiState.subLocationIndex]; defaults to the demo content titles.
+ *   [GameUiState.subLocationIndex]; kept for callers, but no longer shown: the badge above the pet
+ *   says only its name.
  * @param onPetTap called when the player pats the pet — taps it in the game area — and the pat
  *   counts, i.e. no more often than [PetTouchController.MIN_TAP_INTERVAL_MILLIS]; the hearts over
  *   the pet are the screen's own business, the sound of the pat is the caller's.
@@ -564,7 +566,8 @@ fun MainScreen(
                 PrimaryActions(
                     size = PrimaryActionSize * fit,
                     gap = ActionGap * fit,
-                    onOpenScreen = onOpenScreen
+                    onOpenScreen = onOpenScreen,
+                    questsBadge = state.hasUnseenQuestStep
                 )
             },
             center = {
@@ -572,7 +575,8 @@ fun MainScreen(
                     scene = scene,
                     title = stageTitleOf(
                         petName = state.petName,
-                        subLocationTitle = subLocationTitles.getOrNull(state.subLocationIndex)
+                        // Локаций в игре больше нет: над питомцем — только его имя.
+                        subLocationTitle = null
                     ),
                     // Only an upright screen holds the area to a share of the width: on a wide one
                     // the band between the corner blocks is narrow enough as it is.
@@ -582,6 +586,8 @@ fun MainScreen(
                         Dp.Unspecified
                     },
                     dailyBonusAvailable = state.dailyBonusAvailable,
+                    dailyIncome = state.dailyIncome,
+                    careHint = state.careHint,
                     onClaimDailyBonus = onClaimDailyBonus,
                     onPetTap = onPetTap
                 )
@@ -1011,6 +1017,15 @@ private fun MoneyActions(
 }
 
 /**
+ * Размер точки на кнопке квестов: есть шаг, который игрок ещё не видел. Точка стоит в углу кнопки и
+ * размер кнопки не меняет.
+ */
+private val QuestBadgeSize = 12.dp
+
+/** Толщина кольца цвета фона вокруг точки [QuestBadgeSize]: оно отделяет точку от картинки кнопки. */
+private val QuestBadgeRing = 2.dp
+
+/**
  * The corner with the buttons that open the quests, the inventory and the shop.
  *
  * None of them belongs to a group one item of which is selected, so none keeps room under itself
@@ -1021,6 +1036,7 @@ private fun MoneyActions(
  *   screen by [bottomRowFit].
  * @param gap gap between them, shrunk by the same amount.
  * @param onOpenScreen called with the screen a button opens.
+ * @param questsBadge whether the quests button carries the dot of a step the player has not seen.
  * @param modifier modifier applied to the row.
  */
 @Composable
@@ -1028,20 +1044,36 @@ private fun PrimaryActions(
     size: Dp,
     gap: Dp,
     onOpenScreen: (Screen) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    questsBadge: Boolean = false
 ) {
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(gap),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        SpriteButton(
-            assetPath = Sprites.QUESTS,
-            contentDescription = "Открыть квесты",
-            onClick = { onOpenScreen(Screen.QUESTS) },
-            size = size,
-            showIndicator = false
-        )
+        Box {
+            SpriteButton(
+                assetPath = Sprites.QUESTS,
+                contentDescription = if (questsBadge) {
+                    "Открыть квесты, есть новый шаг"
+                } else {
+                    "Открыть квесты"
+                },
+                onClick = { onOpenScreen(Screen.QUESTS) },
+                size = size,
+                showIndicator = false
+            )
+            if (questsBadge) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(QuestBadgeSize)
+                        .background(MaterialTheme.colorScheme.error, CircleShape)
+                        .border(QuestBadgeRing, MaterialTheme.colorScheme.background, CircleShape)
+                )
+            }
+        }
         SpriteButton(
             assetPath = Sprites.INVENTORY,
             contentDescription = "Открыть инвентарь",
@@ -1073,6 +1105,9 @@ private fun PrimaryActions(
  *   width of the column.
  * @param dailyBonusAvailable whether the daily bonus is there to take, i.e. whether the button
  *   under the pet is shown at all.
+ * @param dailyIncome сколько монет даст бонус дня сейчас (см. [GameUiState.dailyIncome]).
+ * @param careHint подсказка, почему питомец растёт медленнее или бонус меньше, или null, когда
+ *   всё хорошо (см. [GameUiState.careHint]).
  * @param onClaimDailyBonus called when the player takes the bonus.
  * @param onPetTap called when the player pats the pet (see [PetStage]).
  * @param modifier modifier applied to the column.
@@ -1083,6 +1118,8 @@ private fun PetColumn(
     title: String?,
     stageMaxWidth: Dp,
     dailyBonusAvailable: Boolean,
+    dailyIncome: Int,
+    careHint: String?,
     onClaimDailyBonus: () -> Unit,
     onPetTap: () -> Unit,
     modifier: Modifier = Modifier
@@ -1104,12 +1141,17 @@ private fun PetColumn(
                 .widthIn(max = stageMaxWidth)
         )
 
+        if (careHint != null) {
+            Spacer(modifier = Modifier.height(StageGap))
+            CareHint(text = careHint, modifier = Modifier.widthIn(max = stageMaxWidth))
+        }
+
         if (dailyBonusAvailable) {
             Spacer(modifier = Modifier.height(StageGap))
             // The one filled button of the screen: taking the bonus is the thing the player is
             // meant to press here, and everything else on the screen is quieter than it.
             PillButton(
-                text = "Бонус дня +${Economy.DAILY_BONUS}",
+                text = "Бонус дня +$dailyIncome",
                 onClick = onClaimDailyBonus,
                 style = PillStyle.Primary
             )
@@ -1260,10 +1302,9 @@ internal fun PetStage(
  * of the one is exactly as big on the screen as a pixel of the other.
  *
  * The pet does not stand in the middle of the room but on its floor: the pet and everything on its
- * grid — the clothes it wears, and the placeholder for missing art that is drawn in its place — are
- * lowered by [SceneViewport.petFloorShift], a whole number of screen pixels that grows with the
- * scene as it is pinched, so the pet stays on the room's pixel grid at any size ([isOnPetGrid],
- * [loweredOntoFloor]).
+ * grid — the clothes it wears — are lowered by [SceneViewport.petFloorShift], a whole number of
+ * screen pixels that grows with the scene as it is pinched, so the pet stays on the room's pixel
+ * grid at any size ([isOnPetGrid], [loweredOntoFloor]).
  *
  * Every sprite is rendered directly on its layer, and if any sprite file is missing, [SpriteLoader]
  * automatically provides an error placeholder sprite for that specific layer.
@@ -1365,7 +1406,6 @@ private fun SceneLayers(
             viewport = viewport,
             animated = animated
         )
-
     }
 }
 
@@ -1528,10 +1568,39 @@ private fun StageBadge(
     }
 }
 
+/**
+ * Подсказка под питомцем: почему он растёт медленнее и почему бонус меньше. Тихая, как и бейдж
+ * над питомцем, — она объясняет, а не ругает.
+ *
+ * @param text текст подсказки (см. [com.legacy.fingame.game.rules.PetCareRules.explain]).
+ * @param modifier модификатор подсказки.
+ */
+@Composable
+private fun CareHint(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, GameColors.cardStroke)
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
 /** State the previews show: a pet with a name, money, stats and a bonus waiting to be taken. */
 private val PreviewState = GameUiState(
     balance = 250,
     dailyBonusAvailable = true,
+    hasUnseenQuestStep = true,
     subLocationIndex = 1,
     petName = "Барсик",
     stats = PetStats(

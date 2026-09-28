@@ -4,11 +4,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.legacy.fingame.BuildConfig
+import com.legacy.fingame.DemoMode
+import com.legacy.fingame.game.adult.AdultMoney
+import com.legacy.fingame.game.adult.RewardUsage
+import com.legacy.fingame.game.adult.RewardUsageLog
 import com.legacy.fingame.game.animals.Animal
 import com.legacy.fingame.game.animals.AnimalSelection
 import com.legacy.fingame.game.animals.Growth
 import com.legacy.fingame.game.economy.Budget
 import com.legacy.fingame.game.economy.BudgetDraft
+import com.legacy.fingame.game.economy.BudgetHistory
 import com.legacy.fingame.game.economy.BudgetResult
 import com.legacy.fingame.game.economy.BudgetState
 import com.legacy.fingame.game.economy.Deposit
@@ -18,14 +24,35 @@ import com.legacy.fingame.game.economy.GameClock
 import com.legacy.fingame.game.economy.MoneyEntry
 import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.economy.SpendKind
+import com.legacy.fingame.game.items.CompositeItemCatalog
+import com.legacy.fingame.game.items.CustomItemDraft
+import com.legacy.fingame.game.items.CustomItems
 import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.items.ItemUse
+import com.legacy.fingame.game.items.customItemOf
+import com.legacy.fingame.game.quests.CompositeQuestCatalog
+import com.legacy.fingame.game.quests.CustomQuestDraft
+import com.legacy.fingame.game.quests.CustomQuests
+import com.legacy.fingame.game.quests.Quest
+import com.legacy.fingame.game.quests.QuestCatalog
+import com.legacy.fingame.game.quests.QuestCheckEvent
+import com.legacy.fingame.game.quests.QuestChoice
+import com.legacy.fingame.game.quests.QuestEngine
+import com.legacy.fingame.game.quests.QuestKind
+import com.legacy.fingame.game.quests.QuestLog
+import com.legacy.fingame.game.quests.QuestOutcome
+import com.legacy.fingame.game.quests.QuestProgress
+import com.legacy.fingame.game.rules.CarePricedCatalog
+import com.legacy.fingame.game.rules.PetCare
+import com.legacy.fingame.game.rules.PetCareRules
+import com.legacy.fingame.game.rules.PetCareTuning
 import com.legacy.fingame.game.settings.GameSettings
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.ui.DemoContent
+import kotlin.random.Random
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,8 +78,12 @@ enum class Screen {
     LOG,
     /** The options/settings screen. */
     OPTIONS,
-    /** The adult mode screen (placeholder). */
-    ADULT_MODE
+    /** Замок перед режимом взрослого: три примера на умножение. */
+    ADULT_LOCK,
+    /** Режим взрослого: история дней, покупок и квестов, инвентарь, цели и журнал ребёнка. */
+    ADULT_MODE,
+    /** Экран справки: список игровых терминов, открывается из [OPTIONS]. */
+    HELP
 }
 
 /**
@@ -80,6 +111,10 @@ enum class Screen {
  * [PlayerState.planningOpen]; becomes true when the daily bonus is claimed and false once a budget
  * is confirmed. See [canPlanBudget] for whether the planning screen may actually be opened.
  * @property moneyLog the player's money log, newest first, restored from [PlayerState.moneyLog].
+ * @property budgetHistory итоги закрытых периодов, новейший первым, из [PlayerState.budgetHistory];
+ * пополняется в [GameViewModel.claimDailyBonus].
+ * @property questLog выборы игрока в квестах, новейший первым, из [PlayerState.questLog];
+ * пополняется в [GameViewModel.chooseQuestOption].
  * @property dailyBonusAvailable whether the daily bonus is waiting to be claimed; recomputed
  * whenever the player comes back to [Screen.MAIN], so an app left open overnight offers it again.
  * @property lastDailyBonusDay day the bonus was last claimed on, kept here only so it can be saved
@@ -107,16 +142,39 @@ enum class Screen {
  * [GameViewModel.tick] as time passes.
  * @property statsUpdatedAtMillis moment [stats] were last brought up to date, kept here so it can be
  * saved back into [PlayerState]; the screens ask [stats] instead.
- * @property petAge age stage the pet has grown to, worked out from [petBornAtMillis] rather than
- * saved (see [Growth.ageAt]). Resolving it against the stages the animal actually has is left to
+ * @property petAge age stage the pet has grown to, worked out from [care] rather than saved (see
+ * [Growth.ageOf]). Resolving it against the stages the animal actually has is left to
  * [com.legacy.fingame.game.animals.Animal.getIdleSpritePath].
  * @property petBornAtMillis moment the pet was taken in, kept here only so it can be saved back into
  * [PlayerState]; the screens ask [petAge] instead.
+ * @property care как питомцу живётся: рост и серия дней без заботы (см. [PetCare]),
+ * восстанавливается из [PlayerState.care].
+ * @property careTuning правила ухода, по которым играет эта игра; здесь — чтобы [dailyIncome] и
+ * [careHint] считались из того же, из чего считает [GameViewModel].
  * @property subLocationIndex index of the currently displayed sub-location within
  * [DemoContent.subLocationTitles], restored from [PlayerState.subLocationIndex].
  * @property todayDay the game day it is right now, on the same scale as [Deposit.maturityDay]: days
  * since the epoch, plus whatever a demo skipped. The screens turn it into the day number the player
  * reads (see [com.legacy.fingame.ui.screens.dayNumberOf]) rather than showing it as it is.
+ * @property quests где игрок в каждом квесте, восстановлено из [PlayerState.quests]; квесты, которых
+ * больше нет в данных, отброшены, а квест, ждавший выбора на пропавшем из данных шаге, завершён.
+ * @property questsSeenAtMillis когда игрок последний раз видел экран квестов, из
+ * [PlayerState.questsSeenAtMillis].
+ * @property lastRandomQuestAtMillis когда выпал последний случайный квест, из
+ * [PlayerState.lastRandomQuestAtMillis].
+ * @property hasUnseenQuestStep горит ли точка на кнопке квестов: есть шаг, ставший доступным после
+ * последнего взгляда на экран (см. [QuestEngine.hasUnseenStep]). Пересчитывается на каждом
+ * [GameViewModel.tick], не сохраняется.
+ * @property adultMode открыт ли режим взрослого: пока он включён, модель не пускает ни покупки, ни
+ * предметы, ни квесты, ни бонус, ни бюджет, ни цели. Не сохраняется — после перезапуска игра снова
+ * у ребёнка.
+ * @property customItems свои предметы взрослого, из [PlayerState.customItems]; продаются наравне с
+ * предметами игры (см. [GameViewModel.catalog]).
+ * @property customQuests свои квесты взрослого, из [PlayerState.customQuests]; ребёнок берёт их
+ * наравне с квестами игры (см. [GameViewModel.questCatalog]).
+ * @property hintsSeen ключи подсказок к экранам, которые игрок уже закрыл, восстанавливаются из
+ * [PlayerState.hintsSeen]; какую подсказку показать сейчас, решает
+ * [com.legacy.fingame.game.hints.HintKeys.pending].
  */
 data class GameUiState(
     val screen: Screen = Screen.MAIN,
@@ -129,6 +187,8 @@ data class GameUiState(
     val budgetDraft: BudgetDraft? = null,
     val planningOpen: Boolean = false,
     val moneyLog: MoneyLog = MoneyLog.EMPTY,
+    val budgetHistory: List<BudgetResult> = emptyList(),
+    val questLog: QuestLog = QuestLog.EMPTY,
     val dailyBonusAvailable: Boolean = false,
     val lastDailyBonusDay: Long = Economy.NEVER_CLAIMED,
     val selectedCategory: ItemCategory = ItemCategory.entries.first(),
@@ -142,10 +202,29 @@ data class GameUiState(
     val statsUpdatedAtMillis: Long = PlayerState.NEVER_UPDATED,
     val petAge: Int = Animal.FIRST_AGE,
     val petBornAtMillis: Long = Growth.NOT_BORN,
+    val care: PetCare = PetCare(),
+    val careTuning: PetCareTuning = PetCareTuning.DEFAULT,
     val subLocationIndex: Int = 0,
     val todayDay: Long = 0L,
-    val settings: GameSettings = GameSettings()
+    val quests: List<QuestProgress> = emptyList(),
+    val questsSeenAtMillis: Long = PlayerState.QUESTS_NEVER_SEEN,
+    val lastRandomQuestAtMillis: Long = PlayerState.NO_RANDOM_QUEST,
+    val hasUnseenQuestStep: Boolean = false,
+    val adultMode: Boolean = false,
+    val customItems: List<Item> = emptyList(),
+    val customQuests: List<Quest> = emptyList(),
+    val rewardUsageLog: RewardUsageLog = RewardUsageLog.EMPTY,
+    val rewardUsageSeenAtMillis: Long = RewardUsageLog.NEVER_SEEN,
+    val goalsReached: Int = 0,
+    val settings: GameSettings = GameSettings(),
+    val hintsSeen: Set<String> = emptySet()
 ) {
+    /**
+     * @param questId id квеста.
+     * @return Где игрок в этом квесте, или null, когда квест не начинался.
+     */
+    fun questProgressOf(questId: String): QuestProgress? = quests.find { it.questId == questId }
+
     /**
      * Whether the player picked anything at all, i.e. whether there is a purchase to ask about.
      * Says nothing about the money: a cart the player cannot afford is still a cart.
@@ -164,6 +243,24 @@ data class GameUiState(
 
     /** Whether the cart holds something the player can actually pay for. */
     val canBuyCart: Boolean get() = hasCart && canAffordCart
+
+    /**
+     * Сколько монет даст бонус дня, если взять его сейчас: меньше обычного, пока питомцем не
+     * занимаются (см. [PetCareRules.dailyIncome]).
+     */
+    val dailyIncome: Int
+        get() = PetCareRules.dailyIncome(Economy.DAILY_BONUS, care.neglectStreak, careTuning)
+
+    /**
+     * Добрая подсказка ребёнку, почему питомец растёт медленнее или бонус меньше, или null, когда
+     * всё хорошо (см. [PetCareRules.explain]).
+     */
+    val careHint: String?
+        get() = if (selection == null) {
+            null
+        } else {
+            PetCareRules.explain(stats, care.dayBestCare, care.neglectStreak, careTuning)
+        }
 
     /** Сколько денег игрок может разложить: всё, что на текущем счёте. Тело вклада сюда не входит. */
     val totalToPlan: Int get() = balance
@@ -223,15 +320,29 @@ data class GameUiState(
  * for the pet's stats and its growth. The view model reads it through a [FastForwardClock], so a
  * demo build can push the game's time forward (see [fastForward]) without the rest of the game
  * knowing about it.
+ * @param questCatalog какие квесты есть в игре; правила над ними — в [QuestEngine].
+ * @param random кости для случайных квестов; в тестах — заранее заданные.
+ * @param allowRestart можно ли пройти пройденный квест ещё раз ([restartQuest]); только в
+ * демо-сборке, иначе монеты «Копилки» можно было бы собирать без конца.
+ * @param ignoreQuestDelays не ждать ни кулдауна квестов, ни паузы между шагами — всё доступно
+ * сразу (см. [QuestEngine]). В приложении это отладочная сборка (см. [factory]); по умолчанию
+ * выключено, так что тесты сами решают, нужно ли им ожидание.
+ * @param careTuning правила ухода: как уход влияет на рост питомца, бонус дня и цены (см.
+ * [PetCareRules]).
  * @param settings the settings the app starts with, as they were saved: they are in the state from
  * its very first value, so nothing that follows the state — the music, the click sound, the theme —
  * ever sees the defaults for a frame.
  */
 class GameViewModel(
     private val store: PlayerStateStore,
-    private val catalog: ItemCatalog,
+    catalog: ItemCatalog,
     clock: GameClock = GameClock.DEVICE,
-    settings: GameSettings = GameSettings()
+    questCatalog: QuestCatalog = QuestCatalog.EMPTY,
+    private val random: Random = Random.Default,
+    private val allowRestart: Boolean = DemoMode.ENABLED,
+    private val careTuning: PetCareTuning = PetCareTuning.DEFAULT,
+    settings: GameSettings = GameSettings(),
+    val ignoreQuestDelays: Boolean = false
 ) : ViewModel() {
 
     /**
@@ -239,6 +350,27 @@ class GameViewModel(
      * it by. Untouched, it is the given clock itself.
      */
     private val clock = FastForwardClock(clock)
+
+    /**
+     * Свои предметы взрослого, как их видит [catalog]. Живут отдельным полем, а не только в
+     * состоянии: каталог нужен уже при восстановлении состояния, когда его самого ещё нет.
+     */
+    private var customItems: List<Item> = emptyList()
+
+    /**
+     * Что продаётся: предметы игры и свои предметы взрослого в конце каждого раздела. Экраны
+     * берут товары отсюда, а не из данных напрямую, так что добавленное взрослым сразу на полке.
+     */
+    val catalog: ItemCatalog = CompositeItemCatalog(catalog) { customItems }
+
+    /** Свои квесты взрослого, как их видит [questCatalog]; по той же причине, что [customItems]. */
+    private var customQuests: List<Quest> = emptyList()
+
+    /**
+     * Какие квесты есть: квесты игры и после них свои квесты взрослого. Экран квестов берёт их
+     * отсюда, так что добавленный взрослым квест ребёнок видит сразу.
+     */
+    val questCatalog: QuestCatalog = CompositeQuestCatalog(questCatalog) { customQuests }
 
     /**
      * Constant limits for [GameViewModel]'s UI state, and the way it is built outside of tests.
@@ -264,20 +396,51 @@ class GameViewModel(
          * @param store where the player's state is restored from and saved to.
          * @param catalog what is on sale.
          * @param clock where the current day comes from; defaults to the device's calendar day.
+         * @param questCatalog какие квесты есть в игре.
+         * @param allowRestart можно ли проходить квесты ещё раз; по умолчанию — только в демо.
+         * @param careTuning правила ухода.
          * @param settings the saved settings the app starts with.
+         * @param ignoreQuestDelays снять ожидание в квестах; по умолчанию — в отладочной сборке
+         * (`BuildConfig.DEBUG`: debug и releaseDebuggable), в обычном release ожидание действует.
          * @return A factory creating a [GameViewModel] backed by [store] and [catalog].
          */
         fun factory(
             store: PlayerStateStore,
             catalog: ItemCatalog,
             clock: GameClock = GameClock.DEVICE,
-            settings: GameSettings = GameSettings()
+            questCatalog: QuestCatalog = QuestCatalog.EMPTY,
+            allowRestart: Boolean = DemoMode.ENABLED,
+            careTuning: PetCareTuning = PetCareTuning.DEFAULT,
+            settings: GameSettings = GameSettings(),
+            ignoreQuestDelays: Boolean = BuildConfig.DEBUG
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { GameViewModel(store, catalog, clock, settings) }
+            initializer {
+                GameViewModel(
+                    store,
+                    catalog,
+                    clock,
+                    questCatalog,
+                    allowRestart = allowRestart,
+                    careTuning = careTuning,
+                    settings = settings,
+                    ignoreQuestDelays = ignoreQuestDelays
+                )
+            }
         }
     }
 
     private val _state = MutableStateFlow(restoredState(settings))
+
+    /**
+     * Витрина магазина: тот же каталог, но с ценами, которые игрок видит и платит, — необязательные
+     * товары дорожают, пока питомцем не занимаются (см. [CarePricedCatalog]). Экран магазина,
+     * корзина и цели берут товары отсюда, а покупка считается по ним же.
+     */
+    // this.catalog — итоговый каталог со своими предметами взрослого, а не параметр конструктора
+    // с одними предметами игры: надбавка ложится и на них.
+    val shopCatalog: ItemCatalog = CarePricedCatalog(this.catalog, careTuning) {
+        _state.value.care.neglectStreak
+    }
 
     /** Current [GameUiState], observed by the UI. */
     val state: StateFlow<GameUiState> = _state.asStateFlow()
@@ -299,7 +462,11 @@ class GameViewModel(
      */
     fun openScreen(screen: Screen) {
         settleMaturedDeposit()
+        val seesQuests = screen == Screen.QUESTS || _state.value.screen == Screen.QUESTS
         _state.value = stateForNavigatingTo(screen)
+        // Открыть экран квестов или уйти с него — это «игрок всё увидел»: момент запоминается
+        // сразу, чтобы точка на кнопке не загорелась снова после перезапуска.
+        if (seesQuests) persist()
     }
 
     /**
@@ -307,9 +474,168 @@ class GameViewModel(
      * If the player was on [Screen.SHOP], the unpaid shop cart is dropped.
      */
     fun closeScreen() {
-        settleMaturedDeposit()
-        _state.value = stateForNavigatingTo(Screen.MAIN)
+        when (_state.value.screen) {
+            Screen.ADULT_MODE -> exitAdultMode()
+            Screen.ADULT_LOCK -> openScreen(Screen.OPTIONS)
+            else -> openScreen(Screen.MAIN)
+        }
     }
+
+    /** Замок решён: открывается режим взрослого, и игра ребёнка становится только для просмотра. */
+    fun enterAdultMode() {
+        _state.value = _state.value.copy(adultMode = true)
+        openScreen(Screen.ADULT_MODE)
+    }
+
+    /** Взрослый закрыл свой режим: обратно в настройки, игра снова у ребёнка. */
+    fun exitAdultMode() {
+        _state.value = _state.value.copy(adultMode = false)
+        openScreen(Screen.OPTIONS)
+    }
+
+    /**
+     * Взрослый добавляет свой предмет в магазин: он сразу на полке своего раздела и сохраняется.
+     *
+     * @param draft что набрано в форме.
+     * @return True, когда предмет добавлен; false вне режима взрослого, при ошибках в черновике
+     * (см. [CustomItemDraft.validate]) и когда своих предметов уже [CustomItems.MAX].
+     */
+    fun addCustomItem(draft: CustomItemDraft): Boolean {
+        val current = _state.value
+        if (!current.adultMode) return false
+        if (draft.validate(existingCount = current.customItems.size).isNotEmpty()) return false
+        val item = customItemOf(draft, freshCustomItemId()) ?: return false
+        customItems = current.customItems + item
+        _state.value = current.copy(customItems = customItems)
+        persist()
+        return true
+    }
+
+    /**
+     * Взрослый убирает свой предмет из магазина. Купленное ребёнком остаётся в сохранении, но
+     * каталог его больше не знает, так что инвентарь его просто не показывает; из целей и с
+     * питомца предмет снимается сразу.
+     *
+     * @param itemId id своего предмета.
+     * @return True, когда предмет убран; false вне режима взрослого и когда такого предмета нет.
+     */
+    fun removeCustomItem(itemId: String): Boolean {
+        val current = _state.value
+        if (!current.adultMode) return false
+        if (current.customItems.none { it.id == itemId }) return false
+        customItems = current.customItems.filterNot { it.id == itemId }
+        val selected = current.selectedCategory
+        _state.value = current.copy(
+            customItems = customItems,
+            goals = current.goals.filterNot { it.itemId == itemId },
+            worn = current.worn.filterNotTo(mutableSetOf()) { it.itemId == itemId },
+            selectedCategory = if (catalog.getItemsByCategory(selected).isEmpty()) {
+                ItemCategory.entries.first()
+            } else {
+                selected
+            }
+        )
+        persist()
+        return true
+    }
+
+    /**
+     * Взрослый добавляет свой квест: ребёнок сразу видит его на экране квестов.
+     *
+     * @param draft что набрано в форме.
+     * @return True, когда квест добавлен; false вне режима взрослого, при ошибках в черновике
+     * (см. [CustomQuestDraft.validate]) и когда своих квестов уже [CustomQuests.MAX].
+     */
+    fun addCustomQuest(draft: CustomQuestDraft): Boolean {
+        val current = _state.value
+        if (!current.adultMode) return false
+        if (draft.validate(existingCount = current.customQuests.size).isNotEmpty()) return false
+        val quest = draft.toQuest(freshCustomQuestId())
+        customQuests = current.customQuests + quest
+        _state.value = current.copy(customQuests = customQuests)
+        persist()
+        return true
+    }
+
+    /**
+     * Взрослый меняет свой квест. Id и место в списке остаются прежними, встроенные квесты не
+     * меняются. Если ребёнок этот квест сейчас проходит, его прохождение сбрасывается: старый шаг и
+     * прогресс могут не подходить к новым ситуациям, поэтому квест просто снова «не начат» — уже
+     * полученные монеты и изменения питомца остаются, выборы — в истории квестов. Пройденный
+     * квест остаётся пройденным: кулдаун и одноразовость продолжают действовать.
+     *
+     * @param questId id своего квеста.
+     * @param draft что набрано в форме.
+     * @return True, когда квест изменён; false вне режима взрослого, когда такого своего квеста
+     * нет и при ошибках в черновике.
+     */
+    fun updateCustomQuest(questId: String, draft: CustomQuestDraft): Boolean {
+        val current = _state.value
+        if (!current.adultMode) return false
+        if (current.customQuests.none { it.id == questId }) return false
+        if (draft.validate(existingCount = current.customQuests.size - 1).isNotEmpty()) return false
+        val quest = draft.toQuest(questId)
+        customQuests = current.customQuests.map { if (it.id == questId) quest else it }
+        val quests = current.quests.filterNot { it.questId == questId && it.isActive }
+        _state.value = current.copy(
+            customQuests = customQuests,
+            quests = quests,
+            hasUnseenQuestStep = QuestEngine.hasUnseenStep(
+                quests,
+                current.questsSeenAtMillis,
+                clock.nowMillis()
+            )
+        )
+        persist()
+        return true
+    }
+
+    /**
+     * Взрослый убирает свой квест. Если ребёнок его проходит, прохождение снимается — квеста больше
+     * нет; выборы остаются в истории квестов.
+     *
+     * @param questId id своего квеста.
+     * @return True, когда квест убран; false вне режима взрослого и когда такого квеста нет.
+     */
+    fun removeCustomQuest(questId: String): Boolean {
+        val current = _state.value
+        if (!current.adultMode) return false
+        if (current.customQuests.none { it.id == questId }) return false
+        customQuests = current.customQuests.filterNot { it.id == questId }
+        val quests = current.quests.filterNot { it.questId == questId }
+        _state.value = current.copy(
+            customQuests = customQuests,
+            quests = quests,
+            hasUnseenQuestStep = QuestEngine.hasUnseenStep(
+                quests,
+                current.questsSeenAtMillis,
+                clock.nowMillis()
+            )
+        )
+        persist()
+        return true
+    }
+
+    /** @return Id для нового своего квеста: `custom-<момент>`, без повторов. */
+    private fun freshCustomQuestId(): String {
+        val base = CustomQuests.ID_PREFIX + clock.nowMillis()
+        var id = base
+        var suffix = 2
+        while (questCatalog.findQuestById(id) != null) id = "$base-${suffix++}"
+        return id
+    }
+
+    /** @return Id для нового своего предмета: `custom-<момент>`, без повторов. */
+    private fun freshCustomItemId(): String {
+        val base = CustomItems.ID_PREFIX + clock.nowMillis()
+        var id = base
+        var suffix = 2
+        while (catalog.findItemById(id) != null) id = "$base-${suffix++}"
+        return id
+    }
+
+    /** Режим взрослого включён: действия, меняющие игру ребёнка, ничего не делают. */
+    private val readOnly: Boolean get() = _state.value.adultMode
 
     /**
      * Builds the state resulting from navigating to [screen]: the unpaid cart is dropped when the
@@ -321,8 +647,18 @@ class GameViewModel(
     private fun stateForNavigatingTo(screen: Screen): GameUiState {
         val previous = _state.value
         val leavingShop = previous.screen == Screen.SHOP && screen != Screen.SHOP
+        val openingQuests = screen == Screen.QUESTS
+        // Уходя с экрана квестов, игрок видел всё, что на нём было, — и шаг, открывшийся без тика.
+        val leavingQuests = previous.screen == Screen.QUESTS
         return previous.copy(
+            questsSeenAtMillis = if (openingQuests || leavingQuests) {
+                clock.nowMillis()
+            } else {
+                previous.questsSeenAtMillis
+            },
+            hasUnseenQuestStep = !openingQuests && !leavingQuests && previous.hasUnseenQuestStep,
             screen = screen,
+            adultMode = previous.adultMode && screen == Screen.ADULT_MODE,
             quantities = if (leavingShop) emptyMap() else previous.quantities,
             pickedVariants = if (leavingShop) emptyMap() else previous.pickedVariants,
             cartPrice = if (leavingShop) 0 else previous.cartPrice,
@@ -352,7 +688,8 @@ class GameViewModel(
             stats = PetStats.FULL,
             statsUpdatedAtMillis = now,
             petAge = Animal.FIRST_AGE,
-            petBornAtMillis = now
+            petBornAtMillis = now,
+            care = PetCare()
         )
         persist()
     }
@@ -365,6 +702,9 @@ class GameViewModel(
      * while the player is watching, so the bars go down in front of them. Calling it more often than
      * the pet actually changes costs nothing and changes nothing: the leftover time below one
      * [PetStats.TICK_MILLIS] is kept for the next call instead of being dropped.
+     *
+     * Здесь же проверяется случайный квест ([QuestEngine.maybeSpawnRandom]) и пересчитывается
+     * точка на кнопке квестов.
      */
     fun tick() {
         settleMaturedDeposit()
@@ -372,15 +712,23 @@ class GameViewModel(
         val current = _state.value
         val now = clock.nowMillis()
         val ticks = PetStats.ticksBetween(current.statsUpdatedAtMillis, now)
-        val age = Growth.ageAt(current.petBornAtMillis, now)
-        if (ticks == 0L && age == current.petAge) return
+        val care = current.livedCare(now)
+        val lived = if (ticks == 0L && care == current.care) {
+            current
+        } else {
+            current.copy(
+                stats = current.stats.decayedBy(ticks),
+                statsUpdatedAtMillis = current.statsUpdatedAtMillis + ticks * PetStats.TICK_MILLIS,
+                care = care,
+                petAge = Growth.ageOf(care.growthMillis),
+                todayDay = clock.today()
+            )
+        }
+        // Квесты живут по тем же часам: может выпасть случайный, может кончиться задержка шага.
+        val next = lived.withQuestsCaughtUp(now)
+        if (next == current) return
 
-        _state.value = current.copy(
-            stats = current.stats.decayedBy(ticks),
-            statsUpdatedAtMillis = current.statsUpdatedAtMillis + ticks * PetStats.TICK_MILLIS,
-            petAge = age,
-            todayDay = clock.today()
-        )
+        _state.value = next
         persist()
     }
 
@@ -418,6 +766,301 @@ class GameViewModel(
     }
 
     /**
+     * Игрок берёт квест кнопкой «Взять». Только квест игрока и только когда его можно начать —
+     * все условия у [QuestEngine.availabilityOf]: не идёт ли он уже, хватает ли минимума, не
+     * пройден ли одноразовый и не остывает ли ещё после кулдауна.
+     *
+     * @param questId id квеста.
+     * @return True, когда квест начат.
+     */
+    fun startQuest(questId: String): Boolean {
+        if (readOnly) return false
+        val quest = questCatalog.findQuestById(questId) ?: return false
+        if (quest.kind != QuestKind.PLAYER) return false
+        return beginQuest(quest)
+    }
+
+    /**
+     * Взрослый включает пройденный квест снова («Включить снова» во вкладке «Квесты» режима
+     * взрослого): один следующий раз его можно начать, не дожидаясь кулдауна и не оглядываясь на
+     * `repeatable = false` (см. [QuestEngine.enable]).
+     *
+     * @param questId id квеста.
+     * @return True, когда квест был пройден и включён; false вне режима взрослого, когда квест не
+     * начинался или ещё идёт.
+     */
+    fun enableQuest(questId: String): Boolean {
+        val current = _state.value
+        if (!current.adultMode) return false
+        val quests = QuestEngine.enable(current.quests, questId) ?: return false
+
+        _state.value = current.copy(quests = quests)
+        persist()
+        return true
+    }
+
+    /**
+     * «Ещё раз» для пройденного квеста игрока: он начинается заново с первого узла и нулевого
+     * прогресса. Минимум на счёте нужен и здесь. Только в демо-сборке (см. `allowRestart`).
+     *
+     * @param questId id квеста.
+     * @return True, когда квест начат заново.
+     */
+    fun restartQuest(questId: String): Boolean {
+        if (readOnly) return false
+        if (!allowRestart) return false
+        val quest = questCatalog.findQuestById(questId) ?: return false
+        if (quest.kind != QuestKind.PLAYER) return false
+        if (_state.value.questProgressOf(questId)?.isFinished != true) return false
+        return beginQuest(quest)
+    }
+
+    /**
+     * Выбор варианта на текущем шаге квеста: полоски питомца и деньги меняются сразу, деньги —
+     * через журнал с причиной «Квест: <название>», в бюджет периода это не идёт.
+     *
+     * У квеста с проверкой взрослым ([Quest.requiresAdultCheck]) выбор — это «Готово»: этап ждёт
+     * проверки, награды пока нет, в истории квестов — запись о сдаче ([QuestCheckEvent.SENT]).
+     *
+     * @param questId id квеста.
+     * @param optionIndex номер варианта на шаге.
+     * @return True, когда выбор сделан; false, когда выбирать сейчас нечего (см. [QuestEngine.choose]).
+     */
+    fun chooseQuestOption(questId: String, optionIndex: Int): Boolean {
+        if (readOnly) return false
+        val quest = questCatalog.findQuestById(questId) ?: return false
+        val current = _state.value
+        val now = clock.nowMillis()
+        val nodeId = current.questProgressOf(questId)?.nodeId ?: return false
+        val choice = QuestEngine.choose(
+            quest,
+            current.quests,
+            optionIndex,
+            current.balance,
+            now,
+            ignoreQuestDelays
+        )
+            ?: return false
+        val logged = QuestChoice(
+            questId = questId,
+            nodeId = nodeId,
+            optionLabel = choice.outcome.optionLabel,
+            moneyDelta = if (choice.awaitingCheck) 0 else choice.outcome.moneyDelta,
+            progressDelta = if (choice.awaitingCheck) 0 else choice.outcome.progressDelta,
+            gameDay = clock.today(),
+            timestampMillis = now,
+            check = if (choice.awaitingCheck) QuestCheckEvent.SENT else null
+        )
+
+        val chosen = current.copy(quests = choice.quests, questLog = current.questLog.plus(logged))
+        _state.value = if (choice.awaitingCheck) chosen else chosen.applyQuestEffects(quest, choice.outcome)
+        _state.value = _state.value.withQuestsLookedAt(now)
+        persist()
+        return true
+    }
+
+    /**
+     * Взрослый открыл журнал «Использованные награды»: всё, что в нём есть, больше не «новое», и
+     * счётчик на вкладке гаснет.
+     */
+    fun markRewardUsagesSeen() {
+        val current = _state.value
+        if (!current.adultMode) return
+        if (current.rewardUsageLog.unseenCount(current.rewardUsageSeenAtMillis) == 0) return
+        _state.value = current.copy(rewardUsageSeenAtMillis = clock.nowMillis())
+        persist()
+    }
+
+    /**
+     * Взрослый вручную добавляет ребёнку монеты или убирает их — с причиной. Запись в журнале денег
+     * помечена [MoneyEntry.fromAdult], причина — «Взрослый добавил 50: за уборку»; её видит и
+     * ребёнок. В бюджет периода это не идёт, как и деньги за квесты. Ниже нуля баланс не уходит —
+     * см. [AdultMoney.validate].
+     *
+     * @param amount сумма без знака.
+     * @param add добавить (true) или убрать (false).
+     * @param reason причина — обязательна.
+     * @return True, когда записано; false вне режима взрослого и когда [AdultMoney.validate]
+     * нашла ошибки.
+     */
+    fun adjustBalanceByAdult(amount: Int, add: Boolean, reason: String): Boolean {
+        val current = _state.value
+        if (!current.adultMode) return false
+        if (AdultMoney.validate(amount, add, reason, current.balance).isNotEmpty()) return false
+        val delta = if (add) amount else -amount
+        _state.value = current.copy(balance = current.balance + delta).logged(
+            MoneyEntry(
+                reason = MoneyLog.adultReason(delta, AdultMoney.cleanReason(reason)),
+                delta = delta,
+                gameDay = clock.today(),
+                timestampMillis = clock.nowMillis(),
+                fromAdult = true
+            )
+        )
+        persist()
+        return true
+    }
+
+    /**
+     * Взрослый «Засчитать»: сданный этап засчитан, ребёнок получает награду — деньги через журнал
+     * с причиной квеста, изменения питомца, прогресс (см. [QuestEngine.approve]). В истории
+     * квестов — запись [QuestCheckEvent.APPROVED] с тем, что реально выдано.
+     *
+     * @param questId id квеста.
+     * @return True, когда этап засчитан; false вне режима взрослого и когда он проверки не ждёт.
+     */
+    fun approveQuestCheck(questId: String): Boolean {
+        val current = _state.value
+        if (!current.adultMode) return false
+        val quest = questCatalog.findQuestById(questId) ?: return false
+        val progress = current.questProgressOf(questId) ?: return false
+        val now = clock.nowMillis()
+        val choice = QuestEngine.approve(quest, current.quests, current.balance, now, ignoreQuestDelays)
+            ?: return false
+        val logged = QuestChoice(
+            questId = questId,
+            nodeId = progress.nodeId,
+            optionLabel = choice.outcome.optionLabel,
+            moneyDelta = choice.outcome.moneyDelta,
+            progressDelta = choice.outcome.progressDelta,
+            gameDay = clock.today(),
+            timestampMillis = now,
+            check = QuestCheckEvent.APPROVED
+        )
+
+        // Ребёнок увидит засчитанный этап как новый шаг — на кнопке квестов загорится точка.
+        _state.value = current.copy(
+            quests = choice.quests,
+            questLog = current.questLog.plus(logged),
+            hasUnseenQuestStep = QuestEngine.hasUnseenStep(choice.quests, current.questsSeenAtMillis, now)
+        ).applyQuestEffects(quest, choice.outcome)
+        persist()
+        return true
+    }
+
+    /**
+     * Взрослый «Не засчитано»: этап возвращается в работу, ребёнок выбирает на нём заново. Награды
+     * не было; в истории квестов — запись [QuestCheckEvent.REJECTED].
+     *
+     * @param questId id квеста.
+     * @return True, когда этап возвращён; false вне режима взрослого и когда он проверки не ждёт.
+     */
+    fun rejectQuestCheck(questId: String): Boolean {
+        val current = _state.value
+        if (!current.adultMode) return false
+        val progress = current.questProgressOf(questId) ?: return false
+        val sent = progress.lastChoice ?: return false
+        val now = clock.nowMillis()
+        val quests = QuestEngine.reject(current.quests, questId, now) ?: return false
+        val logged = QuestChoice(
+            questId = questId,
+            nodeId = progress.nodeId,
+            optionLabel = sent.optionLabel,
+            moneyDelta = 0,
+            progressDelta = 0,
+            gameDay = clock.today(),
+            timestampMillis = now,
+            check = QuestCheckEvent.REJECTED
+        )
+
+        _state.value = current.copy(
+            quests = quests,
+            questLog = current.questLog.plus(logged),
+            hasUnseenQuestStep = QuestEngine.hasUnseenStep(quests, current.questsSeenAtMillis, now)
+        )
+        persist()
+        return true
+    }
+
+    /**
+     * «Дальше» или «Завершить» после результата выбора — когда задержка шага прошла.
+     *
+     * @param questId id квеста.
+     * @return True, когда игрок перешёл на следующий шаг или квест завершён.
+     */
+    fun advanceQuest(questId: String): Boolean {
+        if (readOnly) return false
+        val quest = questCatalog.findQuestById(questId) ?: return false
+        val current = _state.value
+        val now = clock.nowMillis()
+        val quests = QuestEngine.advance(quest, current.quests, now, ignoreQuestDelays) ?: return false
+
+        _state.value = current.copy(quests = quests).withQuestsLookedAt(now)
+        persist()
+        return true
+    }
+
+    /**
+     * @return Момент по часам игры — с перемоткой демо-сборки. По нему экран квестов считает
+     * «Следующий шаг через …», по нему же модель решает, можно ли идти дальше.
+     */
+    fun nowMillis(): Long = clock.nowMillis()
+
+    /**
+     * @return True, когда квест начат; см. [QuestEngine.start].
+     */
+    private fun beginQuest(quest: Quest): Boolean {
+        val current = _state.value
+        val now = clock.nowMillis()
+        val quests = QuestEngine.start(quest, current.quests, current.balance, now, ignoreQuestDelays)
+            ?: return false
+
+        _state.value = current.copy(quests = quests).withQuestsLookedAt(now)
+        persist()
+        return true
+    }
+
+    /**
+     * Применяет исход выбора: полоски питомца двигаются в своих рамках, деньги идут через журнал.
+     * Сумма исхода уже урезана до баланса ([QuestEngine.choose]), так что счёт не уходит в минус.
+     */
+    private fun GameUiState.applyQuestEffects(quest: Quest, outcome: QuestOutcome): GameUiState {
+        val changed = copy(stats = stats.changedBy(outcome.statEffects))
+        if (outcome.moneyDelta == 0) return changed
+        return changed
+            .copy(balance = (changed.balance + outcome.moneyDelta).coerceAtLeast(0))
+            .logged(MoneyLog.questReason(quest.title), outcome.moneyDelta)
+    }
+
+    /** Игрок действует на экране квестов — значит, всё на нём видел. */
+    private fun GameUiState.withQuestsLookedAt(now: Long): GameUiState =
+        copy(questsSeenAtMillis = now, hasUnseenQuestStep = false)
+
+    /**
+     * Квесты догоняют часы: может выпасть случайный квест, а точка на кнопке загорается, когда
+     * есть непросмотренный шаг. Пока открыт экран квестов, новый шаг сразу считается увиденным.
+     */
+    private fun GameUiState.withQuestsCaughtUp(now: Long): GameUiState {
+        val spawned = withRandomQuestSpawned(now)
+        val unseen = QuestEngine.hasUnseenStep(spawned.quests, spawned.questsSeenAtMillis, now)
+        return when {
+            !unseen -> spawned.copy(hasUnseenQuestStep = false)
+            spawned.screen == Screen.QUESTS -> spawned.withQuestsLookedAt(now)
+            else -> spawned.copy(hasUnseenQuestStep = true)
+        }
+    }
+
+    /**
+     * Бросает кости на случайный квест. Шесть часов считаются от последнего случайного квеста, а
+     * пока их не было — от момента, когда игрок завёл питомца; без питомца квесты не выпадают.
+     */
+    private fun GameUiState.withRandomQuestSpawned(now: Long): GameUiState {
+        if (selection == null || petBornAtMillis == Growth.NOT_BORN) return this
+        val since = lastRandomQuestAtMillis.takeUnless { it == PlayerState.NO_RANDOM_QUEST }
+            ?: petBornAtMillis
+        val spawn = QuestEngine.maybeSpawnRandom(
+            questCatalog,
+            quests,
+            balance,
+            since,
+            now,
+            random,
+            ignoreQuestDelays
+        ) ?: return this
+        return copy(quests = spawn.quests, lastRandomQuestAtMillis = now)
+    }
+
+    /**
      * Uses an item the player owns on the pet: the pet eats the food, plays with the toy, and its
      * stat bars move by the item's [Item.effects] either way.
      *
@@ -425,11 +1068,16 @@ class GameViewModel(
      * anything the pet can wear is not used at all — it is put on and taken off through
      * [toggleWorn].
      *
+     * Награда из жизни (раздел «Другое», [ItemUse.REDEEMED]) используется один раз: пропадает из
+     * инвентаря, а в журнал «Использованные награды» ([GameUiState.rewardUsageLog]) пишется, что,
+     * кто (питомец) и когда её использовал — это видит взрослый.
+     *
      * @param selection the item and the variant of it to use, as the inventory holds it.
      * @return True when the item was used, false when the player doesn't own it, it is not registered
      * any more, or it is worn rather than used.
      */
     fun useItem(selection: ItemSelection): Boolean {
+        if (readOnly) return false
         val current = _state.value
         val item = catalog.findItemById(selection.itemId) ?: return false
         if (item.isWearable) return false
@@ -437,15 +1085,35 @@ class GameViewModel(
         val count = current.owned[selection] ?: 0
         if (count <= 0) return false
 
-        val owned = if (item.category.use == ItemUse.CONSUMED) {
+        val usedUp = item.category.use == ItemUse.CONSUMED || item.category.use == ItemUse.REDEEMED
+        val owned = if (usedUp) {
             if (count == 1) current.owned - selection else current.owned + (selection to count - 1)
         } else {
             current.owned
         }
+        val rewardUsageLog = if (item.category.use == ItemUse.REDEEMED) {
+            current.rewardUsageLog.plus(
+                RewardUsage(
+                    itemId = item.id,
+                    itemName = item.name,
+                    petName = current.petName,
+                    gameDay = clock.today(),
+                    timestampMillis = clock.nowMillis()
+                )
+            )
+        } else {
+            current.rewardUsageLog
+        }
 
+        val stats = current.stats.changedBy(item.effects)
+        // День, который успел закончиться, судится без этой заботы: она достаётся новому дню.
+        val care = current.livedCare(clock.nowMillis()).noticed(stats)
         _state.value = current.copy(
             owned = owned,
-            stats = current.stats.changedBy(item.effects)
+            stats = stats,
+            care = care,
+            petAge = Growth.ageOf(care.growthMillis),
+            rewardUsageLog = rewardUsageLog
         )
         persist()
         return true
@@ -466,6 +1134,7 @@ class GameViewModel(
      * not registered any more, or it is not something the pet can wear.
      */
     fun toggleWorn(selection: ItemSelection): Boolean {
+        if (readOnly) return false
         val current = _state.value
         val item = catalog.findItemById(selection.itemId) ?: return false
         if (!item.isWearable) return false
@@ -495,6 +1164,7 @@ class GameViewModel(
      * @return True, когда цель добавлена или снята, false, когда такой товар целью стать не может.
      */
     fun toggleGoal(selection: ItemSelection): Boolean {
+        if (readOnly) return false
         val current = _state.value
         val goals = if (selection in current.goals) {
             current.goals - selection
@@ -602,8 +1272,11 @@ class GameViewModel(
      * enough money for it.
      */
     fun buyCart(): Boolean {
+        if (readOnly) return false
         val current = _state.value
         if (!current.canBuyCart) return false
+        // Цена могла измениться, пока корзина лежала: платится та, что сейчас.
+        if (priceOf(current.quantities) > current.balance) return false
 
         val owned = current.owned.toMutableMap()
         val bought = mutableSetOf<ItemSelection>()
@@ -612,7 +1285,7 @@ class GameViewModel(
         var spentWant = 0
         current.quantities.forEach { (itemId, quantity) ->
             if (quantity <= 0) return@forEach
-            val item = catalog.findItemById(itemId) ?: return@forEach
+            val item = shopCatalog.findItemById(itemId) ?: return@forEach
             val key = ItemSelection(itemId, current.pickedVariantOf(item))
             owned[key] = (owned[key] ?: 0) + quantity
             bought += key
@@ -622,8 +1295,16 @@ class GameViewModel(
                 SpendKind.WANT -> spentWant += cost
             }
             logged = logged.logged(
-                reason = MoneyLog.purchaseReason(item.name, quantity),
-                delta = -cost
+                MoneyEntry(
+                    reason = MoneyLog.purchaseReason(item.name, quantity),
+                    delta = -cost,
+                    gameDay = clock.today(),
+                    timestampMillis = clock.nowMillis(),
+                    itemId = item.id,
+                    variantId = key.variantId,
+                    quantity = quantity,
+                    spendKind = item.category.spendKind
+                )
             )
         }
 
@@ -631,6 +1312,7 @@ class GameViewModel(
             balance = current.balance - (spentMust + spentWant),
             owned = owned.toMap(),
             goals = current.goals.filterNot { goal -> goal in bought },
+            goalsReached = current.goalsReached + current.goals.count { goal -> goal in bought },
             quantities = emptyMap(),
             pickedVariants = emptyMap(),
             cartPrice = 0,
@@ -654,6 +1336,7 @@ class GameViewModel(
      * (по сроку — тогда деньги на счету, но не через "досрочно").
      */
     fun closeDepositEarly(): Boolean {
+        if (readOnly) return false
         settleMaturedDeposit()
 
         val current = _state.value
@@ -704,16 +1387,21 @@ class GameViewModel(
      * @param delta изменение текущего счёта, со знаком.
      * @return Это состояние с дописанной строкой журнала.
      */
-    private fun GameUiState.logged(reason: String, delta: Int): GameUiState = copy(
-        moneyLog = moneyLog.plus(
-            MoneyEntry(
-                reason = reason,
-                delta = delta,
-                gameDay = clock.today(),
-                timestampMillis = clock.nowMillis()
-            )
+    private fun GameUiState.logged(reason: String, delta: Int): GameUiState = logged(
+        MoneyEntry(
+            reason = reason,
+            delta = delta,
+            gameDay = clock.today(),
+            timestampMillis = clock.nowMillis()
         )
     )
+
+    /**
+     * @param entry готовая строка журнала — например, покупка с товаром и количеством.
+     * @return Это состояние с дописанной строкой журнала.
+     */
+    private fun GameUiState.logged(entry: MoneyEntry): GameUiState =
+        copy(moneyLog = moneyLog.plus(entry))
 
     /**
      * Adds coins the player earned to the balance and remembers them right away, so money is never
@@ -743,34 +1431,41 @@ class GameViewModel(
      * @return True, когда бонус выдан, false, когда этот день уже платил.
      */
     fun claimDailyBonus(): Boolean {
-        settleMaturedDeposit()
+        if (readOnly) return false
+        // Бонус зависит от того, как жилось питомцу, так что сперва питомец догоняет часы (и
+        // вклад, дошедший до срока, закрывается — это tick делает первым делом).
+        tick()
 
         val current = _state.value
         val today = clock.today()
         if (!Economy.isDailyBonusAvailable(current.lastDailyBonusDay, today)) return false
 
-        val running = current.budget
+        val closed = current.budget?.let {
+            BudgetResult(
+                plannedMust = it.plannedMust,
+                actualMust = it.spentMust,
+                plannedWant = it.plannedWant,
+                actualWant = it.spentWant,
+                plannedSavings = it.plannedSavings,
+                // Сколько реально осталось на счёте: считается до начисления бонуса, иначе
+                // деньги нового периода оказались бы сохранёнными в прошлом.
+                actualSavings = current.balance,
+                plannedDeposit = it.plannedDeposit,
+                startDay = it.startDay
+            )
+        }
+        val income = current.dailyIncome
         _state.value = current.copy(
-            balance = current.balance + Economy.DAILY_BONUS,
+            balance = current.balance + income,
             lastDailyBonusDay = today,
             dailyBonusAvailable = false,
             budget = null,
-            previousBudgetResult = running?.let {
-                BudgetResult(
-                    plannedMust = it.plannedMust,
-                    actualMust = it.spentMust,
-                    plannedWant = it.plannedWant,
-                    actualWant = it.spentWant,
-                    plannedSavings = it.plannedSavings,
-                    // Сколько реально осталось на счёте: считается до начисления бонуса, иначе
-                    // деньги нового периода оказались бы сохранёнными в прошлом.
-                    actualSavings = current.balance,
-                    plannedDeposit = it.plannedDeposit
-                )
-            } ?: current.previousBudgetResult,
+            previousBudgetResult = closed ?: current.previousBudgetResult,
+            budgetHistory = closed?.let { BudgetHistory.plus(current.budgetHistory, it) }
+                ?: current.budgetHistory,
             budgetDraft = null,
             planningOpen = true
-        ).logged(MoneyLog.REASON_DAILY_BONUS, Economy.DAILY_BONUS)
+        ).logged(MoneyLog.REASON_DAILY_BONUS, income)
         persist()
         openScreen(Screen.BUDGET)
         return true
@@ -791,6 +1486,7 @@ class GameViewModel(
      * ([GameUiState.canPlanBudget]) — подтверждённый бюджет не переписывается.
      */
     fun updateBudgetDraft(draft: BudgetDraft) {
+        if (readOnly) return
         settleMaturedDeposit()
 
         val current = _state.value
@@ -818,6 +1514,7 @@ class GameViewModel(
      * ([GameUiState.canPlanBudget]), то есть подтверждать нечего.
      */
     fun confirmBudget(): Boolean {
+        if (readOnly) return false
         settleMaturedDeposit()
 
         val current = _state.value
@@ -905,6 +1602,13 @@ class GameViewModel(
      * @param quantities the cart contents.
      * @return This state with the new cart and its price.
      */
+    /**
+     * @param now текущий момент.
+     * @return Уход за питомцем, в котором закрыты все дни питомца, закончившиеся к [now].
+     */
+    private fun GameUiState.livedCare(now: Long): PetCare =
+        care.lived(petBornAtMillis, stats, statsUpdatedAtMillis, now, careTuning)
+
     private fun GameUiState.withCart(quantities: Map<String, Int>): GameUiState =
         copy(quantities = quantities, cartPrice = priceOf(quantities))
 
@@ -915,7 +1619,7 @@ class GameViewModel(
      */
     private fun priceOf(quantities: Map<String, Int>): Int =
         quantities.entries.sumOf { (itemId, quantity) ->
-            if (quantity <= 0) 0 else (catalog.findItemById(itemId)?.price ?: 0) * quantity
+            if (quantity <= 0) 0 else (shopCatalog.findItemById(itemId)?.price ?: 0) * quantity
         }
 
     /**
@@ -926,6 +1630,8 @@ class GameViewModel(
      */
     private fun restoredState(settings: GameSettings): GameUiState {
         val saved = store.load()
+        customItems = saved.customItems.take(CustomItems.MAX)
+        customQuests = saved.customQuests.take(CustomQuests.MAX)
         // The time a demo skipped outlives a restart as a shift, not as a moment reached: the
         // real time that passed while the app was closed runs on top of the skipped hours instead
         // of eating them, so the bars keep falling and the day keeps counting in between.
@@ -943,6 +1649,20 @@ class GameViewModel(
             it == Growth.NOT_BORN && saved.selection != null
         } ?: now
         val ticks = PetStats.ticksBetween(statsUpdatedAt, now)
+        // Квест, которого больше нет в данных, сыграть нельзя: его запись просто отбрасывается.
+        val known = saved.quests.filter { questCatalog.findQuestById(it.questId) != null }
+        // Квест, ждущий выбора на шаге, которого больше нет в данных, завершается тем же правилом,
+        // что и «Дальше» (см. [QuestEngine.advance]), — иначе он висел бы активным навсегда.
+        val quests = known.fold(known) { restored, progress ->
+            val quest = questCatalog.findQuestById(progress.questId) ?: return@fold restored
+            val stepVanished = progress.isActive && progress.lastChoice == null &&
+                quest.node(progress.nodeId) == null
+            if (stepVanished) QuestEngine.advance(quest, restored, now) ?: restored else restored
+        }
+        // Сохранение, сделанное до правил ухода, не знает, как жилось питомцу: он сохраняет
+        // возраст, который успел набрать, а дни без заботы начинают считаться с этого запуска.
+        val care = (saved.care ?: PetCare.migrated(bornAt, now, saved.stats.decayedBy(ticks)))
+            .lived(bornAt, saved.stats, statsUpdatedAt, now, careTuning)
 
         return GameUiState(
             selection = saved.selection,
@@ -954,6 +1674,8 @@ class GameViewModel(
             budgetDraft = saved.budgetDraft,
             planningOpen = saved.planningOpen,
             moneyLog = saved.moneyLog,
+            budgetHistory = saved.budgetHistory,
+            questLog = saved.questLog,
             lastDailyBonusDay = saved.lastDailyBonusDay,
             dailyBonusAvailable = Economy.isDailyBonusAvailable(
                 lastClaimedDay = saved.lastDailyBonusDay,
@@ -964,11 +1686,23 @@ class GameViewModel(
             goals = goalsOf(saved.goals, saved.owned),
             stats = saved.stats.decayedBy(ticks),
             statsUpdatedAtMillis = statsUpdatedAt + ticks * PetStats.TICK_MILLIS,
-            petAge = Growth.ageAt(bornAt, now),
+            petAge = Growth.ageOf(care.growthMillis),
             petBornAtMillis = bornAt,
+            care = care,
+            careTuning = careTuning,
             subLocationIndex = existingSubLocation(saved.subLocationIndex),
             todayDay = clock.today(),
-            settings = settings
+            quests = quests,
+            questsSeenAtMillis = saved.questsSeenAtMillis,
+            lastRandomQuestAtMillis = saved.lastRandomQuestAtMillis,
+            hasUnseenQuestStep = QuestEngine.hasUnseenStep(quests, saved.questsSeenAtMillis, now),
+            customItems = customItems,
+            customQuests = customQuests,
+            rewardUsageLog = saved.rewardUsageLog,
+            rewardUsageSeenAtMillis = saved.rewardUsageSeenAtMillis,
+            goalsReached = saved.goalsReached,
+            settings = settings,
+            hintsSeen = saved.hintsSeen
         )
     }
 
@@ -1044,6 +1778,8 @@ class GameViewModel(
                 budgetDraft = current.budgetDraft,
                 planningOpen = current.planningOpen,
                 moneyLog = current.moneyLog,
+                budgetHistory = current.budgetHistory,
+                questLog = current.questLog,
                 lastDailyBonusDay = current.lastDailyBonusDay,
                 owned = current.owned,
                 worn = current.worn,
@@ -1051,8 +1787,18 @@ class GameViewModel(
                 stats = current.stats,
                 statsUpdatedAtMillis = current.statsUpdatedAtMillis,
                 petBornAtMillis = current.petBornAtMillis,
+                care = current.care,
                 gameNowMillis = clock.nowMillis(),
-                clockShiftMillis = clock.shiftMillis
+                clockShiftMillis = clock.shiftMillis,
+                quests = current.quests,
+                questsSeenAtMillis = current.questsSeenAtMillis,
+                lastRandomQuestAtMillis = current.lastRandomQuestAtMillis,
+                customItems = current.customItems,
+                customQuests = current.customQuests,
+                rewardUsageLog = current.rewardUsageLog,
+                rewardUsageSeenAtMillis = current.rewardUsageSeenAtMillis,
+                goalsReached = current.goalsReached,
+                hintsSeen = current.hintsSeen
             )
         )
     }
@@ -1067,9 +1813,36 @@ class GameViewModel(
     }
 
     /**
+     * Запоминает, что игрок закрыл подсказку к экрану: больше она сама не появится — ни в этот
+     * раз, ни после перезапуска.
+     *
+     * @param key ключ подсказки, одно из [com.legacy.fingame.game.hints.HintKeys.ALL].
+     */
+    fun markHintSeen(key: String) {
+        val current = _state.value
+        if (key in current.hintsSeen) return
+        _state.value = current.copy(hintsSeen = current.hintsSeen + key)
+        persist()
+    }
+
+    /**
+     * Забывает все закрытые подсказки: каждая снова появится при следующем входе на свой экран.
+     * Кнопка «Показать подсказки заново» на экране «Помощь».
+     */
+    fun resetHints() {
+        val current = _state.value
+        if (current.hintsSeen.isEmpty()) return
+        _state.value = current.copy(hintsSeen = emptySet())
+        persist()
+    }
+
+    /**
      * Starts the game over: the pet, the money, the budget, the items and everything else the
      * player has done is dropped — from the screen and from [store] alike, so a restart does not
      * bring it back — and the player is taken back to picking a pet, as on the very first launch.
+     *
+     * The screen hints come back too ([GameUiState.hintsSeen] starts empty), starting with the one
+     * on the pet selection screen: a player starting over sees the game as a new player does.
      *
      * The settings stay as they are: they are the player's, not the game's. The clock stays as it
      * is as well: the game never goes back behind a moment the player was already shown (see
@@ -1083,6 +1856,10 @@ class GameViewModel(
                 today = today
             ),
             todayDay = today,
+            // Свои предметы и квесты — взрослого, а не игры ребёнка: они переживают новую игру.
+            customItems = _state.value.customItems,
+            customQuests = _state.value.customQuests,
+            careTuning = careTuning,
             settings = _state.value.settings
         )
         persist()

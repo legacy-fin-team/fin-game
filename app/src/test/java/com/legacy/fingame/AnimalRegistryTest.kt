@@ -40,6 +40,14 @@ class AnimalRegistryTest {
     }
 
     @Test
+    fun `a pet grown past its last stage is drawn at the last one`() {
+        val registry = AnimalRegistry(mapOf(cat.id to cat))
+
+        assertEquals(Animal.FIRST_AGE, registry.coerceAge("cat", -1))
+        assertEquals("animals/cat/orange/2/idle.webp", registry.getIdleSpritePath("cat", "orange", 9))
+    }
+
+    @Test
     fun `animal age is coerced to max age stage when age exceeds ageCount`() {
         val registry = AnimalRegistry(mapOf(cat.id to cat))
 

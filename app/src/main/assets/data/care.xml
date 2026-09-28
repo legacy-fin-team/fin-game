@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Правила ухода за питомцем (см. game/rules/PetCareRules.kt).
+
+    Индекс ухода — среднее всех шкал питомца от 0 до 1. Каждый день питомца (сутки от момента,
+    когда его взяли) судится по лучшему индексу за этот день:
+      ниже stopGrowthBelow — за день не растёт;
+      ниже slowGrowthBelow — растёт в slowGrowthMultiplier раз медленнее;
+      ниже neglectBelow — день без заботы, продлевает серию; иначе серия обнуляется.
+    Каждый день серии: бонус дня меньше на incomePenaltyPercentPerDay % (не больше
+    maxIncomePenaltyPercent %), необязательные товары дороже на optionalMarkupPercentPerDay %
+    (не больше maxOptionalMarkupPercent %). Обязательные товары не дорожают.
+
+    Атрибут, которого нет или который не читается, берётся по умолчанию.
+-->
+<care
+    stopGrowthBelow="0.25"
+    slowGrowthBelow="0.5"
+    slowGrowthMultiplier="0.5"
+    neglectBelow="0.5"
+    incomePenaltyPercentPerDay="10"
+    maxIncomePenaltyPercent="40"
+    optionalMarkupPercentPerDay="10"
+    maxOptionalMarkupPercent="50" />
