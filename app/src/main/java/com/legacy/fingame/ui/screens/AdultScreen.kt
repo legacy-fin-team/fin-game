@@ -182,6 +182,7 @@ fun AdultScreen(
     onEnableQuest: (String) -> Boolean = { false },
     onApproveCheck: (String) -> Boolean = { false },
     onRejectCheck: (String) -> Boolean = { false },
+    onAdjustMoney: (amount: Int, add: Boolean, reason: String) -> Boolean = { _, _, _ -> false },
     initialTab: AdultTab = AdultTab.DAYS,
     initialQuestFormOpen: Boolean = false
 ) {
@@ -287,14 +288,7 @@ fun AdultScreen(
                     onAdd = onAddItem,
                     onRemove = onRemoveItem
                 )
-                AdultTab.LOG -> LogScreen(
-                    log = state.moneyLog,
-                    onOpenBudget = null,
-                    onClose = null,
-                    balance = state.balance,
-                    depositAmount = state.depositAmount,
-                    firstDay = firstDay
-                )
+                AdultTab.LOG -> LogTab(state, firstDay, onAdjustMoney)
             }
         }
     }
@@ -935,6 +929,46 @@ private fun QuestChoiceRow(quest: Quest?, choice: QuestChoice, firstDay: Long) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
+
+/**
+ * Журнал ребёнка — тот же, что видит он сам, без перехода в бюджет, — и над ним «Изменить монеты»:
+ * взрослый добавляет или убирает монеты с причиной (см. [AdultMoneyForm]).
+ */
+@Composable
+private fun LogTab(
+    state: GameUiState,
+    firstDay: Long,
+    onAdjustMoney: (amount: Int, add: Boolean, reason: String) -> Boolean
+) {
+    var formOpen by rememberSaveable { mutableStateOf(false) }
+    if (formOpen) {
+        AdultMoneyForm(
+            balance = state.balance,
+            onSave = { amount, add, reason ->
+                onAdjustMoney(amount, add, reason).also { saved -> if (saved) formOpen = false }
+            },
+            onCancel = { formOpen = false }
+        )
+        return
+    }
+    LogScreen(
+        log = state.moneyLog,
+        onOpenBudget = null,
+        onClose = null,
+        balance = state.balance,
+        depositAmount = state.depositAmount,
+        firstDay = firstDay,
+        headerAction = {
+            PillButton(
+                text = "Изменить монеты",
+                onClick = { formOpen = true },
+                style = PillStyle.Tonal,
+                compact = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    )
 }
 
 @Composable

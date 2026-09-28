@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.legacy.fingame.DemoMode
+import com.legacy.fingame.game.adult.AdultMoney
 import com.legacy.fingame.game.animals.Animal
 import com.legacy.fingame.game.animals.AnimalSelection
 import com.legacy.fingame.game.animals.Growth
@@ -780,6 +781,36 @@ class GameViewModel(
         val chosen = current.copy(quests = choice.quests, questLog = current.questLog.plus(logged))
         _state.value = if (choice.awaitingCheck) chosen else chosen.applyQuestEffects(quest, choice.outcome)
         _state.value = _state.value.withQuestsLookedAt(now)
+        persist()
+        return true
+    }
+
+    /**
+     * Взрослый вручную добавляет ребёнку монеты или убирает их — с причиной. Запись в журнале денег
+     * помечена [MoneyEntry.fromAdult], причина — «Взрослый добавил 50: за уборку»; её видит и
+     * ребёнок. В бюджет периода это не идёт, как и деньги за квесты. Ниже нуля баланс не уходит —
+     * см. [AdultMoney.validate].
+     *
+     * @param amount сумма без знака.
+     * @param add добавить (true) или убрать (false).
+     * @param reason причина — обязательна.
+     * @return True, когда записано; false вне режима взрослого и когда [AdultMoney.validate]
+     * нашла ошибки.
+     */
+    fun adjustBalanceByAdult(amount: Int, add: Boolean, reason: String): Boolean {
+        val current = _state.value
+        if (!current.adultMode) return false
+        if (AdultMoney.validate(amount, add, reason, current.balance).isNotEmpty()) return false
+        val delta = if (add) amount else -amount
+        _state.value = current.copy(balance = current.balance + delta).logged(
+            MoneyEntry(
+                reason = MoneyLog.adultReason(delta, AdultMoney.cleanReason(reason)),
+                delta = delta,
+                gameDay = clock.today(),
+                timestampMillis = clock.nowMillis(),
+                fromAdult = true
+            )
+        )
         persist()
         return true
     }

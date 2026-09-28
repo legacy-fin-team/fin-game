@@ -148,4 +148,18 @@ class MoneyLogCodecTest {
 
         assertEquals(listOf(MoneyLog.REASON_DAILY_BONUS), decoded.entries.map { it.reason })
     }
+
+    @Test
+    fun `a change by the adult keeps its mark, and a purchase-era record reads as not from the adult`() {
+        val byAdult = entry(MoneyLog.adultReason(50, "за уборку"), 50).copy(fromAdult = true)
+
+        val decoded = MoneyLogCodec.decode(MoneyLogCodec.encode(MoneyLog(listOf(byAdult)))).entries.single()
+
+        assertEquals(byAdult, decoded)
+        assertEquals("Взрослый добавил 50: за уборку", decoded.reason)
+        // Так журнал писала версия до ручных изменений: восемь полей.
+        val raw = "Яблоко x4\u001F-60\u001F19000\u001F1700000000000\u001Fapple\u001Fred\u001F4\u001FMUST"
+        assertEquals(false, MoneyLogCodec.decode(raw).entries.single().fromAdult)
+        assertEquals(emptyList<MoneyEntry>(), MoneyLogCodec.decode("$raw\u001Fда").entries)
+    }
 }

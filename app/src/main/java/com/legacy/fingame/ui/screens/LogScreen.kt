@@ -103,6 +103,8 @@ private val AmountColumnMinWidth = 72.dp
  * @param depositAmount сколько лежит на вкладе, или `0`, когда вклада нет.
  * @param firstDay день, который называется «день 1», или null — самая старая запись журнала. Хаб
  *   взрослого передаёт свой, чтобы номера дней совпадали во всех его вкладках.
+ * @param headerAction что показать под шапкой встроенного журнала (кнопка «Изменить монеты» у
+ *   взрослого), или null.
  */
 @Composable
 fun LogScreen(
@@ -112,7 +114,8 @@ fun LogScreen(
     modifier: Modifier = Modifier,
     balance: Int = 0,
     depositAmount: Int = 0,
-    firstDay: Long? = null
+    firstDay: Long? = null,
+    headerAction: (@Composable () -> Unit)? = null
 ) {
     val entries = log.entries
     val oldestGameDay = firstDay ?: log.oldestGameDay ?: 0L
@@ -147,6 +150,10 @@ fun LogScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                     BalanceChip(balance = balance, depositAmount = depositAmount)
+                }
+                if (headerAction != null) {
+                    Spacer(modifier = Modifier.height(ListGap))
+                    headerAction()
                 }
             } else {
                 Row(
