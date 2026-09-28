@@ -94,15 +94,21 @@ class AudioManager(context: Context) {
     private var musicEnabled = true
     private var soundEnabled = true
 
+    /** Вызван ли [init] (и после него ещё не было [release]). */
+    var isInitialized = false
+        private set
+
     /**
      * Инициализирует SoundPool и загружает все звуки из assets.
-     * Вызывать при старте приложения.
+     * Вызывать при старте приложения. Повторный вызов до [release] ничего не делает.
      */
     fun init() {
+        if (isInitialized) return
         soundPool = SoundPool.Builder()
             .setMaxStreams(MAX_STREAMS)
             .build()
         loadAllSounds()
+        isInitialized = true
     }
 
     /**
@@ -226,12 +232,14 @@ class AudioManager(context: Context) {
 
     /**
      * Освобождает все ресурсы. Вызывать при уничтожении приложения.
+     * После этого менеджер можно снова запустить через [init].
      */
     fun release() {
         stopMusic()
         soundPool?.release()
         soundPool = null
         loadedSounds.clear()
+        isInitialized = false
     }
 
     /**

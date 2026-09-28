@@ -23,11 +23,10 @@ import com.legacy.fingame.ui.theme.FinGameTheme
  */
 class MainActivity : ComponentActivity() {
 
-    companion object {
-        private var audioManager: AudioManager? = null
-    }
-
     private lateinit var settingsRepository: GameSettingsRepository
+
+    /** Общий на процесс менеджер звука из [FinGameApplication]: переживает поворот экрана. */
+    private lateinit var audioManager: AudioManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,14 +36,16 @@ class MainActivity : ComponentActivity() {
         settingsRepository = GameSettingsRepository(applicationContext)
         val savedSettings = settingsRepository.load()
 
-        // Аудио: при повороте экрана сохраняем работающий AudioManager, чтобы музыка не прерывалась
-        val audio = audioManager ?: AudioManager(applicationContext).also {
-            it.init()
-            it.applySettings(savedSettings)
-            it.startMusic()
-            audioManager = it
+        // Аудио живёт в Application: при повороте экрана менеджер уже запущен и музыка
+        // не прерывается — только применяем настройки
+        audioManager = (application as FinGameApplication).audioManager
+        if (!audioManager.isInitialized) {
+            audioManager.init()
+            audioManager.applySettings(savedSettings)
+            audioManager.startMusic()
+        } else {
+            audioManager.applySettings(savedSettings)
         }
-        audio.applySettings(savedSettings)
 
         // Щелчок кнопок слушается настройки «Звуки» с самого первого нажатия.
         ClickSound.enabled = savedSettings.soundEnabled
@@ -68,7 +69,7 @@ class MainActivity : ComponentActivity() {
             // Сохраняем настройки и обновляем аудио и щелчок кнопок при каждом изменении
             LaunchedEffect(currentSettings) {
                 settingsRepository.save(currentSettings)
-                audioManager?.applySettings(currentSettings)
+                audioManager.applySettings(currentSettings)
                 ClickSound.enabled = currentSettings.soundEnabled
             }
 
@@ -81,8 +82,8 @@ class MainActivity : ComponentActivity() {
             FinGameTheme(darkTheme = isDark) {
                 FinGameApp(
                     vm = vm,
-                    onPlaySound = { soundKey -> audioManager?.playSound(soundKey) },
-                    onPlayAnimalSound = { animalId -> audioManager?.playAnimalSound(animalId) }
+                    onPlaySound = { soundKey -> audioManager.playSound(soundKey) },
+                    onPlayAnimalSound = { animalId -> audioManager.playAnimalSound(animalId) }
                 )
             }
         }
@@ -90,18 +91,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        audioManager?.pauseMusic()
+        audioManager.pauseMusic()
     }
 
     override fun onResume() {
         super.onResume()
-        audioManager?.resumeMusic()
+        audioManager.resumeMusic()
     }
 
     override fun onDestroy() {
         if (!isChangingConfigurations) {
-            audioManager?.release()
-            audioManager = null
+            audioManager.release()
         }
         super.onDestroy()
     }
