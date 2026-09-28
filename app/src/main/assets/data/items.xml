@@ -29,8 +29,8 @@
         </effects>
     </item>
     <item
-        id="cake"
-        name="Пирожное"
+        id="kibble"
+        name="Корм"
         price="40"
         category="food"
     >
@@ -38,9 +38,9 @@
             <variant id="default" />
         </variants>
         <effects>
-            <effect stat="hunger" value="30" />
-            <effect stat="pleasure" value="15" />
-            <effect stat="health" value="-5" />
+            <effect stat="hunger" value="50" />
+            <effect stat="pleasure" value="10" />
+            <effect stat="health" value="10" />
         </effects>
     </item>
     <item
