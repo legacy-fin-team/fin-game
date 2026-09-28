@@ -2,7 +2,6 @@ package com.legacy.fingame.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -15,7 +14,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -136,19 +134,17 @@ internal fun ProgressTab(state: GameUiState, questCatalog: QuestCatalog) {
 @Composable
 private fun TopicCard(progress: TopicProgress) {
     AdultCard {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = progress.topic.title,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = topicStatusText(progress.status),
-                style = MaterialTheme.typography.labelLarge,
-                color = statusColor(progress.status)
-            )
-        }
+        Text(
+            text = progress.topic.title,
+            modifier = Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = topicStatusText(progress.status),
+            style = MaterialTheme.typography.labelLarge,
+            color = statusColor(progress.status)
+        )
         if (progress.facts.isEmpty()) {
             Text(
                 text = "Тему открывают квесты — их можно добавить во вкладке «Квесты».",
