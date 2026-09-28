@@ -8,6 +8,7 @@ import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.scene.GameLayer
+import com.legacy.fingame.game.settings.GameSettings
 import com.legacy.fingame.game.stats.StatKind
 
 /**
@@ -158,10 +159,17 @@ internal class FakeGameClock(
  * @param store where the player's state is restored from and saved to.
  * @param catalog what is on sale.
  * @param clock which day the game is played on.
+ * @param settings the saved settings the app starts with.
  * @return A view model backed by the given doubles.
  */
 internal fun testGameViewModel(
     store: PlayerStateStore = FakePlayerStateStore(),
     catalog: ItemCatalog = FakeItemCatalog(),
-    clock: GameClock = FakeGameClock()
-): GameViewModel = GameViewModel(store = store, catalog = catalog, clock = clock)
+    clock: GameClock = FakeGameClock(),
+    settings: GameSettings = GameSettings()
+): GameViewModel = GameViewModel(
+    store = store,
+    catalog = catalog,
+    clock = clock,
+    settings = settings
+)

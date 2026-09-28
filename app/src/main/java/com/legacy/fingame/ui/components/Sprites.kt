@@ -61,6 +61,12 @@ object Sprites {
     const val LOG = "ui/log.webp"
 
     /**
+     * Path to the heart that rises over the pet when the player pats it: 8×8 pixels of the art,
+     * drawn on the pet's grid in the game area.
+     */
+    const val HEART = "fx/heart.webp"
+
+    /**
      * Builds the asset path for the icon of a pet stat, the one [StatChip] shows instead of naming
      * the stat in words.
      *

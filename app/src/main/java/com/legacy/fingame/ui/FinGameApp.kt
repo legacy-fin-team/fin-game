@@ -24,6 +24,7 @@ import com.legacy.fingame.game.items.Goals
 import com.legacy.fingame.game.items.Inventory
 import com.legacy.fingame.game.scene.GameScene
 import com.legacy.fingame.game.scene.SceneSprite
+import com.legacy.fingame.game.settings.AudioManager
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.screens.AnimalSelectScreen
@@ -32,6 +33,7 @@ import com.legacy.fingame.ui.screens.InventoryScreen
 import com.legacy.fingame.ui.screens.LogScreen
 import com.legacy.fingame.ui.screens.MainScreen
 import com.legacy.fingame.ui.screens.PlaceholderScreen
+import com.legacy.fingame.ui.screens.SettingsScreen
 import com.legacy.fingame.ui.screens.ShopScreen
 import kotlinx.coroutines.delay
 
@@ -55,8 +57,8 @@ private const val TICK_POLLS_PER_TICK = 10L
  * actually picked.
  *
  * Layout: a full-size [Surface] with an [AnimatedContent] that cross-fades between
- * [MainScreen], [ShopScreen], [InventoryScreen], [BudgetScreen], [LogScreen] and the
- * [PlaceholderScreen] instances for the yet-unspecified sections (quests, options), based on
+ * [MainScreen], [ShopScreen], [InventoryScreen], [BudgetScreen], [LogScreen], [SettingsScreen]
+ * and the [PlaceholderScreen] instances for the yet-unspecified sections (quests, adult mode), based on
  * [GameUiState.screen].
  *
  * While there is a pet to look after, this is also where its life goes on: a loop asks
@@ -70,6 +72,11 @@ private const val TICK_POLLS_PER_TICK = 10L
  *   to each screen; defaults to a [GameViewModel] scoped to this composable, restoring the
  *   player's game from [FinGameApplication.playerPreferences] and pricing the shop out of
  *   [FinGameApplication.itemRegistry].
+ * @param onPlaySound plays a sound effect by its key (see [AudioManager.playSound]); the app's
+ *   audio lives in the activity, so it is handed in rather than looked up. Silent by default, e.g.
+ *   in previews.
+ * @param onPlayAnimalSound plays a random sound of the animal with the given id (see
+ *   [AudioManager.playAnimalSound]) when the player pats the pet. Silent by default.
  */
 @Composable
 fun FinGameApp(
@@ -78,7 +85,9 @@ fun FinGameApp(
         factory = with(LocalContext.current.applicationContext as FinGameApplication) {
             GameViewModel.factory(store = playerPreferences, catalog = itemRegistry)
         }
-    )
+    ),
+    onPlaySound: (String) -> Unit = {},
+    onPlayAnimalSound: (animalId: String) -> Unit = {}
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val application = LocalContext.current.applicationContext as FinGameApplication
@@ -147,6 +156,9 @@ fun FinGameApp(
                             catalog = itemRegistry,
                             animalAge = state.petAge
                         ),
+                        // Patting the pet only makes it happy to see: hearts on the screen and a
+                        // sound, no stats and no money.
+                        onPetTap = { onPlayAnimalSound(pet.animalId) },
                         goals = Goals.linesOf(goals = state.goals, catalog = itemRegistry),
                         onOpenGoal = vm::openGoal
                     )
@@ -199,7 +211,19 @@ fun FinGameApp(
                         balance = state.balance,
                         depositAmount = state.depositAmount
                     )
-                    Screen.OPTIONS -> PlaceholderScreen("Опции", Sprites.SETTINGS, vm::closeScreen)
+                    Screen.OPTIONS -> SettingsScreen(
+                        settings = state.settings,
+                        onSettingsChanged = vm::updateSettings,
+                        onOpenAdultMode = { vm.openScreen(Screen.ADULT_MODE) },
+                        onResetProgress = vm::resetProgress,
+                        onBack = vm::closeScreen
+                    )
+
+                    Screen.ADULT_MODE -> PlaceholderScreen(
+                        "Режим взрослого",
+                        Sprites.SETTINGS,
+                        vm::closeScreen
+                    )
                 }
             }
         }

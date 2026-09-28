@@ -1,8 +1,10 @@
 package com.legacy.fingame.ui.screens
 
+import android.os.SystemClock
 import androidx.annotation.VisibleForTesting
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
@@ -25,15 +28,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.IntrinsicMeasurable
@@ -56,6 +64,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.legacy.fingame.DemoMode
@@ -67,6 +76,8 @@ import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.scene.GameLayer
 import com.legacy.fingame.game.scene.GameScene
+import com.legacy.fingame.game.scene.HeartBurst
+import com.legacy.fingame.game.scene.PetTouchController
 import com.legacy.fingame.game.scene.SceneOffset
 import com.legacy.fingame.game.scene.SceneSprite
 import com.legacy.fingame.game.scene.SceneViewport
@@ -159,6 +170,13 @@ private const val SceneMaxZoom = 2f
 
 /** How round the corners of the game area are. */
 private val SceneCornerRadius = 32.dp
+
+/** Depth of the hearts over a patted pet: over every layer of the room, the clothes included. */
+private val HeartsZIndex = GameLayer.CLOTHES.zIndex + 1f
+
+/** Side of a heart as a part of the side of the scene: 8 pixels of the art out of 128. */
+private val HeartSizeFraction =
+    HeartBurst.HEART_PIXELS.toFloat() / GameLayer.BACKGROUND.spritePixels
 
 /**
  * Name of the game area in the semantics tree: what a test takes hold of to drag and pinch the
@@ -453,6 +471,9 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
  *   to know how the assets are laid out. Defaults to the demo content pet alone.
  * @param subLocationTitles titles for each sub-location, indexed by
  *   [GameUiState.subLocationIndex]; defaults to the demo content titles.
+ * @param onPetTap called when the player pats the pet — taps it in the game area — and the pat
+ *   counts, i.e. no more often than [PetTouchController.MIN_TAP_INTERVAL_MILLIS]; the hearts over
+ *   the pet are the screen's own business, the sound of the pat is the caller's.
  * @param goals цели игрока в том порядке, в каком он их отмечал, уже сведённые с каталогом
  *   ([com.legacy.fingame.game.items.Goals.linesOf]); пустой список — карточка-подсказка на их месте.
  * @param onOpenGoal вызывается с целью, по карточке которой нажали.
@@ -468,6 +489,7 @@ fun MainScreen(
     scene: GameScene = DemoScene,
     // TODO: default pulls from demo content; replace with real sub-location names for the current location.
     subLocationTitles: List<String> = DemoContent.subLocationTitles,
+    onPetTap: () -> Unit = {},
     goals: List<GoalLine> = emptyList(),
     onOpenGoal: (ItemSelection) -> Unit = {}
 ) {
@@ -558,7 +580,8 @@ fun MainScreen(
                         Dp.Unspecified
                     },
                     dailyBonusAvailable = state.dailyBonusAvailable,
-                    onClaimDailyBonus = onClaimDailyBonus
+                    onClaimDailyBonus = onClaimDailyBonus,
+                    onPetTap = onPetTap
                 )
             }
         )
@@ -1049,6 +1072,7 @@ private fun PrimaryActions(
  * @param dailyBonusAvailable whether the daily bonus is there to take, i.e. whether the button
  *   under the pet is shown at all.
  * @param onClaimDailyBonus called when the player takes the bonus.
+ * @param onPetTap called when the player pats the pet (see [PetStage]).
  * @param modifier modifier applied to the column.
  */
 @Composable
@@ -1058,6 +1082,7 @@ private fun PetColumn(
     stageMaxWidth: Dp,
     dailyBonusAvailable: Boolean,
     onClaimDailyBonus: () -> Unit,
+    onPetTap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -1071,6 +1096,7 @@ private fun PetColumn(
 
         PetStage(
             scene = scene,
+            onPetTap = onPetTap,
             modifier = Modifier
                 .weight(1f, fill = false)
                 .widthIn(max = stageMaxWidth)
@@ -1125,15 +1151,21 @@ private fun stageTitleOf(petName: String, subLocationTitle: String?): String? = 
  * layout pass and not during composition ([sceneWindow], [sceneIn]), so a finger moving the room
  * around never composes the sprites it is stacked out of again.
  *
+ * A tap on the pet pats it: hearts rise over its head ([SceneLayers]) and [onPetTap] is called, no
+ * more often than [PetTouchController.MIN_TAP_INTERVAL_MILLIS]. A drag or a pinch that starts on
+ * the pet moves the room as anywhere else and pats nothing.
+ *
  * @param scene what stands on each layer of the area.
  * @param modifier modifier applied to the card; this is where the caller states how much room the
  *   area has, e.g. as a share of the screen or as the height left over in a column.
+ * @param onPetTap called when the player pats the pet and the pat counts.
  */
 @Composable
 @VisibleForTesting
 internal fun PetStage(
     scene: GameScene,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onPetTap: () -> Unit = {}
 ) {
     val density = LocalDensity.current
     BoxWithConstraints(modifier = modifier) {
@@ -1202,7 +1234,12 @@ internal fun PetStage(
                         }
                     }
             ) {
-                SceneLayers(scene = scene, viewport = viewport, moved = { moved })
+                SceneLayers(
+                    scene = scene,
+                    viewport = viewport,
+                    moved = { moved },
+                    onPetTap = onPetTap
+                )
             }
         }
     }
@@ -1213,13 +1250,34 @@ internal fun PetStage(
  * picture as large as the viewport says the scene is and moved to where the player put it.
  *
  * The stack is built out of the five [GameLayer]s: the scenery of the sub-location, whatever stands
- * behind the pet, the pet itself, whatever stands in front of it and the clothes it wears.
+ * behind the pet, the pet itself, whatever stands in front of it and the clothes it wears. The
+ * layers are drawn in [GameLayer.DRAW_ORDER] and each of them also carries its [GameLayer.zIndex],
+ * so what covers what is decided by the layer and not by the order the sprites happen to be
+ * composed in. Inside the scene every layer takes its [GameLayer.sizeFraction] of it — a quarter of
+ * the scene for the pet, which is painted at a quarter of the resolution of the room — so a pixel
+ * of the one is exactly as big on the screen as a pixel of the other.
+ *
+ * The pet does not stand in the middle of the room but on its floor: the pet and everything on its
+ * grid — the clothes it wears, and the placeholder for missing art that is drawn in its place — are
+ * lowered by [SceneViewport.petFloorShift], a whole number of screen pixels that grows with the
+ * scene as it is pinched, so the pet stays on the room's pixel grid at any size ([isOnPetGrid],
+ * [loweredOntoFloor]).
+ *
  * Every sprite is rendered directly on its layer, and if any sprite file is missing, [SpriteLoader]
  * automatically provides an error placeholder sprite for that specific layer.
+ *
+ * The pet sprite itself listens for taps: a tap on it pats the pet, which sends a wave of hearts up
+ * over its head on a layer above everything else in the room ([PetHearts]) and calls [onPetTap].
+ * How often a pat counts is [PetTouchController]'s business; the waves live on the device's uptime
+ * clock rather than the game's, since a demo skipping hours ahead has nothing to do with how long
+ * a heart takes to rise. The taps are caught by the sprite and not by the whole area, so Compose's
+ * own hit testing — which already knows where the scene was dragged, how large it is drawn and how
+ * far the pet is lowered onto the floor — decides what the finger is on.
  *
  * @param scene what stands on each layer.
  * @param viewport geometry of the window and the scene behind it, read in the layout pass.
  * @param moved how far the scene is dragged, read in the layout pass as well.
+ * @param onPetTap called when the player pats the pet and the pat counts.
  * @param modifier modifier applied to the stack.
  */
 @Composable
@@ -1227,10 +1285,40 @@ private fun SceneLayers(
     scene: GameScene,
     viewport: () -> SceneViewport,
     moved: () -> SceneOffset,
+    onPetTap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val all = remember(scene) {
         GameLayer.DRAW_ORDER.flatMap { layer -> scene[layer].map { layer to it } }
+    }
+
+    val touch = remember { PetTouchController() }
+    var bursts by remember { mutableStateOf(emptyList<HeartBurst>()) }
+    var nowMillis by remember { mutableLongStateOf(0L) }
+    val currentOnPetTap by rememberUpdatedState(onPetTap)
+    // Read through a state rather than straight off [scene]: the pet's tap handler is set up once
+    // and outlives the pet growing up, and the hearts have to find the head the pet has now.
+    val currentAge by rememberUpdatedState(scene.animalAge)
+    val pat: () -> Unit = {
+        val now = SystemClock.uptimeMillis()
+        if (touch.onTap(now, age = currentAge) != null) {
+            nowMillis = now
+            bursts = touch.alive(now)
+            currentOnPetTap()
+        }
+    }
+
+    // The hearts move while there are any: once a frame the clock is read again and the waves that
+    // are over are dropped, and once the last one is, the loop ends until the next pat.
+    if (bursts.isNotEmpty()) {
+        LaunchedEffect(Unit) {
+            while (true) {
+                withFrameMillis { }
+                val now = SystemClock.uptimeMillis()
+                nowMillis = now
+                bursts = touch.alive(now)
+            }
+        }
     }
 
     Box(
@@ -1243,12 +1331,94 @@ private fun SceneLayers(
                 contentDescription = sprite.description,
                 modifier = Modifier
                     .zIndex(layer.zIndex)
+                    .loweredOntoFloor(enabled = layer.isOnPetGrid, viewport = viewport)
                     .fillMaxSize(layer.sizeFraction)
                     .aspectRatio(1f)
+                    .then(
+                        if (layer == GameLayer.ANIMAL) {
+                            Modifier.pointerInput(Unit) { detectTapGestures(onTap = { pat() }) }
+                        } else {
+                            Modifier
+                        }
+                    )
             )
+        }
+
+        PetHearts(bursts = bursts, nowMillis = { nowMillis }, viewport = viewport)
+
+    }
+}
+
+/**
+ * The waves of hearts rising over the pet after it was patted, drawn over everything else in the
+ * room (see [HeartsZIndex]) and on the pet's own grid: lowered onto the floor with it, and every
+ * move counted in pixels of the artwork and multiplied by the scene's scale, so the hearts stay on
+ * the pet however the room is pinched and dragged. Each heart is moved by a whole number of screen
+ * pixels, so its own pixels stay crisp. The area clips the scene, so a heart never rises over the
+ * badge or the buttons around the card.
+ *
+ * The hearts are moved in the layout and drawing passes ([nowMillis] is read there), so they rise
+ * without composing the room again on every frame.
+ *
+ * @param bursts the waves still in the air.
+ * @param nowMillis what time it is on the clock the waves were set off on.
+ * @param viewport geometry of the scene, for how many screen pixels a pixel of the art is.
+ */
+@Composable
+private fun PetHearts(
+    bursts: List<HeartBurst>,
+    nowMillis: () -> Long,
+    viewport: () -> SceneViewport
+) {
+    bursts.forEach { burst ->
+        key(burst.id) {
+            repeat(HeartBurst.HEARTS) { index ->
+                Sprite(
+                    assetPath = Sprites.HEART,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .zIndex(HeartsZIndex)
+                        .loweredOntoFloor(enabled = true, viewport = viewport)
+                        .offset {
+                            val heart = burst.heartAt(index, nowMillis() - burst.startMillis)
+                            val scale = viewport().scale
+                            IntOffset(
+                                x = ((heart?.x ?: 0f) * scale).roundToInt(),
+                                y = ((heart?.y ?: 0f) * scale).roundToInt()
+                            )
+                        }
+                        .graphicsLayer {
+                            alpha = burst.heartAt(index, nowMillis() - burst.startMillis)
+                                ?.alpha ?: 0f
+                        }
+                        .fillMaxSize(HeartSizeFraction)
+                        .aspectRatio(1f)
+                )
+            }
         }
     }
 }
+
+/**
+ * Whether the sprites of this layer are drawn on the pet's own grid — the pet itself and the
+ * clothes it wears — and so go down onto the floor together with it.
+ */
+private val GameLayer.isOnPetGrid: Boolean
+    get() = this == GameLayer.ANIMAL || this == GameLayer.CLOTHES
+
+/**
+ * Lowers what this modifier is applied to onto the floor of the room, by
+ * [SceneViewport.petFloorShift].
+ *
+ * The shift is read at placement time, so a pinch moves the pet down with the room without
+ * composing it again.
+ *
+ * @param enabled whether to lower it at all; the scenery of the room stays where it is.
+ * @param viewport geometry of the scene, for how many screen pixels the shift is at its size.
+ * @return This modifier, lowered when [enabled].
+ */
+private fun Modifier.loweredOntoFloor(enabled: Boolean, viewport: () -> SceneViewport): Modifier =
+    if (enabled) offset { IntOffset(x = 0, y = viewport().petFloorShift) } else this
 
 /**
  * Lays what this modifier is applied to out as the window of the game area: a square of the side
