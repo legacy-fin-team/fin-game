@@ -43,15 +43,24 @@ class PetTouchAssetsTest {
         assertEquals(8, ((bits shr 14) and 0x3fff) + 1)
     }
 
+    /** Keys of the animal sounds in the assets: file names without the extension. */
+    private fun animalSoundKeys(): List<String> {
+        val folder = asset("audio/sounds/animal/cat1.ogg").parentFile!!
+        return folder.list()!!.map { it.substringBeforeLast('.') }.distinct().sorted()
+    }
+
     @Test
-    fun `the pat sound is an OGG file under its key`() {
-        assertOgg("audio/sounds/animal/${AudioManager.SOUND_PAT}.ogg")
+    fun `the pat sounds are OGG files under their keys`() {
+        val patKeys = AudioManager.animalSoundKeys(animalSoundKeys(), AudioManager.SOUND_PAT)
+        assertTrue("no pat sounds", patKeys.isNotEmpty())
+        for (key in patKeys) {
+            assertOgg("audio/sounds/animal/$key.ogg")
+        }
     }
 
     @Test
     fun `the cat has its own OGG sounds`() {
-        val folder = asset("audio/sounds/animal/${AudioManager.SOUND_PAT}.ogg").parentFile!!
-        val keys = folder.list()!!.map { it.substringBeforeLast('.') }.distinct().sorted()
+        val keys = animalSoundKeys()
         assertEquals(listOf("cat1", "cat2"), AudioManager.animalSoundKeys(keys, "cat"))
         for (key in listOf("cat1", "cat2")) {
             assertOgg("audio/sounds/animal/$key.ogg")
