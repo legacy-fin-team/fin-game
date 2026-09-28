@@ -37,11 +37,11 @@ class ShippedQuestsTest {
     }
 
     @Test
-    fun `the four quests of the spec are all read`() {
+    fun `the six quests of the spec are all read`() {
         val quests = readShippedQuests()
 
         assertEquals(
-            listOf("picnic", "piggy_bank", "lost_wallet", "guests"),
+            listOf("picnic", "piggy_bank", "lost_wallet", "guests", "lemonade", "fair"),
             quests.map { it.id }
         )
     }
@@ -108,6 +108,29 @@ class ShippedQuestsTest {
         assertEquals(10, tea.progressDelta)
         assertEquals(mapOf(StatKind.PLEASURE to 5), tea.statEffects)
         assertEquals("tidy", tea.nextNodeId)
+    }
+
+    @Test
+    fun `the lemonade quest is taken by player, has progress and needs 50 coins`() {
+        val lemonade = readShippedQuests().single { it.id == "lemonade" }
+
+        assertEquals("Лимонад", lemonade.title)
+        assertEquals(QuestKind.PLAYER, lemonade.kind)
+        assertTrue(lemonade.hasProgress)
+        assertEquals(50, lemonade.minBalance)
+        assertEquals(2, lemonade.stepCount)
+        assertEquals(listOf(1, 0), lemonade.stepOrder.map { lemonade.node(it)!!.delayMinutes })
+    }
+
+    @Test
+    fun `the fair quest comes by itself and has two nodes`() {
+        val fair = readShippedQuests().single { it.id == "fair" }
+
+        assertEquals("Ярмарка", fair.title)
+        assertEquals(QuestKind.RANDOM, fair.kind)
+        assertFalse(fair.hasProgress)
+        assertEquals(2, fair.stepCount)
+        assertEquals(listOf(1, 0), fair.stepOrder.map { fair.node(it)!!.delayMinutes })
     }
 
     @Test

@@ -145,4 +145,73 @@
             </option>
         </node>
     </quest>
+
+    <quest id="lemonade" title="Лимонад" kind="player" progress="true" min-balance="50"
+           start="recipe" image="quests/lemonade.webp" cooldown-minutes="120">
+        <description>Открой лимонадный киоск! Выбери рецепт и цену, чтобы заработать монеты.</description>
+        <node id="recipe" delay-minutes="1">
+            <text>Из чего приготовишь лимонад?</text>
+            <option label="Свежие лимоны" next="price" money="-30" progress="50">
+                <result>Лимонад получился очень вкусным! Все хотят попробовать.</result>
+                <effect stat="pleasure" value="10" />
+            </option>
+            <option label="Лимонный сок" next="price" money="-15" progress="30">
+                <result>Быстро и недорого. Вкус обычный, но освежает.</result>
+                <effect stat="pleasure" value="5" />
+            </option>
+            <option label="Просто вода" next="price" money="0" progress="10">
+                <result>Бесплатно, но покупатели ждут настоящий лимонад.</result>
+                <effect stat="pleasure" value="-5" />
+            </option>
+        </node>
+        <node id="price">
+            <text>Какую цену поставишь за стакан?</text>
+            <option label="Честную цену" next="end" money="50" progress="50">
+                <result>Отличная цена! Всё быстро разошлось, ты в плюсе.</result>
+                <effect stat="pleasure" value="15" />
+                <effect stat="hunger" value="-5" />
+            </option>
+            <option label="Низкую цену" next="end" money="35" progress="40">
+                <result>Очередь выстроилась мгновенно! Разобрали всё.</result>
+                <effect stat="pleasure" value="10" />
+            </option>
+            <option label="Завышенную" next="end" money="20" progress="20">
+                <result>Слишком дорого: купили всего пару стаканов.</result>
+                <effect stat="pleasure" value="-5" />
+            </option>
+        </node>
+    </quest>
+
+    <quest id="fair" title="Ярмарка" kind="random" start="entrance"
+           image="quests/fair.webp" cooldown-minutes="120">
+        <description>В городе открылась ярмарка! Пойдём посмотрим?</description>
+        <node id="entrance" delay-minutes="1">
+            <text>На ярмарке столько всего интересного! Куда пойдём?</text>
+            <option label="К аттракционам" next="attractions" money="-20">
+                <result>Билет стоит 20 монет. Покатаемся на карусели!</result>
+                <effect stat="pleasure" value="20" />
+            </option>
+            <option label="Смотреть фокусы" next="end">
+                <result>Представление бесплатное и очень весёлое!</result>
+                <effect stat="pleasure" value="10" />
+            </option>
+            <option label="Помочь с уборкой" next="end" money="25">
+                <result>Организаторы отблагодарили за помощь деньгами!</result>
+                <effect stat="pleasure" value="5" />
+                <effect stat="hunger" value="-5" />
+            </option>
+        </node>
+        <node id="attractions">
+            <text>После аттракционов захотелось перекусить.</text>
+            <option label="Купить яблоко" next="end" money="-10">
+                <result>Сочное яблоко дало сил и хорошего настроения.</result>
+                <effect stat="hunger" value="15" />
+                <effect stat="health" value="5" />
+            </option>
+            <option label="Попить воды" next="end">
+                <result>Вода из фонтанчика бесплатная и освежает.</result>
+                <effect stat="hunger" value="5" />
+            </option>
+        </node>
+    </quest>
 </quests>
