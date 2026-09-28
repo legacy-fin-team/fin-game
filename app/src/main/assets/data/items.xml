@@ -50,8 +50,7 @@
         category="toys"
     >
         <variants>
-            <variant id="red" />
-            <variant id="blue" />
+            <variant id="default" />
         </variants>
         <effects>
             <effect stat="pleasure" value="20" />
