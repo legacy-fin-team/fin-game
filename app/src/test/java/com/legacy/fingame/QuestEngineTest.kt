@@ -1,6 +1,7 @@
 package com.legacy.fingame
 
 import com.legacy.fingame.game.quests.Quest
+import com.legacy.fingame.game.quests.QuestAvailability
 import com.legacy.fingame.game.quests.QuestCatalog
 import com.legacy.fingame.game.quests.QuestCheck
 import com.legacy.fingame.game.quests.QuestEngine
@@ -161,6 +162,35 @@ class QuestEngineTest {
         assertEquals(TestQuests.GUESTS, spawn.quest)
     }
 
+    @Test
+    fun `without the wait a quest on cooldown can be taken right away`() {
+        val finished = QuestProgress("picnic", Quest.END_NODE, availableAtMillis = now, status = QuestStatus.FINISHED)
+
+        val availability =
+            QuestEngine.availabilityOf(TestQuests.PICNIC, listOf(finished), 1_000, now, ignoreDelays = true)
+
+        assertEquals(QuestAvailability(canStart = true), availability)
+        assertEquals(
+            listOf(QuestProgress("picnic", "food", now)),
+            QuestEngine.start(TestQuests.PICNIC, listOf(finished), 1_000, now, ignoreDelays = true)
+        )
+    }
+
+    @Test
+    fun `without the wait a one-time quest still waits for an adult, and the minimum still counts`() {
+        val onceQuest = TestQuests.PICNIC.copy(repeatable = false)
+        val finished = QuestProgress("picnic", Quest.END_NODE, availableAtMillis = now, status = QuestStatus.FINISHED)
+
+        assertEquals(
+            QuestUnavailableReason.ONE_TIME_DONE,
+            QuestEngine.availabilityOf(onceQuest, listOf(finished), 1_000, now, ignoreDelays = true).reason
+        )
+        assertEquals(
+            QuestUnavailableReason.NOT_ENOUGH_MONEY,
+            QuestEngine.availabilityOf(TestQuests.PICNIC, listOf(finished), 99, now, ignoreDelays = true).reason
+        )
+    }
+
     // --- Выбрать вариант ---
 
     @Test
@@ -265,6 +295,30 @@ class QuestEngineTest {
 
         val next = QuestEngine.advance(TestQuests.PICNIC, quests, now + minute)!!.single()
         assertEquals(QuestProgress("picnic", "games", now + minute, progress = 60), next)
+    }
+
+    @Test
+    fun `without the wait the next step opens right after the choice`() {
+        val choice = QuestEngine.choose(
+            TestQuests.PICNIC, started(TestQuests.PICNIC), 0, 150, now, ignoreDelays = true
+        )!!
+        assertEquals(now, choice.quests.single().availableAtMillis)
+
+        val next = QuestEngine.advance(TestQuests.PICNIC, choice.quests, now, ignoreDelays = true)!!.single()
+
+        assertEquals(QuestProgress("picnic", "games", now, progress = 60), next)
+    }
+
+    @Test
+    fun `without the wait a step that was already waiting opens right away`() {
+        // Выбор сделан ещё с ожиданием, а флаг включился потом: ждать всё равно не нужно.
+        val quests = QuestEngine.choose(TestQuests.PICNIC, started(TestQuests.PICNIC), 0, 150, now)!!.quests
+
+        assertNull(QuestEngine.advance(TestQuests.PICNIC, quests, now))
+        assertEquals(
+            "games",
+            QuestEngine.advance(TestQuests.PICNIC, quests, now, ignoreDelays = true)!!.single().nodeId
+        )
     }
 
     @Test

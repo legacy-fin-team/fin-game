@@ -223,7 +223,8 @@ fun FinGameApp(
                         onClose = vm::closeScreen,
                         balance = state.balance,
                         depositAmount = state.depositAmount,
-                        canRestart = DemoMode.ENABLED
+                        canRestart = DemoMode.ENABLED,
+                        ignoreDelays = vm.ignoreQuestDelays
                     )
 
                     Screen.BUDGET -> BudgetScreen(

@@ -39,6 +39,14 @@ android {
                 enable = false
             }
         }
+        create("releaseDebuggable") {
+            initWith(getByName("release"))
+
+            isDebuggable = true
+            signingConfig = signingConfigs.getByName("debug")
+
+            buildConfigField("boolean", "DEMO_MODE", (demoModeOverride ?: false).toString())
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

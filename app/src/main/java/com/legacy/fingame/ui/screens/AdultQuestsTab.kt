@@ -881,6 +881,8 @@ private fun PreviewPage(draft: CustomQuestDraft) {
         balance = quest.minBalance,
         canRestart = false,
         nowMillis = 0L,
+        // Квест ещё не начат, ждать в нём нечего — флаг отладочной сборки ничего не меняет.
+        ignoreDelays = false,
         onToggle = {},
         onStart = {},
         onChoose = {},

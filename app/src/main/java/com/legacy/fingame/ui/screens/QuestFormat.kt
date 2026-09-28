@@ -96,14 +96,17 @@ fun availableInText(remainingMillis: Long): String =
  * @param progress его сохранённый прогресс — пройденный.
  * @param balance текущий счёт игрока.
  * @param nowMillis текущий момент.
+ * @param ignoreDelays ожидание снято (отладочная сборка) — кулдауна нет, отсчёта тоже.
  */
 private fun finishedStatusText(
     quest: Quest,
     progress: QuestProgress,
     balance: Int,
-    nowMillis: Long
+    nowMillis: Long,
+    ignoreDelays: Boolean
 ): String {
-    val availability = QuestEngine.availabilityOf(quest, listOf(progress), balance, nowMillis)
+    val availability =
+        QuestEngine.availabilityOf(quest, listOf(progress), balance, nowMillis, ignoreDelays)
     return if (availability.reason == QuestUnavailableReason.COOLDOWN) {
         availableInText(availability.availableAtMillis!! - nowMillis)
     } else {
@@ -117,22 +120,28 @@ private fun finishedStatusText(
  * @param entry карточка.
  * @param balance текущий счёт игрока — для «Нужно N монет».
  * @param nowMillis момент по игровым часам — для отсчёта.
+ * @param ignoreDelays ожидание снято (отладочная сборка): отсчётов нет, всё доступно сразу.
  * @return «Можно взять», «Нужно 100 монет», «Шаг 2 из 3», «Следующий шаг через 0:42»,
  * «Следующий шаг готов», «Можно завершить», «Завершён · 80%» или «Доступен через …».
  */
-fun questStatusText(entry: QuestEntry, balance: Int, nowMillis: Long): String {
+fun questStatusText(
+    entry: QuestEntry,
+    balance: Int,
+    nowMillis: Long,
+    ignoreDelays: Boolean = false
+): String {
     val quest = entry.quest
     val progress = entry.progress
         ?: return if (balance < quest.minBalance) needCoinsText(quest.minBalance) else "Можно взять"
     val choice = progress.lastChoice
     return when {
-        progress.isFinished -> finishedStatusText(quest, progress, balance, nowMillis)
+        progress.isFinished -> finishedStatusText(quest, progress, balance, nowMillis, ignoreDelays)
         progress.isAwaitingCheck -> QuestAwaitingCheckText
         choice == null -> stepText(
             quest.stepNumberOf(progress.nodeId).coerceAtLeast(1),
             quest.stepCount.coerceAtLeast(1)
         )
-        nowMillis < progress.availableAtMillis ->
+        nowMillis < QuestEngine.stepAvailableAtMillis(progress, nowMillis, ignoreDelays) ->
             nextStepInText(progress.availableAtMillis - nowMillis)
         choice.isFinal -> "Можно завершить"
         else -> "Следующий шаг готов"
@@ -146,13 +155,25 @@ fun questStatusText(entry: QuestEntry, balance: Int, nowMillis: Long): String {
  * @param entry карточка.
  * @param balance текущий счёт игрока — для «Нужно N монет».
  * @param nowMillis момент по игровым часам.
+ * @param ignoreDelays ожидание снято (отладочная сборка): кулдауна и его отсчёта нет.
  * @return «Шаг 2 из 3» у взятого квеста, «Доступен через …» у пройденного на кулдауне, null у
  * пройденного без кулдауна, у невзятого — как [questStatusText].
  */
-fun expandedQuestStatusText(entry: QuestEntry, balance: Int, nowMillis: Long): String? {
-    val progress = entry.progress ?: return questStatusText(entry, balance, nowMillis)
+fun expandedQuestStatusText(
+    entry: QuestEntry,
+    balance: Int,
+    nowMillis: Long,
+    ignoreDelays: Boolean = false
+): String? {
+    val progress = entry.progress ?: return questStatusText(entry, balance, nowMillis, ignoreDelays)
     if (progress.isFinished) {
-        val availability = QuestEngine.availabilityOf(entry.quest, listOf(progress), balance, nowMillis)
+        val availability = QuestEngine.availabilityOf(
+            entry.quest,
+            listOf(progress),
+            balance,
+            nowMillis,
+            ignoreDelays
+        )
         return if (availability.reason == QuestUnavailableReason.COOLDOWN) {
             availableInText(availability.availableAtMillis!! - nowMillis)
         } else {
@@ -168,12 +189,18 @@ fun expandedQuestStatusText(entry: QuestEntry, balance: Int, nowMillis: Long): S
 /**
  * @param entries карточки экрана.
  * @param nowMillis момент по игровым часам.
+ * @param ignoreDelays ожидание снято (отладочная сборка): ждать нечего, отсчёт не нужен.
  * @return Ждёт ли хоть один идущий квест следующего шага — только тогда экрану нужен отсчёт.
  */
-fun hasWaitingStep(entries: List<QuestEntry>, nowMillis: Long): Boolean =
-    entries.any { entry ->
-        entry.progress?.let { it.isActive && it.availableAtMillis > nowMillis } == true
-    }
+fun hasWaitingStep(
+    entries: List<QuestEntry>,
+    nowMillis: Long,
+    ignoreDelays: Boolean = false
+): Boolean = entries.any { entry ->
+    entry.progress?.let {
+        it.isActive && QuestEngine.stepAvailableAtMillis(it, nowMillis, ignoreDelays) > nowMillis
+    } == true
+}
 
 /** @return Надпись кнопки под результатом: «Завершить» после последнего выбора, иначе «Дальше». */
 fun advanceButtonText(outcome: QuestOutcome): String =
