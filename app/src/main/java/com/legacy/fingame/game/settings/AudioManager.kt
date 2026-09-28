@@ -139,8 +139,12 @@ class AudioManager(context: Context) {
             mediaPlayer = MediaPlayer().apply {
                 setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
                 afd.close()
-                isLooping = true
+                isLooping = false
                 setVolume(1.0f, 1.0f)
+                setOnCompletionListener {
+                    stopMusic()
+                    startMusic()
+                }
                 prepare()
                 start()
             }
@@ -196,8 +200,8 @@ class AudioManager(context: Context) {
     }
 
     /**
-     * Проигрывает случайный звук животного из его набора (`cat1`, `cat2`, `cat3` для `cat`),
-     * а если своих звуков у животного нет — запасной [SOUND_PAT].
+     * Проигрывает случайный звук животного из его набора (`cat1`, `cat2` для `cat`),
+     * а если своих звуков у животного нет — случайный звук из серии запасных (`pat`, `pat1`, `pat2`).
      *
      * @param animalId id животного из `data/animals.xml`.
      * @param random источник случайности (подменяется в тестах).
@@ -205,7 +209,19 @@ class AudioManager(context: Context) {
     fun playAnimalSound(animalId: String, random: Random = Random.Default) {
         if (!soundEnabled) return
         val keys = animalSoundKeys(loadedSounds.keys, animalId)
-        playSound(if (keys.isEmpty()) SOUND_PAT else keys.random(random))
+        if (keys.isNotEmpty()) {
+            playSound(keys.random(random))
+        } else {
+            val patKeys = animalSoundKeys(loadedSounds.keys, SOUND_PAT).toMutableList()
+            if (loadedSounds.containsKey(SOUND_PAT)) {
+                patKeys.add(SOUND_PAT)
+            }
+            if (patKeys.isNotEmpty()) {
+                playSound(patKeys.random(random))
+            } else {
+                playSound(SOUND_PAT)
+            }
+        }
     }
 
     /**
