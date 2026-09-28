@@ -80,6 +80,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         private const val KEY_PLANNING_OPEN = "planning_open"
         private const val KEY_MONEY_LOG = "money_log"
         private const val KEY_GOALS = "goals"
+        private const val KEY_HINTS_SEEN = "hints_seen"
 
         /** Key the savings account was stored under, read once more to hand the money back. */
         private const val KEY_RETIRED_SAVINGS = "savings"
@@ -149,7 +150,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             KEY_BUDGET_DRAFT_DEPOSIT_TERM_DAYS,
             KEY_PLANNING_OPEN,
             KEY_MONEY_LOG,
-            KEY_GOALS
+            KEY_GOALS,
+            KEY_HINTS_SEEN
         )
 
         /** Prefix of the key one stat bar is stored under, completed by [StatKind.xmlName]. */
@@ -210,7 +212,9 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             ),
             petBornAtMillis = preferences.getLong(KEY_PET_BORN_AT, defaults.petBornAtMillis),
             gameNowMillis = preferences.getLong(KEY_GAME_NOW, defaults.gameNowMillis),
-            clockShiftMillis = preferences.getLong(KEY_CLOCK_SHIFT, defaults.clockShiftMillis)
+            clockShiftMillis = preferences.getLong(KEY_CLOCK_SHIFT, defaults.clockShiftMillis),
+            hintsSeen = preferences.getStringSet(KEY_HINTS_SEEN, null)?.toSet()
+                ?: defaults.hintsSeen
         )
     }
 
@@ -273,6 +277,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             .putBoolean(KEY_PLANNING_OPEN, state.planningOpen)
             .putString(KEY_MONEY_LOG, MoneyLogCodec.encode(state.moneyLog))
             .putString(KEY_GOALS, GoalsCodec.encode(state.goals))
+            .putStringSet(KEY_HINTS_SEEN, state.hintsSeen.toSet())
 
         StatKind.entries.forEach { stat ->
             editor.putInt(KEY_STAT_PREFIX + stat.xmlName, state.stats[stat])

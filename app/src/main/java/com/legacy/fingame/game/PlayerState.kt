@@ -71,6 +71,9 @@ import com.legacy.fingame.game.stats.PetStats
  * @property planningOpen открыто ли планирование: становится true при получении бонуса дня и
  * false при подтверждении бюджета.
  * @property moneyLog журнал изменений текущего счёта, новейшее первым.
+ * @property hintsSeen ключи подсказок к экранам, которые игрок уже закрыл (см.
+ * [com.legacy.fingame.game.hints.HintKeys]): каждая подсказка показывается один раз, пока игрок не
+ * попросит показать их заново или не начнёт игру сначала.
  */
 data class PlayerState(
     val selection: AnimalSelection? = null,
@@ -91,7 +94,8 @@ data class PlayerState(
     val statsUpdatedAtMillis: Long = NEVER_UPDATED,
     val petBornAtMillis: Long = Growth.NOT_BORN,
     val gameNowMillis: Long = CLOCK_NEVER_SAVED,
-    val clockShiftMillis: Long = FastForwardClock.NO_SHIFT
+    val clockShiftMillis: Long = FastForwardClock.NO_SHIFT,
+    val hintsSeen: Set<String> = emptySet()
 ) {
     companion object {
         /**
