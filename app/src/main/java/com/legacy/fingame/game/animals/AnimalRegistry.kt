@@ -53,6 +53,16 @@ class AnimalRegistry(private val animalsMap: Map<String, Animal>) {
     }
 
     /**
+     * @param animalId id of an animal.
+     * @param age age stage the pet has grown to (see [Growth.ageAt]).
+     * @return Age stage of this animal the pet is drawn at, see [Animal.getAgeStage].
+     */
+    fun getAgeStage(animalId: String, age: Int): Int {
+        val animal = animalsMap.getValue(animalId)
+        return animal.getAgeStage(age)
+    }
+
+    /**
      * Checks that an animal variant is still present in the data, e.g. before using the
      * animal the player picked during an earlier run.
      *

@@ -1,5 +1,8 @@
 package com.legacy.fingame
 
+import com.legacy.fingame.game.animals.Animal
+import com.legacy.fingame.game.animals.AnimalRegistry
+import com.legacy.fingame.game.animals.Growth
 import com.legacy.fingame.game.items.Inventory
 import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.items.ItemSprites
@@ -207,5 +210,40 @@ class GameSceneTest {
         )
 
         assertTrue(entries.isEmpty())
+    }
+
+    @Test
+    fun `clothes on a pet grown past its last stage are drawn at the stage the pet itself is`() {
+        // A cat is painted at three stages, but it keeps growing by the calendar: nine days in it is
+        // "nine stages old", and its clothes used to be asked for as equipped-cat-9.
+        val cat = Animal(
+            id = animalId,
+            name = "Кот",
+            ageCount = 3,
+            variants = mapOf("white" to "animals/cat/white")
+        )
+        val registry = AnimalRegistry(mapOf(cat.id to cat))
+        val age = Growth.ageAt(bornAtMillis = 0L, nowMillis = 9 * Growth.STAGE_MILLIS)
+        val stage = registry.getAgeStage(animalId, age)
+
+        val scene = GameScene.of(
+            background = background,
+            pet = SceneSprite(
+                assetPath = registry.getIdleSpritePath(animalId, "white", stage),
+                description = "Питомец"
+            ),
+            animalId = animalId,
+            worn = setOf(ItemSelection(TestItems.HAT.id, "black")),
+            catalog = catalog,
+            animalAge = stage
+        )
+
+        assertEquals(9, age)
+        assertEquals(cat.ageCount - 1, scene.animalAge)
+        assertEquals("animals/cat/white/2/idle.webp", scene[GameLayer.ANIMAL].single().assetPath)
+        assertEquals(
+            listOf(ItemSprites.equippedOnAnimal(TestItems.HAT.id, "black", animalId, 2)),
+            scene[GameLayer.CLOTHES].map { it.assetPath }
+        )
     }
 }
