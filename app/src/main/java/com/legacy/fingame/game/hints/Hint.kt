@@ -49,11 +49,8 @@ object HintKeys {
 
     /**
      * @param screen открытый экран игры (питомец уже выбран).
-     * @return Ключ подсказки к этому экрану, или null, когда у экрана подсказки нет.
-     *
-     * [Screen.QUESTS] пока без подсказки: в этой ветке на его месте заглушка. Когда появится
-     * настоящий экран квестов, сюда добавляется `Screen.QUESTS -> QUESTS`, текст уже есть в
-     * `data/hints.xml`.
+     * @return Ключ подсказки к этому экрану, или null, когда у экрана подсказки нет: у настроек,
+     * помощи, замка и режима взрослого своих подсказок нет.
      */
     fun forScreen(screen: Screen): String? = when (screen) {
         Screen.MAIN -> HOME
@@ -61,7 +58,7 @@ object HintKeys {
         Screen.INVENTORY -> INVENTORY
         Screen.BUDGET -> BUDGET
         Screen.LOG -> LOG
-        Screen.QUESTS,
+        Screen.QUESTS -> QUESTS
         Screen.OPTIONS,
         Screen.ADULT_LOCK,
         Screen.ADULT_MODE,

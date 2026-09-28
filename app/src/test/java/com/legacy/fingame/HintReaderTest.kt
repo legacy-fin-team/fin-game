@@ -146,7 +146,8 @@ class HintReaderTest {
             Screen.SHOP to HintKeys.SHOP,
             Screen.INVENTORY to HintKeys.INVENTORY,
             Screen.BUDGET to HintKeys.BUDGET,
-            Screen.LOG to HintKeys.LOG
+            Screen.LOG to HintKeys.LOG,
+            Screen.QUESTS to HintKeys.QUESTS
         )
         expected.forEach { (screen, key) ->
             assertEquals(key, HintKeys.pending(hasPet = true, screen = screen, seen = emptySet()))
@@ -156,7 +157,7 @@ class HintReaderTest {
 
     @Test
     fun `settings and help show no hint of their own`() {
-        listOf(Screen.OPTIONS, Screen.HELP, Screen.ADULT_MODE).forEach { screen ->
+        listOf(Screen.OPTIONS, Screen.HELP, Screen.ADULT_LOCK, Screen.ADULT_MODE).forEach { screen ->
             assertNull(HintKeys.pending(hasPet = true, screen = screen, seen = emptySet()))
         }
     }
