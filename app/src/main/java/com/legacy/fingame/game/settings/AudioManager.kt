@@ -201,7 +201,7 @@ class AudioManager(context: Context) {
 
     /**
      * Проигрывает случайный звук животного из его набора (`cat1`, `cat2` для `cat`),
-     * а если своих звуков у животного нет — случайный звук из серии запасных (`pat1`, `pat2`).
+     * а если своих звуков у животного нет — случайный звук из серии запасных (`pat1`, `pat2` и т.д.).
      *
      * @param animalId id животного из `data/animals.xml`.
      * @param random источник случайности (подменяется в тестах).
@@ -212,14 +212,11 @@ class AudioManager(context: Context) {
         if (keys.isNotEmpty()) {
             playSound(keys.random(random))
         } else {
-            val patKeys = animalSoundKeys(loadedSounds.keys, SOUND_PAT).toMutableList()
-            if (loadedSounds.containsKey(SOUND_PAT)) {
-                patKeys.add(SOUND_PAT)
-            }
+            val patKeys = animalSoundKeys(loadedSounds.keys, SOUND_PAT)
             if (patKeys.isNotEmpty()) {
                 playSound(patKeys.random(random))
             } else {
-                playSound(SOUND_PAT)
+                Log.w(TAG, "Нет запасных звуков поглаживания ('pat1', 'pat2'...)")
             }
         }
     }
