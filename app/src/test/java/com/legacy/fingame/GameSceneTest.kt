@@ -214,7 +214,7 @@ class GameSceneTest {
 
     @Test
     fun `clothes on a pet grown past its last stage are drawn at the stage the pet itself is`() {
-        // A cat is painted at three stages, but it keeps growing by the calendar: nine days in it is
+        // A cat is painted at three stages, but it keeps growing: nine days of growth make it
         // "nine stages old", and its clothes used to be asked for as equipped-cat-9.
         val cat = Animal(
             id = animalId,
@@ -223,7 +223,7 @@ class GameSceneTest {
             variants = mapOf("white" to "animals/cat/white")
         )
         val registry = AnimalRegistry(mapOf(cat.id to cat))
-        val age = Growth.ageAt(bornAtMillis = 0L, nowMillis = 9 * Growth.STAGE_MILLIS)
+        val age = Growth.ageOf(growthMillis = 9 * Growth.STAGE_MILLIS)
         val stage = registry.getAgeStage(animalId, age)
 
         val scene = GameScene.of(
