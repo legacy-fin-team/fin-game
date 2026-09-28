@@ -20,6 +20,7 @@ import com.legacy.fingame.DemoMode
 import com.legacy.fingame.FinGameApplication
 import com.legacy.fingame.game.GameViewModel
 import com.legacy.fingame.game.Screen
+import com.legacy.fingame.game.hints.HintKeys
 import com.legacy.fingame.game.items.Cart
 import com.legacy.fingame.game.items.Goals
 import com.legacy.fingame.game.items.Inventory
@@ -29,11 +30,13 @@ import com.legacy.fingame.game.scene.GameScene
 import com.legacy.fingame.game.scene.SceneSprite
 import com.legacy.fingame.game.settings.AudioManager
 import com.legacy.fingame.game.stats.PetStats
+import com.legacy.fingame.ui.components.ScreenHint
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.screens.AdultLockScreen
 import com.legacy.fingame.ui.screens.AdultScreen
 import com.legacy.fingame.ui.screens.AnimalSelectScreen
 import com.legacy.fingame.ui.screens.BudgetScreen
+import com.legacy.fingame.ui.screens.HelpScreen
 import com.legacy.fingame.ui.screens.InventoryScreen
 import com.legacy.fingame.ui.screens.LogScreen
 import com.legacy.fingame.ui.screens.MainScreen
@@ -63,15 +66,21 @@ private const val TICK_POLLS_PER_TICK = 10L
  *
  * Layout: a full-size [Surface] with an [AnimatedContent] that cross-fades between
  * [MainScreen], [ShopScreen], [InventoryScreen], [QuestsScreen], [BudgetScreen], [LogScreen],
- * [SettingsScreen], the lock in front of the adult mode ([AdultLockScreen]) and the adult hub
- * ([AdultScreen]), based on
- * [GameUiState.screen].
+ * [SettingsScreen], [HelpScreen], the lock in front of the adult mode ([AdultLockScreen]) and the
+ * adult hub ([AdultScreen]), based on [GameUiState.screen].
  *
  * While there is a pet to look after, this is also where its life goes on: a loop asks
  * [GameViewModel.tick] to catch up with the clock, so the stat bars fall and the pet grows up in
  * front of the player instead of only between launches. In a demo build ([DemoMode.ENABLED]) the
  * main screen also gets the button that pushes that same clock forward, so a demo can show a day of
  * the pet's life without waiting one out.
+ *
+ * The game is explained in small steps rather than in one welcome window: the first time the player
+ * lands on the pet selection screen, on the main screen and on each of the other screens, a
+ * [ScreenHint] about that screen is shown on top of it, once. Which one is due is decided by
+ * [HintKeys.pending] out of [GameUiState.hintsSeen]; closing it is remembered by
+ * [GameViewModel.markHintSeen]. Only one hint is ever on screen, and the pet selection hint and the
+ * main screen one never follow each other without the player picking a pet in between.
  *
  * @param modifier modifier applied to the root surface.
  * @param vm view model providing [GameUiState] and the navigation/action callbacks passed down
@@ -109,6 +118,11 @@ fun FinGameApp(
 
     val savedSelection = state.selection
     val pet = savedSelection?.takeIf { animalRegistry.hasVariant(it.animalId, it.variantId) }
+    val pendingHint = HintKeys.pending(
+        hasPet = pet != null,
+        screen = state.screen,
+        seen = state.hintsSeen
+    )?.let(application.hintRegistry::find)
 
     // «Назад» из режима взрослого и из замка ведёт в настройки (см. [GameViewModel.closeScreen]).
     BackHandler(enabled = state.screen != Screen.MAIN) { vm.closeScreen() }
@@ -248,6 +262,9 @@ fun FinGameApp(
                         settings = state.settings,
                         onSettingsChanged = vm::updateSettings,
                         onOpenAdultMode = { vm.openScreen(Screen.ADULT_LOCK) },
+                        onOpenHelp = { vm.openScreen(Screen.HELP) },
+                        // A reset makes the player new again in every sense: the screen hints come
+                        // back with it, starting with the one on the pet selection screen.
                         onResetProgress = vm::resetProgress,
                         onBack = vm::closeScreen
                     )
@@ -273,8 +290,24 @@ fun FinGameApp(
                         onRewardsSeen = vm::markRewardUsagesSeen,
                         onClose = vm::exitAdultMode
                     )
+
+                    Screen.HELP -> HelpScreen(
+                        entries = application.helpRegistry.getEntries(),
+                        hints = application.hintRegistry.getHints(),
+                        hintsAlreadyReset = state.hintsSeen.isEmpty(),
+                        onResetHints = vm::resetHints,
+                        onClose = { vm.openScreen(Screen.OPTIONS) }
+                    )
                 }
             }
+
+        }
+
+        if (pendingHint != null) {
+            ScreenHint(
+                hint = pendingHint,
+                onDismiss = { vm.markHintSeen(pendingHint.key) }
+            )
         }
     }
 }

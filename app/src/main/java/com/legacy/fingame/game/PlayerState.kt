@@ -93,6 +93,9 @@ import com.legacy.fingame.game.stats.PetStats
  * [RewardUsageLog.NEVER_SEEN]; записи новее — «новые», их число — на вкладке «Награды».
  * @property goalsReached сколько целей ребёнок купил — цель после покупки из [goals] уходит, а
  * раздел взрослого «Прогресс» помнит, что до цели дошли.
+ * @property hintsSeen ключи подсказок к экранам, которые игрок уже закрыл (см.
+ * [com.legacy.fingame.game.hints.HintKeys]): каждая подсказка показывается один раз, пока игрок не
+ * попросит показать их заново или не начнёт игру сначала.
  */
 data class PlayerState(
     val selection: AnimalSelection? = null,
@@ -123,7 +126,8 @@ data class PlayerState(
     val customQuests: List<Quest> = emptyList(),
     val rewardUsageLog: RewardUsageLog = RewardUsageLog.EMPTY,
     val rewardUsageSeenAtMillis: Long = RewardUsageLog.NEVER_SEEN,
-    val goalsReached: Int = 0
+    val goalsReached: Int = 0,
+    val hintsSeen: Set<String> = emptySet()
 ) {
     companion object {
         /**

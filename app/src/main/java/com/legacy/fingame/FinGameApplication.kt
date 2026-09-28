@@ -2,6 +2,8 @@ package com.legacy.fingame
 
 import android.app.Application
 import com.legacy.fingame.game.animals.AnimalRegistry
+import com.legacy.fingame.game.help.HelpRegistry
+import com.legacy.fingame.game.hints.HintRegistry
 import com.legacy.fingame.game.items.ItemRegistry
 import com.legacy.fingame.game.quests.QuestRegistry
 import com.legacy.fingame.utils.PlayerPreferences
@@ -21,6 +23,12 @@ class FinGameApplication : Application() {
     lateinit var playerPreferences: PlayerPreferences
         private set
 
+    lateinit var hintRegistry: HintRegistry
+        private set
+
+    lateinit var helpRegistry: HelpRegistry
+        private set
+
 
     override fun onCreate() {
         super.onCreate()
@@ -29,5 +37,7 @@ class FinGameApplication : Application() {
         itemRegistry = ItemRegistry(applicationContext)
         questRegistry = QuestRegistry(applicationContext)
         playerPreferences = PlayerPreferences(applicationContext)
+        hintRegistry = HintRegistry(applicationContext)
+        helpRegistry = HelpRegistry(applicationContext)
     }
 }

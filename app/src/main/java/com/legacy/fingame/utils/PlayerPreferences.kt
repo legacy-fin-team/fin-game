@@ -35,6 +35,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
     companion object {
         private const val TAG = "PlayerPreferences"
 
+        /** Name of the SharedPreferences file the player's game is kept in. */
         private const val PREFERENCES_NAME = "player"
         private const val KEY_ANIMAL_ID = "selected_animal_id"
         private const val KEY_ANIMAL_VARIANT_ID = "selected_animal_variant_id"
@@ -78,6 +79,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         private const val KEY_PLANNING_OPEN = "planning_open"
         private const val KEY_MONEY_LOG = "money_log"
         private const val KEY_GOALS = "goals"
+        private const val KEY_HINTS_SEEN = "hints_seen"
 
         /** Состояние квестов одной строкой, см. [QuestStateCodec]. */
         internal const val KEY_QUESTS = "quests"
@@ -129,7 +131,9 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             "budget_draft_savings",
             "previous_budget_planned",
             "previous_budget_planned_savings",
-            "previous_budget_actual"
+            "previous_budget_actual",
+            // Флаг единого приветственного окна: его сменили подсказки по экранам (hints_seen).
+            "onboarding_seen"
         )
 
         /**
@@ -188,7 +192,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             KEY_CUSTOM_QUESTS,
             KEY_REWARD_USAGE_LOG,
             KEY_REWARD_USAGE_SEEN_AT,
-            KEY_GOALS_REACHED
+            KEY_GOALS_REACHED,
+            KEY_HINTS_SEEN
         )
 
         /** Prefix of the key one stat bar is stored under, completed by [StatKind.xmlName]. */
@@ -270,7 +275,9 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
                 KEY_REWARD_USAGE_SEEN_AT,
                 defaults.rewardUsageSeenAtMillis
             ),
-            goalsReached = preferences.getInt(KEY_GOALS_REACHED, defaults.goalsReached)
+            goalsReached = preferences.getInt(KEY_GOALS_REACHED, defaults.goalsReached),
+            hintsSeen = preferences.getStringSet(KEY_HINTS_SEEN, null)?.toSet()
+                ?: defaults.hintsSeen
         )
     }
 
@@ -344,6 +351,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             .putString(KEY_REWARD_USAGE_LOG, RewardUsageLogCodec.encode(state.rewardUsageLog))
             .putLong(KEY_REWARD_USAGE_SEEN_AT, state.rewardUsageSeenAtMillis)
             .putInt(KEY_GOALS_REACHED, state.goalsReached)
+            .putStringSet(KEY_HINTS_SEEN, state.hintsSeen.toSet())
 
         StatKind.entries.forEach { stat ->
             editor.putInt(KEY_STAT_PREFIX + stat.xmlName, state.stats[stat])

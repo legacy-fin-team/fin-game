@@ -77,7 +77,9 @@ enum class Screen {
     /** Замок перед режимом взрослого: три примера на умножение. */
     ADULT_LOCK,
     /** Режим взрослого: история дней, покупок и квестов, инвентарь, цели и журнал ребёнка. */
-    ADULT_MODE
+    ADULT_MODE,
+    /** Экран справки: список игровых терминов, открывается из [OPTIONS]. */
+    HELP
 }
 
 /**
@@ -162,6 +164,9 @@ enum class Screen {
  * предметами игры (см. [GameViewModel.catalog]).
  * @property customQuests свои квесты взрослого, из [PlayerState.customQuests]; ребёнок берёт их
  * наравне с квестами игры (см. [GameViewModel.questCatalog]).
+ * @property hintsSeen ключи подсказок к экранам, которые игрок уже закрыл, восстанавливаются из
+ * [PlayerState.hintsSeen]; какую подсказку показать сейчас, решает
+ * [com.legacy.fingame.game.hints.HintKeys.pending].
  */
 data class GameUiState(
     val screen: Screen = Screen.MAIN,
@@ -201,7 +206,8 @@ data class GameUiState(
     val rewardUsageLog: RewardUsageLog = RewardUsageLog.EMPTY,
     val rewardUsageSeenAtMillis: Long = RewardUsageLog.NEVER_SEEN,
     val goalsReached: Int = 0,
-    val settings: GameSettings = GameSettings()
+    val settings: GameSettings = GameSettings(),
+    val hintsSeen: Set<String> = emptySet()
 ) {
     /**
      * @param questId id квеста.
@@ -1625,7 +1631,8 @@ class GameViewModel(
             rewardUsageLog = saved.rewardUsageLog,
             rewardUsageSeenAtMillis = saved.rewardUsageSeenAtMillis,
             goalsReached = saved.goalsReached,
-            settings = settings
+            settings = settings,
+            hintsSeen = saved.hintsSeen
         )
     }
 
@@ -1719,7 +1726,8 @@ class GameViewModel(
                 customQuests = current.customQuests,
                 rewardUsageLog = current.rewardUsageLog,
                 rewardUsageSeenAtMillis = current.rewardUsageSeenAtMillis,
-                goalsReached = current.goalsReached
+                goalsReached = current.goalsReached,
+                hintsSeen = current.hintsSeen
             )
         )
     }
@@ -1734,9 +1742,36 @@ class GameViewModel(
     }
 
     /**
+     * Запоминает, что игрок закрыл подсказку к экрану: больше она сама не появится — ни в этот
+     * раз, ни после перезапуска.
+     *
+     * @param key ключ подсказки, одно из [com.legacy.fingame.game.hints.HintKeys.ALL].
+     */
+    fun markHintSeen(key: String) {
+        val current = _state.value
+        if (key in current.hintsSeen) return
+        _state.value = current.copy(hintsSeen = current.hintsSeen + key)
+        persist()
+    }
+
+    /**
+     * Забывает все закрытые подсказки: каждая снова появится при следующем входе на свой экран.
+     * Кнопка «Показать подсказки заново» на экране «Помощь».
+     */
+    fun resetHints() {
+        val current = _state.value
+        if (current.hintsSeen.isEmpty()) return
+        _state.value = current.copy(hintsSeen = emptySet())
+        persist()
+    }
+
+    /**
      * Starts the game over: the pet, the money, the budget, the items and everything else the
      * player has done is dropped — from the screen and from [store] alike, so a restart does not
      * bring it back — and the player is taken back to picking a pet, as on the very first launch.
+     *
+     * The screen hints come back too ([GameUiState.hintsSeen] starts empty), starting with the one
+     * on the pet selection screen: a player starting over sees the game as a new player does.
      *
      * The settings stay as they are: they are the player's, not the game's. The clock stays as it
      * is as well: the game never goes back behind a moment the player was already shown (see
