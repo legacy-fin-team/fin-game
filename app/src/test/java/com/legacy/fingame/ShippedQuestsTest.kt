@@ -4,14 +4,15 @@ import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestCatalog
 import com.legacy.fingame.game.quests.QuestKind
 import com.legacy.fingame.game.quests.QuestReader
+import com.legacy.fingame.game.quests.QuestTopic
 import com.legacy.fingame.game.stats.StatKind
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * Квесты, с которыми игра поставляется: файл из assets читается целиком, и в нём ровно то, что
@@ -37,28 +38,40 @@ class ShippedQuestsTest {
     }
 
     @Test
-    fun `the six quests of the spec are all read`() {
+    fun `the four quests of the spec are all read`() {
         val quests = readShippedQuests()
 
         assertEquals(
-            listOf("picnic", "piggy_bank", "lost_wallet", "guests", "lemonade", "fair"),
+            listOf("picnic", "piggy_bank", "lost_wallet", "guests"),
             quests.map { it.id }
         )
     }
 
     @Test
-    fun `the picnic needs 300 coins, has progress and has 11 steps across 2 days`() {
+    fun `every shipped quest has a topic`() {
+        val topics = readShippedQuests().associate { it.id to it.topic }
+
+        assertEquals(
+            mapOf(
+                "picnic" to QuestTopic.PLANNING,
+                "piggy_bank" to QuestTopic.SAVING,
+                "lost_wallet" to QuestTopic.HONESTY,
+                "guests" to QuestTopic.NEEDS_WANTS
+            ),
+            topics
+        )
+    }
+
+    @Test
+    fun `the picnic needs 100 coins, has progress and waits a minute between steps`() {
         val picnic = readShippedQuests().single { it.id == "picnic" }
 
         assertEquals("Пикник", picnic.title)
         assertEquals(QuestKind.PLAYER, picnic.kind)
         assertTrue(picnic.hasProgress)
-        assertEquals(300, picnic.minBalance)
-        assertEquals(11, picnic.stepCount)
-        assertEquals(
-            listOf(0, 0, 0, 0, 1440, 0, 0, 0, 0, 0, 0),
-            picnic.stepOrder.map { picnic.node(it)!!.delayMinutes }
-        )
+        assertEquals(100, picnic.minBalance)
+        assertEquals(3, picnic.stepCount)
+        assertEquals(listOf(1, 1, 0), picnic.stepOrder.map { picnic.node(it)!!.delayMinutes })
         assertTrue(picnic.nodes.values.flatMap { it.options }.any { it.moneyDelta < 0 })
     }
 
@@ -111,29 +124,6 @@ class ShippedQuestsTest {
         assertEquals(10, tea.progressDelta)
         assertEquals(mapOf(StatKind.PLEASURE to 5), tea.statEffects)
         assertEquals("tidy", tea.nextNodeId)
-    }
-
-    @Test
-    fun `the lemonade quest is taken by player, has progress and needs 50 coins`() {
-        val lemonade = readShippedQuests().single { it.id == "lemonade" }
-
-        assertEquals("Лимонад", lemonade.title)
-        assertEquals(QuestKind.PLAYER, lemonade.kind)
-        assertTrue(lemonade.hasProgress)
-        assertEquals(50, lemonade.minBalance)
-        assertEquals(2, lemonade.stepCount)
-        assertEquals(listOf(1, 0), lemonade.stepOrder.map { lemonade.node(it)!!.delayMinutes })
-    }
-
-    @Test
-    fun `the fair quest comes by itself and has two nodes`() {
-        val fair = readShippedQuests().single { it.id == "fair" }
-
-        assertEquals("Ярмарка", fair.title)
-        assertEquals(QuestKind.RANDOM, fair.kind)
-        assertFalse(fair.hasProgress)
-        assertEquals(2, fair.stepCount)
-        assertEquals(listOf(1, 0), fair.stepOrder.map { fair.node(it)!!.delayMinutes })
     }
 
     @Test

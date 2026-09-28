@@ -29,8 +29,8 @@
         </effects>
     </item>
     <item
-        id="cake"
-        name="Пирожное"
+        id="kibble"
+        name="Корм"
         price="40"
         category="food"
     >
@@ -38,9 +38,9 @@
             <variant id="default" />
         </variants>
         <effects>
-            <effect stat="hunger" value="30" />
-            <effect stat="pleasure" value="15" />
-            <effect stat="health" value="-5" />
+            <effect stat="hunger" value="50" />
+            <effect stat="pleasure" value="10" />
+            <effect stat="health" value="10" />
         </effects>
     </item>
     <item
@@ -50,8 +50,7 @@
         category="toys"
     >
         <variants>
-            <variant id="red" />
-            <variant id="blue" />
+            <variant id="default" />
         </variants>
         <effects>
             <effect stat="pleasure" value="20" />
@@ -72,48 +71,70 @@
         </effects>
     </item>
     <item
-        id="hat"
+        id="bow"
         price="100"
-        name="Шляпа"
+        name="Бант"
         category="clothes"
     >
         <variants>
-            <variant id="black" />
-            <variant id="white" />
+            <variant id="red" />
+            <variant id="green" />
             <variant id="violet" />
         </variants>
     </item>
     <item
-        id="scarf"
-        name="Шарф"
+        id="tie"
+        name="Галстук"
+        price="80"
+        category="clothes"
+    >
+        <variants>
+            <variant id="orange" />
+            <variant id="green" />
+            <variant id="blue" />
+            <variant id="violet" />
+        </variants>
+    </item>
+    <item
+        id="bowtie"
+        name="Бабочка"
         price="80"
         category="clothes"
     >
         <variants>
             <variant id="red" />
             <variant id="green" />
+            <variant id="violet" />
         </variants>
     </item>
     <item
-        id="lamp"
-        name="Лампа"
+        id="plant"
+        name="Растение"
         price="150"
         category="decor"
-        layer="environment-front"
     >
         <variants>
             <variant id="default" />
         </variants>
     </item>
     <item
-        id="rug"
-        name="Коврик"
+        id="dresser"
+        name="Комод"
         price="90"
         category="decor"
     >
         <variants>
-            <variant id="beige" />
-            <variant id="blue" />
+            <variant id="default" />
+        </variants>
+    </item>
+    <item
+        id="books"
+        name="Книги"
+        price="90"
+        category="decor"
+    >
+        <variants>
+            <variant id="default" />
         </variants>
     </item>
 </items>

@@ -133,6 +133,28 @@ class QuestFormatTest {
     }
 
     @Test
+    fun `without the wait a finished quest on cooldown shows no countdown`() {
+        val entry = QuestEntry(
+            TestQuests.PIGGY_BANK,
+            QuestProgress("piggy_bank", Quest.END_NODE, now, status = QuestStatus.FINISHED)
+        )
+
+        assertEquals("Завершён", questStatusText(entry, 0, now, ignoreDelays = true))
+        assertNull(expandedQuestStatusText(entry, 0, now, ignoreDelays = true))
+    }
+
+    @Test
+    fun `without the wait a step that was waiting is ready and the screen does not tick`() {
+        val waiting = QuestEntry(
+            TestQuests.PICNIC,
+            QuestProgress("picnic", "food", now + 42_000L, lastChoice = toGames)
+        )
+
+        assertEquals("Следующий шаг готов", questStatusText(waiting, 0, now, ignoreDelays = true))
+        assertFalse(hasWaitingStep(listOf(waiting), now, ignoreDelays = true))
+    }
+
+    @Test
     fun `a one-time quest that is done for good just says it is finished`() {
         val onceQuest = TestQuests.PIGGY_BANK.copy(repeatable = false)
         val entry = QuestEntry(

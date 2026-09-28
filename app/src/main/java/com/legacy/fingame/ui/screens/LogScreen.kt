@@ -94,71 +94,108 @@ private val AmountColumnMinWidth = 72.dp
  * помнит: игра считает дни от эпохи, и показывать игроку девятнадцатитысячный день бессмысленно.
  *
  * @param log журнал, как его хранит состояние игры.
- * @param onOpenBudget вызывается, когда игрок хочет перейти к бюджету.
- * @param onClose вызывается, когда игрок закрывает экран.
+ * @param onOpenBudget вызывается, когда игрок хочет перейти к бюджету; null — кнопки «Бюджет» нет
+ *   (журнал глазами взрослого: в бюджет ребёнка ему хода нет).
+ * @param onClose вызывается, когда игрок закрывает экран; null — журнал встроен в хаб взрослого,
+ *   у которого свой крестик и свои поля: шапка сжимается до строки «Журнал» и баланса.
  * @param modifier модификатор корня экрана.
  * @param balance текущий баланс игрока, показываемый в шапке.
  * @param depositAmount сколько лежит на вкладе, или `0`, когда вклада нет.
+ * @param firstDay день, который называется «день 1», или null — самая старая запись журнала. Хаб
+ *   взрослого передаёт свой, чтобы номера дней совпадали во всех его вкладках.
+ * @param headerAction что показать под шапкой встроенного журнала (кнопка «Изменить монеты» у
+ *   взрослого), или null.
  */
 @Composable
 fun LogScreen(
     log: MoneyLog,
-    onOpenBudget: () -> Unit,
-    onClose: () -> Unit,
+    onOpenBudget: (() -> Unit)?,
+    onClose: (() -> Unit)?,
     modifier: Modifier = Modifier,
     balance: Int = 0,
-    depositAmount: Int = 0
+    depositAmount: Int = 0,
+    firstDay: Long? = null,
+    headerAction: (@Composable () -> Unit)? = null
 ) {
     val entries = log.entries
-    val oldestGameDay = log.oldestGameDay ?: 0L
+    val oldestGameDay = firstDay ?: log.oldestGameDay ?: 0L
     // Записи уже лежат новейшими вперёд, так что и дни выходят из группировки в том же порядке.
     val byDay = entries.groupBy { it.gameDay }
 
+    val embedded = onClose == null
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .systemBarsPadding()
-            .padding(ScreenPadding),
+        modifier = if (embedded) {
+            modifier.fillMaxSize()
+        } else {
+            modifier
+                .fillMaxSize()
+                .systemBarsPadding()
+                .padding(ScreenPadding)
+        },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Column(modifier = Modifier.widthIn(max = GameDimens.ContentMaxWidth).fillMaxWidth()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(HeaderGap),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                BalanceChip(balance = balance, depositAmount = depositAmount)
-                Spacer(modifier = Modifier.weight(1f))
-                SpriteButton(
-                    assetPath = Sprites.CLOSE,
-                    contentDescription = "Закрыть журнал",
-                    onClick = onClose,
-                    size = CloseButtonSize,
-                    showIndicator = false
-                )
-            }
+            if (onClose == null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(ListGap),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Журнал",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    BalanceChip(balance = balance, depositAmount = depositAmount)
+                }
+                if (headerAction != null) {
+                    Spacer(modifier = Modifier.height(ListGap))
+                    headerAction()
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(HeaderGap),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BalanceChip(balance = balance, depositAmount = depositAmount)
+                    Spacer(modifier = Modifier.weight(1f))
+                    SpriteButton(
+                        assetPath = Sprites.CLOSE,
+                        contentDescription = "Закрыть журнал",
+                        onClick = onClose,
+                        size = CloseButtonSize,
+                        showIndicator = false
+                    )
+                }
 
-            Spacer(modifier = Modifier.height(HeaderGap))
+                Spacer(modifier = Modifier.height(HeaderGap))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(ListGap),
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Text(
-                    text = "Журнал",
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                PillButton(
-                    text = "Бюджет",
-                    onClick = onOpenBudget,
-                    style = PillStyle.Text,
-                    compact = true
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(ListGap),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Text(
+                        text = "Журнал",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (onOpenBudget != null) {
+                        PillButton(
+                            text = "Бюджет",
+                            onClick = onOpenBudget,
+                            style = PillStyle.Text,
+                            compact = true
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(ListGap))

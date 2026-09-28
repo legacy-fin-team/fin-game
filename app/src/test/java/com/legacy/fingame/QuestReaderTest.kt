@@ -3,6 +3,7 @@ package com.legacy.fingame
 import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestKind
 import com.legacy.fingame.game.quests.QuestReader
+import com.legacy.fingame.game.quests.QuestTopic
 import com.legacy.fingame.game.stats.StatKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -136,6 +137,44 @@ class QuestReaderTest {
         assertFalse(quest.repeatable)
         assertEquals(180, quest.cooldownMinutes)
         assertEquals(2, quest.stageDelayMinutes)
+    }
+
+    @Test
+    fun `the adult check is read from its attribute and is off by default`() {
+        fun quest(attribute: String) = read(
+            """
+            <quest id="chores" title="Уборка" kind="player" start="a" $attribute>
+                <node id="a">
+                    <text>Текст.</text>
+                    <option label="Готово" next="end"><result>Чисто.</result></option>
+                </node>
+            </quest>
+            """
+        )
+
+        assertTrue(quest("requires-adult-check=\"true\"").single().requiresAdultCheck)
+        assertFalse(quest("requires-adult-check=\"false\"").single().requiresAdultCheck)
+        assertFalse(quest("").single().requiresAdultCheck)
+        assertEquals(emptyList<Quest>(), quest("requires-adult-check=\"maybe\""))
+    }
+
+    @Test
+    fun `the topic is read, optional, and an unknown one drops the quest`() {
+        fun quest(attribute: String) = read(
+            """
+            <quest id="piggy" title="Копилка" kind="player" start="a" $attribute>
+                <node id="a">
+                    <text>Текст.</text>
+                    <option label="Ок" next="end"><result>Готово.</result></option>
+                </node>
+            </quest>
+            """
+        )
+
+        assertEquals(QuestTopic.SAVING, quest("topic=\"saving\"").single().topic)
+        assertEquals(QuestTopic.NEEDS_WANTS, quest("topic=\"needs-wants\"").single().topic)
+        assertNull(quest("").single().topic)
+        assertEquals(emptyList<Quest>(), quest("topic=\"astrology\""))
     }
 
     @Test

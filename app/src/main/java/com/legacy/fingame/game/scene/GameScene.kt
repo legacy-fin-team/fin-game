@@ -25,8 +25,13 @@ data class SceneSprite(
  *
  * @property sprites sprites of every layer that has any, keyed by layer. A layer nothing stands on is
  * missing from the map rather than holding an empty list.
+ * @property animalAge age stage the pet on [GameLayer.ANIMAL] is drawn at, so what goes with the
+ * pet — the hearts over its head when it is patted — finds its head at that age.
  */
-data class GameScene(val sprites: Map<GameLayer, List<SceneSprite>> = emptyMap()) {
+data class GameScene(
+    val sprites: Map<GameLayer, List<SceneSprite>> = emptyMap(),
+    val animalAge: Int = Animal.FIRST_AGE
+) {
 
     companion object {
 
@@ -84,7 +89,10 @@ data class GameScene(val sprites: Map<GameLayer, List<SceneSprite>> = emptyMap()
                 )
             }
 
-            return GameScene(sprites.mapValues { (_, layerSprites) -> layerSprites.toList() })
+            return GameScene(
+                sprites = sprites.mapValues { (_, layerSprites) -> layerSprites.toList() },
+                animalAge = animalAge
+            )
         }
     }
 

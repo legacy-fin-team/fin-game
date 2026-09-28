@@ -2,8 +2,10 @@ package com.legacy.fingame
 
 import com.legacy.fingame.game.economy.MoneyEntry
 import com.legacy.fingame.game.economy.MoneyLog
+import com.legacy.fingame.game.economy.SpendKind
 import com.legacy.fingame.utils.MoneyLogCodec
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /** Кодек журнала: журнал переживает превращение в строку и обратно без потерь. */
@@ -97,5 +99,67 @@ class MoneyLogCodecTest {
             listOf(MoneyLog.REASON_DAILY_BONUS, "Яблоко x4"),
             decoded.entries.map { it.reason }
         )
+    }
+
+    @Test
+    fun `a purchase keeps its item, variant, quantity and kind`() {
+        val purchase = entry("Яблоко x4", -60).copy(
+            itemId = "apple",
+            variantId = "red",
+            quantity = 4,
+            spendKind = SpendKind.MUST
+        )
+
+        val decoded = MoneyLogCodec.decode(MoneyLogCodec.encode(MoneyLog(listOf(purchase))))
+
+        assertEquals(purchase, decoded.entries.single())
+    }
+
+    @Test
+    fun `an old record without item fields still decodes`() {
+        // Так журнал писала версия до истории покупок: четыре поля, без товара.
+        val raw = "Яблоко x4\u001F-60\u001F19000\u001F1700000000000"
+
+        val decoded = MoneyLogCodec.decode(raw).entries.single()
+
+        assertEquals("Яблоко x4", decoded.reason)
+        assertEquals(-60, decoded.delta)
+        assertNull(decoded.itemId)
+        assertNull(decoded.variantId)
+        assertEquals(0, decoded.quantity)
+        assertNull(decoded.spendKind)
+    }
+
+    @Test
+    fun `a record that is not a purchase keeps no item fields`() {
+        val bonus = entry(MoneyLog.REASON_DAILY_BONUS, 50)
+
+        val decoded = MoneyLogCodec.decode(MoneyLogCodec.encode(MoneyLog(listOf(bonus))))
+
+        assertEquals(bonus, decoded.entries.single())
+    }
+
+    @Test
+    fun `a purchase with a broken quantity is skipped while the rest decode`() {
+        val good = MoneyLogCodec.encode(MoneyLog(listOf(entry(MoneyLog.REASON_DAILY_BONUS, 50))))
+        val bad = "Яблоко x4\u001F-60\u001F19000\u001F1700000000000\u001Fapple\u001Fred\u001Fмного\u001FMUST"
+
+        val decoded = MoneyLogCodec.decode(listOf(bad, good).joinToString("\u001E"))
+
+        assertEquals(listOf(MoneyLog.REASON_DAILY_BONUS), decoded.entries.map { it.reason })
+    }
+
+    @Test
+    fun `a change by the adult keeps its mark, and a purchase-era record reads as not from the adult`() {
+        val byAdult = entry(MoneyLog.adultReason(50, "за уборку"), 50).copy(fromAdult = true)
+
+        val decoded = MoneyLogCodec.decode(MoneyLogCodec.encode(MoneyLog(listOf(byAdult)))).entries.single()
+
+        assertEquals(byAdult, decoded)
+        assertEquals("Взрослый добавил 50: за уборку", decoded.reason)
+        // Так журнал писала версия до ручных изменений: восемь полей.
+        val raw = "Яблоко x4\u001F-60\u001F19000\u001F1700000000000\u001Fapple\u001Fred\u001F4\u001FMUST"
+        assertEquals(false, MoneyLogCodec.decode(raw).entries.single().fromAdult)
+        assertEquals(emptyList<MoneyEntry>(), MoneyLogCodec.decode("$raw\u001Fда").entries)
     }
 }

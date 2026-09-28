@@ -52,4 +52,41 @@ class PlayerPreferencesKeysTest {
     fun `the goals are written under a key of their own`() {
         assertTrue("goals" in PlayerPreferences.LIVE_KEYS)
     }
+
+    @Test
+    fun `the adult mode histories are among the live keys`() {
+        // История бюджета и журнал квестов пишутся при каждом сохранении, как журнал денег.
+        assertTrue(PlayerPreferences.KEY_BUDGET_HISTORY in PlayerPreferences.LIVE_KEYS)
+        assertTrue(PlayerPreferences.KEY_QUEST_LOG in PlayerPreferences.LIVE_KEYS)
+        assertEquals("budget_history", PlayerPreferences.KEY_BUDGET_HISTORY)
+        assertEquals("quest_log", PlayerPreferences.KEY_QUEST_LOG)
+    }
+
+    @Test
+    fun `the custom items are among the live keys`() {
+        // Свои предметы взрослого пишутся при каждом сохранении одной строкой.
+        assertTrue(PlayerPreferences.KEY_CUSTOM_ITEMS in PlayerPreferences.LIVE_KEYS)
+        assertEquals("custom_items", PlayerPreferences.KEY_CUSTOM_ITEMS)
+    }
+
+    @Test
+    fun `the custom quests are among the live keys`() {
+        // Свои квесты взрослого пишутся при каждом сохранении одной строкой.
+        assertTrue(PlayerPreferences.KEY_CUSTOM_QUESTS in PlayerPreferences.LIVE_KEYS)
+        assertEquals("custom_quests", PlayerPreferences.KEY_CUSTOM_QUESTS)
+    }
+
+    @Test
+    fun `the reward usage log and its last look are among the live keys`() {
+        assertTrue(PlayerPreferences.KEY_REWARD_USAGE_LOG in PlayerPreferences.LIVE_KEYS)
+        assertTrue(PlayerPreferences.KEY_REWARD_USAGE_SEEN_AT in PlayerPreferences.LIVE_KEYS)
+        assertEquals("reward_usage_log", PlayerPreferences.KEY_REWARD_USAGE_LOG)
+        assertEquals("reward_usage_seen_at", PlayerPreferences.KEY_REWARD_USAGE_SEEN_AT)
+    }
+
+    @Test
+    fun `the reached goals are among the live keys`() {
+        assertTrue(PlayerPreferences.KEY_GOALS_REACHED in PlayerPreferences.LIVE_KEYS)
+        assertEquals("goals_reached", PlayerPreferences.KEY_GOALS_REACHED)
+    }
 }

@@ -58,13 +58,15 @@ class GameViewModelQuestTest {
         clock: FakeGameClock = FakeGameClock(),
         random: Random = ScriptedRandom(),
         allowRestart: Boolean = true,
-        catalog: QuestCatalog = TestQuests.CATALOG
+        catalog: QuestCatalog = TestQuests.CATALOG,
+        ignoreQuestDelays: Boolean = false
     ): GameViewModel = testGameViewModel(
         store = store,
         clock = clock,
         questCatalog = catalog,
         random = random,
-        allowRestart = allowRestart
+        allowRestart = allowRestart,
+        ignoreQuestDelays = ignoreQuestDelays
     )
 
     /** [TestQuests.CATALOG], но без кулдауна — для тестов, которым сам кулдаун не интересен. */
@@ -225,6 +227,21 @@ class GameViewModelQuestTest {
     }
 
     @Test
+    fun `in a debug build a quest neither waits between steps nor cools down`() {
+        val vm = vmOver(storeWith(balance = 150), ignoreQuestDelays = true)
+        vm.startQuest("picnic")
+        vm.chooseQuestOption("picnic", 0)
+
+        assertTrue(vm.advanceQuest("picnic"))
+        assertTrue(vm.chooseQuestOption("picnic", 0))
+        assertTrue(vm.advanceQuest("picnic"))
+        assertEquals(QuestStatus.FINISHED, vm.state.value.questProgressOf("picnic")!!.status)
+
+        assertTrue(vm.startQuest("picnic"))
+        assertEquals("food", vm.state.value.questProgressOf("picnic")!!.nodeId)
+    }
+
+    @Test
     fun `finishing a quest and playing it again once the cooldown passes`() {
         val vm = vmOver(storeWith(balance = 150))
         vm.startQuest("piggy_bank")
@@ -276,7 +293,11 @@ class GameViewModelQuestTest {
         assertFalse(vm.startQuest("piggy_bank"))
         assertFalse(vm.restartQuest("piggy_bank"))
 
+        // Включает только взрослый, из своего режима.
+        assertFalse(vm.enableQuest("piggy_bank"))
+        vm.enterAdultMode()
         assertTrue(vm.enableQuest("piggy_bank"))
+        vm.exitAdultMode()
 
         assertTrue(vm.startQuest("piggy_bank"))
         assertEquals("start", vm.state.value.questProgressOf("piggy_bank")!!.nodeId)
@@ -285,6 +306,7 @@ class GameViewModelQuestTest {
     @Test
     fun `enabling a quest nobody ever finished changes nothing`() {
         val vm = vmOver(storeWith())
+        vm.enterAdultMode()
 
         assertFalse(vm.enableQuest("piggy_bank"))
         assertFalse(vm.enableQuest("nowhere"))

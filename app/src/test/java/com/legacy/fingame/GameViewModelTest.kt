@@ -4,10 +4,18 @@ import com.legacy.fingame.game.GameViewModel.Companion.MAX_ITEM_QUANTITY
 import com.legacy.fingame.game.PlayerState
 import com.legacy.fingame.game.Screen
 import com.legacy.fingame.game.animals.AnimalSelection
+import com.legacy.fingame.game.economy.Economy
+import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.items.ItemCategory
+import com.legacy.fingame.game.items.ItemSelection
+import com.legacy.fingame.game.settings.GameSettings
+import com.legacy.fingame.game.settings.ThemeMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.concurrent.TimeUnit
 
 class GameViewModelTest {
 
@@ -145,6 +153,75 @@ class GameViewModelTest {
 
         vm.nextSubLocation()
         assertEquals(0, vm.state.value.subLocationIndex)
+    }
+
+    @Test
+    fun `the saved settings are in the state from its very first value`() {
+        val saved = GameSettings(
+            soundVolume = 0,
+            musicVolume = 0,
+            themeMode = ThemeMode.DARK
+        )
+
+        val vm = testGameViewModel(settings = saved)
+
+        assertEquals(saved, vm.state.value.settings)
+    }
+
+    @Test
+    fun `resetProgress wipes the saved game and sends the player back to picking a pet`() {
+        val store = FakePlayerStateStore(
+            PlayerState(
+                selection = AnimalSelection(animalId = "cat", variantId = "orange"),
+                petName = "Барсик",
+                balance = 777,
+                owned = mapOf(ItemSelection(TestItems.BALL.id, "red") to 1),
+                lastDailyBonusDay = FakeGameClock.DEFAULT_DAY
+            )
+        )
+        val vm = testGameViewModel(store = store)
+        vm.openScreen(Screen.OPTIONS)
+
+        vm.resetProgress()
+
+        val state = vm.state.value
+        assertNull(state.selection)
+        assertEquals("", state.petName)
+        assertEquals(Economy.STARTING_BALANCE, state.balance)
+        assertTrue(state.owned.isEmpty())
+        assertEquals(Screen.MAIN, state.screen)
+        assertTrue(state.dailyBonusAvailable)
+        // What the next launch would restore is the empty game too.
+        assertNull(store.state.selection)
+        assertEquals("", store.state.petName)
+        assertEquals(Economy.STARTING_BALANCE, store.state.balance)
+        assertTrue(store.state.owned.isEmpty())
+        assertEquals(MoneyLog.EMPTY, store.state.moneyLog)
+        assertEquals(Economy.NEVER_CLAIMED, store.state.lastDailyBonusDay)
+        assertNull(testGameViewModel(store = store).state.value.selection)
+    }
+
+    @Test
+    fun `resetProgress keeps the clock`() {
+        val store = FakePlayerStateStore()
+        val vm = testGameViewModel(store = store)
+        val skipped = TimeUnit.HOURS.toMillis(12)
+        vm.fastForward(skipped)
+
+        vm.resetProgress()
+
+        // The hours skipped ahead are not taken back: the game never goes back behind what the
+        // player was already shown, whatever the new game starts with.
+        assertEquals(skipped, store.state.clockShiftMillis)
+    }
+
+    @Test
+    fun `resetProgress keeps the settings`() {
+        val vm = testGameViewModel(settings = GameSettings(soundVolume = 0))
+
+        vm.resetProgress()
+
+        assertFalse(vm.state.value.settings.soundEnabled)
     }
 
     @Test

@@ -256,9 +256,11 @@ class PetCareTest {
 
     @Test
     fun `the pet grows up as the days pass`() {
+        // Здесь проверяется ход времени, а не уход: без правил ухода брошенный питомец растёт как
+        // обычно. Что бывает с брошенным питомцем по правилам, проверяет GameCareRulesTest.
         val clock = FakeGameClock()
         val store = FakePlayerStateStore()
-        val vm = testGameViewModel(store = store, clock = clock)
+        val vm = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
         vm.selectAnimal(AnimalSelection(animalId = "cat", variantId = "white"))
 
         clock.millis += Growth.STAGE_MILLIS * 2
