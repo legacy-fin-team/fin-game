@@ -38,4 +38,21 @@ class AnimalRegistryTest {
 
         assertFalse(registry.hasVariant("cat", "orange"))
     }
+
+    @Test
+    fun `animal age is coerced to max age stage when age exceeds ageCount`() {
+        val registry = AnimalRegistry(mapOf(cat.id to cat))
+
+        assertEquals(0, cat.coerceAge(0))
+        assertEquals(1, cat.coerceAge(1))
+        assertEquals(2, cat.coerceAge(2))
+        assertEquals(2, cat.coerceAge(3))
+        assertEquals(2, cat.coerceAge(9))
+
+        assertEquals(0, registry.coerceAge("cat", 0))
+        assertEquals(1, registry.coerceAge("cat", 1))
+        assertEquals(2, registry.coerceAge("cat", 2))
+        assertEquals(2, registry.coerceAge("cat", 3))
+        assertEquals(2, registry.coerceAge("cat", 9))
+    }
 }
