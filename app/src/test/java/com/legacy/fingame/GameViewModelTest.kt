@@ -158,8 +158,8 @@ class GameViewModelTest {
     @Test
     fun `the saved settings are in the state from its very first value`() {
         val saved = GameSettings(
-            soundEnabled = false,
-            musicEnabled = false,
+            soundVolume = 0,
+            musicVolume = 0,
             themeMode = ThemeMode.DARK
         )
 
@@ -217,7 +217,7 @@ class GameViewModelTest {
 
     @Test
     fun `resetProgress keeps the settings`() {
-        val vm = testGameViewModel(settings = GameSettings(soundEnabled = false))
+        val vm = testGameViewModel(settings = GameSettings(soundVolume = 0))
 
         vm.resetProgress()
 
