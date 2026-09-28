@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Собирает docs/FinGame-Документация.docx из docs/DOCUMENTATION.md.
+"""Собирает docs/FinGame-Документация.docx из файлов документации docs/*.md.
 
 Требуется pandoc 3.x. Запуск из корня репозитория:
 
     python3 docs/tools/make_docx.py
 
 Что делает:
-- заголовок первого уровня становится титулом, разделы — заголовками первого уровня;
+- вступление берётся из docs/README.md (текст до оглавления), затем файлы из FILES по порядку;
+- заголовок первого уровня каждого файла становится разделом документа, его подразделы — пунктами
+  оглавления второго уровня;
+- ссылки между файлами становятся ссылками на соответствующий раздел внутри документа;
 - блоки Mermaid заменяются ссылкой на Markdown-версию (текстовая схема остаётся);
-- скрытые пометки <!-- TODO ...: ... --> становятся видимыми «[TODO ...: ...]»;
 - оглавление заполняется сразу (видно в любом просмотрщике) и обновляется Word при открытии;
 - стили (A4, рамки таблиц, шрифты) берутся из docs/tools/reference.docx.
 """
@@ -21,27 +23,91 @@ import tempfile
 import zipfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-SRC = os.path.join(ROOT, 'docs', 'DOCUMENTATION.md')
-REF = os.path.join(ROOT, 'docs', 'tools', 'reference.docx')
-OUT = os.path.join(ROOT, 'docs', 'FinGame-Документация.docx')
+DOCS = os.path.join(ROOT, 'docs')
+INDEX = 'README.md'
+FILES = [
+    'build.md',
+    'architecture.md',
+    'pet-growth.md',
+    'animals.md',
+    'items.md',
+    'quests.md',
+    'scene.md',
+    'economy.md',
+    'education.md',
+    'ux-accessibility.md',
+    'testing.md',
+    'requirements.md',
+    'licenses.md',
+    'roadmap.md',
+]
+REF = os.path.join(DOCS, 'tools', 'reference.docx')
+OUT = os.path.join(DOCS, 'FinGame-Документация.docx')
+TITLE = 'Fin Game — сопроводительная документация'
 SUBTITLE = 'Мобильная игра по финансовой грамотности для детей. Android'
 
+LINK = re.compile(r'\[([^\]]+)\]\(([^)\s]+)\)')
+FENCE = re.compile(r'^(```|~~~)')
 
-def prepare_markdown(text):
+
+def read(name):
+    with open(os.path.join(DOCS, name), encoding='utf-8') as f:
+        return f.read()
+
+
+def anchor(name):
+    return 'doc-' + os.path.splitext(name)[0]
+
+
+def split_title(name, text):
     lines = text.split('\n')
     if not lines[0].startswith('# '):
-        sys.exit('DOCUMENTATION.md должен начинаться с заголовка первого уровня')
-    title = lines[0][2:].strip()
-    body = '\n'.join(lines[1:])
+        sys.exit(f'{name} должен начинаться с заголовка первого уровня')
+    return lines[0][2:].strip(), '\n'.join(lines[1:])
+
+
+def rewrite_links(text, titles):
+    """Ссылки на другие файлы документации ведут на их разделы; прочие ссылки на файлы — текстом."""
+    def repl(m):
+        label, target = m.group(1), m.group(2)
+        if re.match(r'^[a-z]+://', target):
+            return m.group(0)
+        path = target.split('#', 1)[0]
+        if path in titles:
+            return f'[{label}](#{anchor(path)})'
+        return label
+    return LINK.sub(repl, text)
+
+
+def shifted(text):
+    """Опускает заголовки на уровень ниже (вне блоков кода), чтобы файл стал разделом документа."""
+    out, in_code = [], False
+    for line in text.split('\n'):
+        if FENCE.match(line):
+            in_code = not in_code
+        elif not in_code and re.match(r'^#{1,5} ', line):
+            line = '#' + line
+        out.append(line)
+    return '\n'.join(out)
+
+
+def prepare_markdown():
+    titles = {name: split_title(name, read(name))[0] for name in FILES}
+    _, intro = split_title(INDEX, read(INDEX))
+    intro = intro.split('\n## ', 1)[0]
+    parts = [rewrite_links(intro, titles)]
+    for name in FILES:
+        title, body = split_title(name, read(name))
+        body = rewrite_links(shifted(body), titles)
+        parts.append(f'## {title} {{#{anchor(name)}}}\n{body}')
+    body = '\n\n'.join(parts)
     body = re.sub(r'```mermaid\n.*?```',
-                  '*Та же схема в формате Mermaid приведена в файле docs/DOCUMENTATION.md.*',
+                  '*Та же схема в формате Mermaid приведена в файле docs/architecture.md.*',
                   body, flags=re.S)
-    body = re.sub(r'<!--\s*(TODO[^:]*):\s*(.*?)\s*-->',
-                  lambda m: f'**[{m.group(1)}: {m.group(2)}]**', body, flags=re.S)
     if '<!--' in body:
-        sys.exit('В документе остался HTML-комментарий, который не попадёт в DOCX')
+        sys.exit('В документации остался HTML-комментарий, который не попадёт в DOCX')
     body = re.sub(r'^---$', '', body, flags=re.M)
-    meta = (f'---\ntitle: "{title}"\nsubtitle: "{SUBTITLE}"\n'
+    meta = (f'---\ntitle: "{TITLE}"\nsubtitle: "{SUBTITLE}"\n'
             'lang: ru-RU\ntoc-title: "Содержание"\n---\n')
     return meta + body
 
@@ -99,13 +165,12 @@ def fill_toc(path):
 
 
 def main():
-    with open(SRC, encoding='utf-8') as f:
-        markdown = prepare_markdown(f.read())
+    markdown = prepare_markdown()
     with tempfile.TemporaryDirectory() as tmp:
         md = os.path.join(tmp, 'doc.md')
         with open(md, 'w', encoding='utf-8') as f:
             f.write(markdown)
-        subprocess.run(['pandoc', md, '-f', 'gfm+yaml_metadata_block', '-t', 'docx',
+        subprocess.run(['pandoc', md, '-f', 'gfm+yaml_metadata_block+attributes', '-t', 'docx',
                         '--toc', '--toc-depth=2', '--shift-heading-level-by=-1',
                         '--reference-doc', REF, '-o', OUT], check=True)
     count = fill_toc(OUT)
