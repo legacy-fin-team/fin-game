@@ -126,6 +126,34 @@ class GameViewModelCustomQuestsTest {
     }
 
     @Test
+    fun `a custom quest feeds and heals the pet`() {
+        val vm = testGameViewModel(store = store(), clock = clock)
+        val meal = cleaning.copy(
+            steps = listOf(
+                CustomQuestStepDraft(
+                    text = "Время обеда",
+                    options = listOf(
+                        CustomQuestOptionDraft("Суп", "Сытно", hungerDelta = 20, healthDelta = 10),
+                        CustomQuestOptionDraft("Конфеты", "Сладко", healthDelta = -10, moodDelta = 5)
+                    )
+                )
+            )
+        )
+        vm.enterAdultMode()
+        assertTrue(vm.addCustomQuest(meal))
+        vm.exitAdultMode()
+        val id = vm.state.value.customQuests.single().id
+
+        vm.startQuest(id)
+        assertTrue(vm.chooseQuestOption(id, 0))
+
+        val stats = vm.state.value.stats
+        assertEquals(70, stats[StatKind.HUNGER])
+        assertEquals(60, stats[StatKind.HEALTH])
+        assertEquals(50, stats[StatKind.PLEASURE])
+    }
+
+    @Test
     fun `removing a quest drops its run but keeps the choices`() {
         val store = store()
         val vm = testGameViewModel(store = store, clock = clock)

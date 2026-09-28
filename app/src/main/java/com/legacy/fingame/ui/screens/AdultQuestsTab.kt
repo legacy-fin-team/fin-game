@@ -575,7 +575,7 @@ private fun StepPage(
     }
 }
 
-/** Карточка одного варианта: кнопка, результат, монеты, настроение, прогресс. */
+/** Карточка одного варианта: кнопка, результат, монеты, сытость, здоровье, настроение, прогресс. */
 @Composable
 private fun OptionEditor(
     number: Int,
@@ -628,15 +628,17 @@ private fun OptionEditor(
             max = CustomQuests.MONEY_MAX,
             onChange = { onChange(option.copy(moneyDelta = it)) }
         )
-        StepperRow(
-            iconPath = Sprites.stat(StatKind.PLEASURE.xmlName),
-            title = "Настроение",
-            value = option.moodDelta,
-            step = CustomQuests.MOOD_STEP,
-            min = CustomQuests.MOOD_MIN,
-            max = CustomQuests.MOOD_MAX,
-            onChange = { onChange(option.copy(moodDelta = it)) }
-        )
+        CustomQuests.STATS.forEach { stat ->
+            StepperRow(
+                iconPath = Sprites.stat(stat.xmlName),
+                title = CustomQuests.statTitle(stat),
+                value = option.deltaOf(stat),
+                step = CustomQuests.STAT_STEP,
+                min = CustomQuests.STAT_MIN,
+                max = CustomQuests.STAT_MAX,
+                onChange = { onChange(option.withDelta(stat, it)) }
+            )
+        }
         Text(
             text = "Прогресс квеста",
             style = MaterialTheme.typography.bodyMedium,
@@ -810,11 +812,13 @@ internal fun questRulesText(draft: CustomQuestDraft): String = buildString {
 }
 
 /**
- * «+20 монет, −5 настроения, +50 %», а без изменений — «без изменений». Число и слово соединены
- * неразрывным пробелом: «%» не уезжает на новую строку один.
+ * «+20 монет, +10 сытости, −5 настроения, +50 %», а без изменений — «без изменений». Число и слово
+ * соединены неразрывным пробелом: «%» не уезжает на новую строку один.
  */
 internal fun optionEffectsText(option: CustomQuestOptionDraft): String = listOfNotNull(
     option.moneyDelta.takeIf { it != 0 }?.let { "${signed(it)}\u00A0монет" },
+    option.hungerDelta.takeIf { it != 0 }?.let { "${signed(it)}\u00A0сытости" },
+    option.healthDelta.takeIf { it != 0 }?.let { "${signed(it)}\u00A0здоровья" },
     option.moodDelta.takeIf { it != 0 }?.let { "${signed(it)}\u00A0настроения" },
     option.progressDelta.takeIf { it != 0 }?.let { "+$it\u00A0%" }
 ).joinToString(", ").ifEmpty { "без изменений" }
@@ -829,7 +833,7 @@ internal val PreviewCleaningDraft = CustomQuestDraft(
         CustomQuestStepDraft(
             text = "Комната в беспорядке",
             options = listOf(
-                CustomQuestOptionDraft("Убрать сейчас", "Стало чисто!", progressDelta = 25),
+                CustomQuestOptionDraft("Убрать сейчас", "Стало чисто!", progressDelta = 25, healthDelta = 5),
                 CustomQuestOptionDraft("Потом", "Беспорядок остался")
             )
         ),

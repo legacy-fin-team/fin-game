@@ -130,6 +130,43 @@ class CustomQuestsTest {
     }
 
     @Test
+    fun `an option changes every bar of the pet and the codec keeps them`() {
+        val meal = cleaning.copy(
+            steps = listOf(
+                cleaning.steps[0].copy(
+                    options = listOf(
+                        CustomQuestOptionDraft("Суп", "Сытно", hungerDelta = 20, healthDelta = 10, moodDelta = -5),
+                        CustomQuestOptionDraft("Потом", "Голодно", hungerDelta = -10)
+                    )
+                )
+            )
+        )
+        val quest = meal.toQuest("custom-5")
+
+        assertEquals(
+            mapOf(StatKind.HUNGER to 20, StatKind.HEALTH to 10, StatKind.PLEASURE to -5),
+            quest.node("s1")!!.options[0].statEffects
+        )
+        assertEquals(mapOf(StatKind.HUNGER to -10), quest.node("s1")!!.options[1].statEffects)
+        val decoded = CustomQuestsCodec.decode(CustomQuestsCodec.encode(listOf(quest))).single()
+        assertEquals(quest, decoded)
+        assertEquals(meal, CustomQuestDraft.of(decoded))
+    }
+
+    @Test
+    fun `every bar is checked against its limits`() {
+        fun withOption(option: CustomQuestOptionDraft) = cleaning.copy(
+            steps = listOf(cleaning.steps[0].copy(options = listOf(option, cleaning.steps[0].options[1])))
+        )
+        val ok = cleaning.steps[0].options[0]
+
+        assertTrue(withOption(ok.copy(hungerDelta = CustomQuests.STAT_MAX + 5)).validate().any { it.contains("сытость") })
+        assertTrue(withOption(ok.copy(healthDelta = 3)).validate().any { it.contains("здоровье") })
+        assertTrue(withOption(ok.copy(moodDelta = CustomQuests.STAT_MIN - 5)).validate().any { it.contains("настроение") })
+        assertEquals(emptyList<String>(), withOption(ok.copy(hungerDelta = -20, healthDelta = 20)).validate())
+    }
+
+    @Test
     fun `without progress in any option the quest has none`() {
         val flat = cleaning.copy(
             steps = cleaning.steps.map { step ->

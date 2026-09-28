@@ -67,12 +67,12 @@ object CustomQuests {
 
     const val MONEY_STEP = 10
 
-    /** Пределы изменения настроения питомца. */
-    const val MOOD_MIN = -20
+    /** Пределы изменения любой шкалы питомца — сытости, здоровья, настроения. */
+    const val STAT_MIN = -20
 
-    const val MOOD_MAX = 20
+    const val STAT_MAX = 20
 
-    const val MOOD_STEP = 5
+    const val STAT_STEP = 5
 
     /** Сдвиги прогресса, из которых выбирает взрослый, в процентах. */
     val PROGRESS_STEPS: List<Int> = listOf(0, 25, 50, 100)
@@ -82,6 +82,16 @@ object CustomQuests {
 
     /** @return Свой ли это квест взрослого. */
     fun isCustom(questId: String): Boolean = questId.startsWith(ID_PREFIX)
+
+    /** Шкалы питомца в порядке строк формы: сытость, здоровье, настроение. */
+    val STATS: List<StatKind> = listOf(StatKind.HUNGER, StatKind.HEALTH, StatKind.PLEASURE)
+
+    /** @return Как шкала называется в форме: «Сытость», «Здоровье», «Настроение». */
+    fun statTitle(stat: StatKind): String = when (stat) {
+        StatKind.HUNGER -> "Сытость"
+        StatKind.HEALTH -> "Здоровье"
+        StatKind.PLEASURE -> "Настроение"
+    }
 
     /**
      * @param index номер ситуации, с нуля.
@@ -106,20 +116,38 @@ object CustomQuests {
  * @property label надпись на кнопке.
  * @property resultText что случилось после выбора.
  * @property moneyDelta монеты, со знаком.
- * @property moodDelta настроение питомца, со знаком.
+ * @property moodDelta настроение питомца ([StatKind.PLEASURE]), со знаком.
  * @property progressDelta сдвиг прогресса квеста, в процентах.
+ * @property hungerDelta сытость питомца ([StatKind.HUNGER]), со знаком.
+ * @property healthDelta здоровье питомца ([StatKind.HEALTH]), со знаком.
  */
 data class CustomQuestOptionDraft(
     val label: String = "",
     val resultText: String = "",
     val moneyDelta: Int = 0,
     val moodDelta: Int = 0,
-    val progressDelta: Int = 0
+    val progressDelta: Int = 0,
+    val hungerDelta: Int = 0,
+    val healthDelta: Int = 0
 ) {
+
+    /** @return Изменение шкалы [stat] этим вариантом, со знаком. */
+    fun deltaOf(stat: StatKind): Int = when (stat) {
+        StatKind.HUNGER -> hungerDelta
+        StatKind.HEALTH -> healthDelta
+        StatKind.PLEASURE -> moodDelta
+    }
+
+    /** @return Этот вариант, у которого шкала [stat] меняется на [value]. */
+    fun withDelta(stat: StatKind, value: Int): CustomQuestOptionDraft = when (stat) {
+        StatKind.HUNGER -> copy(hungerDelta = value)
+        StatKind.HEALTH -> copy(healthDelta = value)
+        StatKind.PLEASURE -> copy(moodDelta = value)
+    }
 
     /** @return Эффекты варианта на шкалы питомца, без нулевых — как их получит [QuestOption]. */
     fun statEffects(): Map<StatKind, Int> =
-        mapOf(StatKind.PLEASURE to moodDelta).filterValues { it != 0 }
+        StatKind.entries.associateWith { deltaOf(it) }.filterValues { it != 0 }
 
     companion object {
 
@@ -138,7 +166,9 @@ data class CustomQuestOptionDraft(
             resultText = resultText,
             moneyDelta = moneyDelta,
             moodDelta = effects[StatKind.PLEASURE] ?: 0,
-            progressDelta = progressDelta
+            progressDelta = progressDelta,
+            hungerDelta = effects[StatKind.HUNGER] ?: 0,
+            healthDelta = effects[StatKind.HEALTH] ?: 0
         )
     }
 }
@@ -244,10 +274,12 @@ data class CustomQuestDraft(
             ) {
                 errors += "$where: монеты — от ${CustomQuests.MONEY_MIN} до +${CustomQuests.MONEY_MAX}"
             }
-            if (option.moodDelta !in CustomQuests.MOOD_MIN..CustomQuests.MOOD_MAX ||
-                option.moodDelta % CustomQuests.MOOD_STEP != 0
-            ) {
-                errors += "$where: настроение — от ${CustomQuests.MOOD_MIN} до +${CustomQuests.MOOD_MAX}"
+            StatKind.entries.forEach { stat ->
+                val delta = option.deltaOf(stat)
+                if (delta !in CustomQuests.STAT_MIN..CustomQuests.STAT_MAX || delta % CustomQuests.STAT_STEP != 0) {
+                    errors += "$where: ${CustomQuests.statTitle(stat).lowercase()} — от ${CustomQuests.STAT_MIN} " +
+                        "до +${CustomQuests.STAT_MAX}"
+                }
             }
             if (option.progressDelta !in CustomQuests.PROGRESS_STEPS) {
                 errors += "$where: выбери прогресс"
