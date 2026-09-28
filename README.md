@@ -110,9 +110,9 @@
 
 | Вариант | Debuggable | Подпись | Минификация | `DEMO_MODE` | Чем отличается в игре | Команда | APK |
 |---|---|---|---|---|---|---|---|
-| debug | да | отладочный ключ Android SDK | нет | `true` | Есть кнопка «+12 ч» (перемотка времени, см. `DemoMode.kt`) | `./gradlew :app:assembleDebug` | `app/build/outputs/apk/debug/app-debug.apk` |
-| release | нет | не задана — APK неподписанный, подписывается вручную (`apksigner`) | выключена (`optimization { enable = false }`) | `false` | Кнопки перемотки нет, время идёт как у игрока | `./gradlew :app:assembleRelease` | `app/build/outputs/apk/release/app-release-unsigned.apk` |
-| releaseDebuggable | да (копия `release` + `isDebuggable = true`) | отладочный ключ Android SDK (как у debug) | выключена (копия `release`) | `false` | Как у release, но APK уже подписан отладочным ключом и ставится поверх debug-сборки, без удаления | `./gradlew :app:assembleReleaseDebuggable` | `app/build/outputs/apk/releaseDebuggable/app-releaseDebuggable.apk` |
+| debug | да | отладочный ключ Android SDK | нет | `true` | Есть кнопка «+12 ч» (перемотка времени, см. `DemoMode.kt`); квесты без ожидания — кулдауны и паузы между этапами отключены | `./gradlew :app:assembleDebug` | `app/build/outputs/apk/debug/app-debug.apk` |
+| release | нет | не задана — APK неподписанный, подписывается вручную (`apksigner`) | выключена (`optimization { enable = false }`) | `false` | Кнопки перемотки нет, время идёт как у игрока; кулдауны и паузы в квестах действуют | `./gradlew :app:assembleRelease` | `app/build/outputs/apk/release/app-release-unsigned.apk` |
+| releaseDebuggable | да (копия `release` + `isDebuggable = true`) | отладочный ключ Android SDK (как у debug) | выключена (копия `release`) | `false` | Как у release (без «+12 ч»), но APK подписан отладочным ключом и ставится поверх debug-сборки; квесты без ожидания, как в debug (`BuildConfig.DEBUG = true`) | `./gradlew :app:assembleReleaseDebuggable` | `app/build/outputs/apk/releaseDebuggable/app-releaseDebuggable.apk` |
 
 `DEMO_MODE` переопределяется для любого варианта свойством `-Pfingame.demoMode=true|false`
 (например, `./gradlew :app:assembleRelease -Pfingame.demoMode=true` — релизная сборка с кнопкой
