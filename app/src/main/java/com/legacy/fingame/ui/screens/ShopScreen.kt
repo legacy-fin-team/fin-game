@@ -910,11 +910,12 @@ private fun CategoryButton(
  *
  * @return The Russian title of the category.
  */
-private fun ItemCategory.title(): String = when (this) {
+internal fun ItemCategory.title(): String = when (this) {
     ItemCategory.FOOD -> "Еда"
     ItemCategory.TOYS -> "Игрушки"
     ItemCategory.CLOTHES -> "Одежда"
     ItemCategory.DECOR -> "Декор"
+    ItemCategory.OTHER -> "Другое"
 }
 
 /**

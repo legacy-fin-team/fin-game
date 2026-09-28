@@ -32,9 +32,16 @@ object QuestEngine {
      * Что получилось из выбора варианта.
      *
      * @property quests новое состояние квестов.
-     * @property outcome исход выбора — его надо применить к питомцу и деньгам.
+     * @property outcome исход выбора — его надо применить к питомцу и деньгам, если только он не
+     * [awaitingCheck].
+     * @property awaitingCheck выбор сдан на проверку взрослому ([Quest.requiresAdultCheck]): исход
+     * пока НЕ применяется — это сделает [approve].
      */
-    data class Choice(val quests: List<QuestProgress>, val outcome: QuestOutcome)
+    data class Choice(
+        val quests: List<QuestProgress>,
+        val outcome: QuestOutcome,
+        val awaitingCheck: Boolean = false
+    )
 
     /**
      * Случайный квест, который только что выпал.
@@ -160,6 +167,10 @@ object QuestEngine {
      * у квестов с прогрессом. Следующий шаг откроется через задержку узла; после последнего
      * варианта ждать нечего; с [ignoreDelays] не ждать и между шагами.
      *
+     * У квеста с [Quest.requiresAdultCheck] выбор — это «Готово» ребёнка: этап уходит на проверку
+     * ([QuestCheck.WAITING]), прогресс не двигается, а исход возвращается с
+     * [Choice.awaitingCheck] — применять его рано, это сделает [approve].
+     *
      * @param optionIndex номер варианта на узле.
      * @param balance текущий счёт игрока.
      * @return Новое состояние и исход, или null, когда выбирать сейчас нечего: квест не идёт, выбор
@@ -199,14 +210,83 @@ object QuestEngine {
             moneyDelta = moneyDelta,
             progressDelta = progress - current.progress
         )
+        if (quest.requiresAdultCheck) {
+            val sent = current.copy(
+                availableAtMillis = nowMillis,
+                lastChoice = outcome,
+                check = QuestCheck.WAITING
+            )
+            return Choice(quests.replaced(sent), outcome, awaitingCheck = true)
+        }
         val waitMillis = if (outcome.isFinal || ignoreDelays) 0L else node.delayMinutes * MINUTE_MILLIS
         val updated = current.copy(
             progress = progress,
             availableAtMillis = nowMillis + waitMillis,
-            lastChoice = outcome
+            lastChoice = outcome,
+            check = QuestCheck.NONE
         )
         return Choice(quests.replaced(updated), outcome)
     }
+
+    /**
+     * Взрослый «Засчитать»: сданный этап засчитывается, как если бы выбор был сделан сейчас —
+     * прогресс двигается, трата урезается до нынешнего баланса, следующий шаг откроется через
+     * задержку узла. Дальше ребёнок видит результат и идёт «Дальше», как обычно.
+     *
+     * @param balance текущий счёт игрока.
+     * @param ignoreDelays не ждать паузы узла и после засчитанного этапа (см. описание [QuestEngine]).
+     * Саму проверку флаг не снимает: без «Засчитать» награды нет.
+     * @return Новое состояние и исход, который теперь надо применить к питомцу и деньгам; null,
+     * когда этап квеста проверки не ждёт.
+     */
+    fun approve(
+        quest: Quest,
+        quests: List<QuestProgress>,
+        balance: Int,
+        nowMillis: Long,
+        ignoreDelays: Boolean = false
+    ): Choice? {
+        val current = progressOf(quests, quest.id) ?: return null
+        if (!current.isAwaitingCheck) return null
+        val sent = current.lastChoice ?: return null
+        val moneyDelta = if (sent.moneyDelta < 0) {
+            sent.moneyDelta.coerceAtLeast(-balance.coerceAtLeast(0))
+        } else {
+            sent.moneyDelta
+        }
+        val progress = if (quest.hasProgress) {
+            (current.progress + sent.progressDelta).coerceIn(Quest.MIN_PROGRESS, Quest.MAX_PROGRESS)
+        } else {
+            current.progress
+        }
+        val outcome = sent.copy(moneyDelta = moneyDelta, progressDelta = progress - current.progress)
+        val delayMinutes = quest.node(current.nodeId)?.delayMinutes ?: 0
+        val waitMillis = if (outcome.isFinal || ignoreDelays) 0L else delayMinutes * MINUTE_MILLIS
+        val updated = current.copy(
+            progress = progress,
+            availableAtMillis = nowMillis + waitMillis,
+            lastChoice = outcome,
+            check = QuestCheck.NONE
+        )
+        return Choice(quests.replaced(updated), outcome)
+    }
+
+    /**
+     * Взрослый «Не засчитано»: сданный выбор снимается, этап снова в работе — ребёнок выбирает на
+     * том же шаге заново. Награды не было, так что и отнимать нечего.
+     *
+     * @return Новое состояние, или null, когда этап квеста [questId] проверки не ждёт.
+     */
+    fun reject(quests: List<QuestProgress>, questId: String, nowMillis: Long): List<QuestProgress>? {
+        val current = progressOf(quests, questId) ?: return null
+        if (!current.isAwaitingCheck) return null
+        return quests.replaced(
+            current.copy(availableAtMillis = nowMillis, lastChoice = null, check = QuestCheck.REJECTED)
+        )
+    }
+
+    /** @return Этапы, которые ждут проверки взрослым, в порядке списка квестов. */
+    fun awaitingCheck(quests: List<QuestProgress>): List<QuestProgress> = quests.filter { it.isAwaitingCheck }
 
     /**
      * «Дальше» или «Завершить» после показанного результата. Узел, которого в данных больше нет,
@@ -226,6 +306,7 @@ object QuestEngine {
         val current = progressOf(quests, quest.id) ?: return null
         if (!current.isActive) return null
 
+        if (current.isAwaitingCheck) return null
         val choice = current.lastChoice
         if (choice == null) {
             if (quest.node(current.nodeId) != null) return null

@@ -12,6 +12,7 @@ import com.legacy.fingame.game.quests.QuestCatalog
 import com.legacy.fingame.game.quests.QuestKind
 import com.legacy.fingame.game.quests.QuestNode
 import com.legacy.fingame.game.quests.QuestOption
+import com.legacy.fingame.game.rules.PetCareTuning
 import com.legacy.fingame.game.scene.GameLayer
 import com.legacy.fingame.game.settings.GameSettings
 import com.legacy.fingame.game.stats.StatKind
@@ -169,6 +170,8 @@ internal class FakeGameClock(
  * meet a quest.
  * @param random dice for random quests; by default dice that fail the test the moment they are
  * rolled, so a test that does not script them proves they were never needed.
+ * @param allowRestart whether a finished quest may be started again.
+ * @param careTuning правила ухода; по умолчанию — те же, что в игре.
  * @param settings the saved settings the app starts with.
  * @param ignoreQuestDelays whether quests skip their waits, as in a debug build; off by default, so
  * the tests about cooldowns and delays see them — a unit test runs the debug build itself.
@@ -181,6 +184,7 @@ internal fun testGameViewModel(
     questCatalog: QuestCatalog = QuestCatalog.EMPTY,
     random: Random = ScriptedRandom(),
     allowRestart: Boolean = true,
+    careTuning: PetCareTuning = PetCareTuning.DEFAULT,
     settings: GameSettings = GameSettings(),
     ignoreQuestDelays: Boolean = false
 ): GameViewModel = GameViewModel(
@@ -190,6 +194,7 @@ internal fun testGameViewModel(
     questCatalog = questCatalog,
     random = random,
     allowRestart = allowRestart,
+    careTuning = careTuning,
     settings = settings,
     ignoreQuestDelays = ignoreQuestDelays
 )
@@ -394,3 +399,14 @@ internal class ScriptedRandom(vararg picks: Int) : Random() {
         return pick
     }
 }
+
+/**
+ * Правила ухода, при которых питомец всегда растёт как обычно и никаких штрафов нет: для
+ * проверок часов и перезапусков, где питомца нарочно оставляют одного. Сами правила ухода
+ * проверяет [GameCareRulesTest].
+ */
+internal val NO_CARE_RULES = PetCareTuning(
+    stopGrowthBelow = 0.0,
+    slowGrowthBelow = 0.0,
+    neglectBelow = 0.0
+)

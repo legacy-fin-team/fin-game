@@ -10,13 +10,28 @@ package com.legacy.fingame.game.economy
  * потому что игрок смотрит журнал ради своих трат.
  * @property gameDay игровой день, в который это случилось, как его называет [GameClock.today].
  * @property timestampMillis момент по часам игры, в миллисекундах.
+ * @property itemId для покупки — id купленного товара, для всего остального — null. Записи,
+ * сделанные до истории покупок, его не знают, поэтому и старая покупка читается с null.
+ * @property variantId для покупки — вариант товара, в котором его купили, иначе null.
+ * @property quantity для покупки — сколько штук куплено одной позицией корзины, иначе ноль.
+ * @property spendKind для покупки — в какую категорию плана она легла, иначе null.
+ * @property fromAdult монеты добавил или убрал взрослый вручную, из своего режима; причина тогда —
+ * [MoneyLog.adultReason], её же видит ребёнок.
  */
 data class MoneyEntry(
     val reason: String,
     val delta: Int,
     val gameDay: Long,
-    val timestampMillis: Long
-)
+    val timestampMillis: Long,
+    val itemId: String? = null,
+    val variantId: String? = null,
+    val quantity: Int = 0,
+    val spendKind: SpendKind? = null,
+    val fromAdult: Boolean = false
+) {
+    /** Покупка ли это товара — то есть запись, по которой видно, что именно купили. */
+    val isPurchase: Boolean get() = itemId != null
+}
 
 /**
  * Журнал изменений денег: всё, что случилось с текущим счётом игрока, новейшее первым.
@@ -95,5 +110,14 @@ data class MoneyLog(val entries: List<MoneyEntry> = emptyList()) {
          * «Квест: Пикник».
          */
         fun questReason(title: String): String = "Квест: $title"
+
+        /**
+         * @param delta сколько взрослый добавил (плюс) или убрал (минус).
+         * @param reason причина, которую взрослый вписал.
+         * @return Причина ручного изменения так, как её читают ребёнок и взрослый: «Взрослый
+         * добавил 50: за уборку», «Взрослый убрал 20: разбил чашку».
+         */
+        fun adultReason(delta: Int, reason: String): String =
+            if (delta >= 0) "Взрослый добавил $delta: $reason" else "Взрослый убрал ${-delta}: $reason"
     }
 }

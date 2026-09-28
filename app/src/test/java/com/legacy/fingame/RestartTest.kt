@@ -16,6 +16,9 @@ import org.junit.Test
  * Closing the app and opening it again: the player finds the pet where it was left, however that
  * point in time was reached — by waiting, by skipping time in a demo build, or by a device clock
  * that has been moved since.
+ *
+ * Питомца здесь нарочно оставляют одного, а проверяются часы, поэтому игра идёт без правил ухода
+ * ([NO_CARE_RULES]); сами правила проверяет [GameCareRulesTest].
  */
 class RestartTest {
 
@@ -39,13 +42,13 @@ class RestartTest {
     fun `a pet grown while the app was open comes back grown up`() {
         val clock = FakeGameClock()
         val store = storeWithPet(clock)
-        val firstRun = testGameViewModel(store = store, clock = clock)
+        val firstRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
 
         clock.millis += Growth.STAGE_MILLIS * 2
         firstRun.tick()
         assertEquals(Animal.FIRST_AGE + 2, firstRun.state.value.petAge)
 
-        val nextRun = testGameViewModel(store = store, clock = clock)
+        val nextRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
 
         assertEquals(Animal.FIRST_AGE + 2, nextRun.state.value.petAge)
     }
@@ -54,12 +57,12 @@ class RestartTest {
     fun `a pet grown by skipping time comes back grown up`() {
         val clock = FakeGameClock()
         val store = storeWithPet(clock)
-        val firstRun = testGameViewModel(store = store, clock = clock)
+        val firstRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
 
         firstRun.fastForward(Growth.STAGE_MILLIS * 2)
         assertEquals(Animal.FIRST_AGE + 2, firstRun.state.value.petAge)
 
-        val nextRun = testGameViewModel(store = store, clock = clock)
+        val nextRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
 
         assertEquals(Animal.FIRST_AGE + 2, nextRun.state.value.petAge)
     }
@@ -68,12 +71,12 @@ class RestartTest {
     fun `the bars come back where skipping time left them`() {
         val clock = FakeGameClock()
         val store = storeWithPet(clock)
-        val firstRun = testGameViewModel(store = store, clock = clock)
+        val firstRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
 
         firstRun.fastForward(PetStats.TICK_MILLIS * 3)
         val skippedTo = firstRun.state.value.stats
 
-        val nextRun = testGameViewModel(store = store, clock = clock)
+        val nextRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
 
         assertEquals(skippedTo, nextRun.state.value.stats)
         StatKind.entries.forEach { stat ->
@@ -88,7 +91,7 @@ class RestartTest {
     fun `a device clock moved back does not make the pet younger`() {
         val clock = FakeGameClock()
         val store = storeWithPet(clock)
-        val firstRun = testGameViewModel(store = store, clock = clock)
+        val firstRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
 
         clock.millis += Growth.STAGE_MILLIS * 3
         firstRun.tick()
@@ -96,7 +99,7 @@ class RestartTest {
 
         // The player turns the device's clock back a week between the two launches.
         clock.millis -= Growth.STAGE_MILLIS * 7
-        val nextRun = testGameViewModel(store = store, clock = clock)
+        val nextRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
 
         assertEquals(Animal.FIRST_AGE + 3, nextRun.state.value.petAge)
     }
@@ -104,7 +107,7 @@ class RestartTest {
     @Test
     fun `a device clock moved back while the app is open does not make the pet younger`() {
         val clock = FakeGameClock()
-        val vm = testGameViewModel(store = storeWithPet(clock), clock = clock)
+        val vm = testGameViewModel(store = storeWithPet(clock), clock = clock, careTuning = NO_CARE_RULES)
 
         clock.millis += Growth.STAGE_MILLIS
         vm.tick()
@@ -120,7 +123,7 @@ class RestartTest {
     fun `a moment behind the pet's own takes nothing off its bars`() {
         val clock = FakeGameClock()
         val store = storeWithPet(clock)
-        val firstRun = testGameViewModel(store = store, clock = clock)
+        val firstRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
 
         firstRun.fastForward(PetStats.TICK_MILLIS * 2)
         val skippedTo = firstRun.state.value.stats
@@ -130,7 +133,7 @@ class RestartTest {
         firstRun.tick()
         assertEquals(skippedTo, firstRun.state.value.stats)
 
-        val nextRun = testGameViewModel(store = store, clock = clock)
+        val nextRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
         assertEquals(skippedTo, nextRun.state.value.stats)
     }
 
@@ -138,12 +141,12 @@ class RestartTest {
     fun `the day a skip reached is the day the game comes back on`() {
         val clock = FakeGameClock()
         val store = storeWithPet(clock)
-        val firstRun = testGameViewModel(store = store, clock = clock)
+        val firstRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
 
         firstRun.fastForward(Growth.STAGE_MILLIS)
         assertEquals(clock.day + 1, firstRun.state.value.todayDay)
 
-        val nextRun = testGameViewModel(store = store, clock = clock)
+        val nextRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
 
         assertEquals(clock.day + 1, nextRun.state.value.todayDay)
     }
@@ -152,13 +155,13 @@ class RestartTest {
     fun `a skipped day that has already paid does not pay again after a restart`() {
         val clock = FakeGameClock()
         val store = storeWithPet(clock)
-        val firstRun = testGameViewModel(store = store, clock = clock)
+        val firstRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
 
         firstRun.fastForward(Growth.STAGE_MILLIS)
         assertTrue(firstRun.claimDailyBonus())
         val earned = firstRun.state.value.balance
 
-        val nextRun = testGameViewModel(store = store, clock = clock)
+        val nextRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
         assertFalse(nextRun.state.value.dailyBonusAvailable)
         assertFalse(nextRun.claimDailyBonus())
         assertEquals(earned, nextRun.state.value.balance)

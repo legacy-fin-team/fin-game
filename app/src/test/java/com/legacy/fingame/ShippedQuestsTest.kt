@@ -4,14 +4,15 @@ import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestCatalog
 import com.legacy.fingame.game.quests.QuestKind
 import com.legacy.fingame.game.quests.QuestReader
+import com.legacy.fingame.game.quests.QuestTopic
 import com.legacy.fingame.game.stats.StatKind
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * Квесты, с которыми игра поставляется: файл из assets читается целиком, и в нём ровно то, что
@@ -43,6 +44,21 @@ class ShippedQuestsTest {
         assertEquals(
             listOf("picnic", "piggy_bank", "lost_wallet", "guests"),
             quests.map { it.id }
+        )
+    }
+
+    @Test
+    fun `every shipped quest has a topic`() {
+        val topics = readShippedQuests().associate { it.id to it.topic }
+
+        assertEquals(
+            mapOf(
+                "picnic" to QuestTopic.PLANNING,
+                "piggy_bank" to QuestTopic.SAVING,
+                "lost_wallet" to QuestTopic.HONESTY,
+                "guests" to QuestTopic.NEEDS_WANTS
+            ),
+            topics
         )
     }
 

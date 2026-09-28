@@ -3,6 +3,7 @@ package com.legacy.fingame.utils
 import android.util.Log
 import com.legacy.fingame.game.economy.MoneyEntry
 import com.legacy.fingame.game.economy.MoneyLog
+import com.legacy.fingame.game.economy.SpendKind
 
 /**
  * Журнал денег как одна строка в настройках приложения.
@@ -14,6 +15,11 @@ import com.legacy.fingame.game.economy.MoneyLog
  * ни в одном обычном тексте, так что формат никогда не путает разделитель с содержимым — за
  * единственным исключением: причина ([MoneyEntry.reason]) чистится от них при кодировании (см.
  * [encode]), чтобы даже самый странный ввод не мог сломать формат.
+ *
+ * Запись — девять полей: причина, изменение, игровой день, момент; товар, вариант, количество и
+ * категория плана (у не-покупки пустые); и признак «изменил взрослый» (`1`/`0`). Журналы прежних
+ * версий писали четыре поля (до истории покупок — такие записи читаются как не-покупки) или восемь
+ * (до ручных изменений взрослого — признак тогда ложь).
  */
 object MoneyLogCodec {
 
@@ -25,8 +31,17 @@ object MoneyLogCodec {
     /** Разделитель полей внутри одной записи — символ "unit separator". */
     private const val FIELD_SEPARATOR = '\u001F'
 
-    /** Сколько полей в одной записи: причина, изменение, игровой день, момент. */
-    private const val FIELDS_PER_ENTRY = 4
+    /** Сколько полей в записи старого вида: причина, изменение, игровой день, момент. */
+    private const val BASE_FIELDS = 4
+
+    /** Сколько полей в записи до ручных изменений взрослого: к базовым — товар, вариант, количество, категория. */
+    private const val PURCHASE_FIELDS = 8
+
+    /** Сколько полей в записи нынешнего вида: ещё признак «изменил взрослый». */
+    private const val FIELDS_PER_ENTRY = 9
+
+    private const val FROM_ADULT = "1"
+    private const val NOT_FROM_ADULT = "0"
 
     /**
      * @param log журнал, как его держит игра.
@@ -35,12 +50,21 @@ object MoneyLogCodec {
      */
     fun encode(log: MoneyLog): String = log.entries.joinToString(ENTRY_SEPARATOR.toString()) { entry ->
         listOf(
-            entry.reason.replace(ENTRY_SEPARATOR.toString(), "").replace(FIELD_SEPARATOR.toString(), ""),
+            clean(entry.reason),
             entry.delta,
             entry.gameDay,
-            entry.timestampMillis
+            entry.timestampMillis,
+            clean(entry.itemId.orEmpty()),
+            clean(entry.variantId.orEmpty()),
+            entry.quantity,
+            entry.spendKind?.name.orEmpty(),
+            if (entry.fromAdult) FROM_ADULT else NOT_FROM_ADULT
         ).joinToString(FIELD_SEPARATOR.toString())
     }
+
+    /** @return [text] без обоих разделителей: так он не сломает формат, что бы в нём ни было. */
+    private fun clean(text: String): String =
+        text.replace(ENTRY_SEPARATOR.toString(), "").replace(FIELD_SEPARATOR.toString(), "")
 
     /**
      * Читает обратно то, что написал [encode].
@@ -62,28 +86,45 @@ object MoneyLogCodec {
 
     /**
      * @param record одна запись, как её отделил [decode].
-     * @return Запись, или null, когда полей не четыре или число не разобралось.
+     * @return Запись, или null, когда полей не четыре, не восемь и не девять или число не разобралось.
+     * Категория, которой больше нет в игре, читается как null — сама покупка от этого не теряется.
      */
     private fun decodeEntry(record: String): MoneyEntry? {
         val fields = record.split(FIELD_SEPARATOR)
-        if (fields.size != FIELDS_PER_ENTRY) {
-            Log.w(TAG, "Dropped a malformed money log record: '$record'")
-            return null
+        if (fields.size != BASE_FIELDS && fields.size != PURCHASE_FIELDS && fields.size != FIELDS_PER_ENTRY) {
+            return dropped(record)
         }
 
         val delta = fields[1].toIntOrNull()
         val gameDay = fields[2].toLongOrNull()
         val timestampMillis = fields[3].toLongOrNull()
-        if (delta == null || gameDay == null || timestampMillis == null) {
-            Log.w(TAG, "Dropped a malformed money log record: '$record'")
-            return null
-        }
+        if (delta == null || gameDay == null || timestampMillis == null) return dropped(record)
 
-        return MoneyEntry(
+        val entry = MoneyEntry(
             reason = fields[0],
             delta = delta,
             gameDay = gameDay,
             timestampMillis = timestampMillis
         )
+        if (fields.size == BASE_FIELDS) return entry
+
+        val quantity = fields[6].toIntOrNull() ?: return dropped(record)
+        val fromAdult = when (fields.getOrNull(PURCHASE_FIELDS)) {
+            null, NOT_FROM_ADULT -> false
+            FROM_ADULT -> true
+            else -> return dropped(record)
+        }
+        return entry.copy(
+            itemId = fields[4].ifEmpty { null },
+            variantId = fields[5].ifEmpty { null },
+            quantity = quantity,
+            spendKind = SpendKind.entries.find { it.name == fields[7] },
+            fromAdult = fromAdult
+        )
+    }
+
+    private fun dropped(record: String): MoneyEntry? {
+        Log.w(TAG, "Dropped a malformed money log record: '$record'")
+        return null
     }
 }

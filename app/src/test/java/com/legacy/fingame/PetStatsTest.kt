@@ -96,20 +96,22 @@ class PetStatsTest {
     }
 
     @Test
-    fun `a pet grows one stage per stage-long stretch of time`() {
-        val born = 5_000_000L
-
-        assertEquals(Animal.FIRST_AGE, Growth.ageAt(born, born))
-        assertEquals(Animal.FIRST_AGE, Growth.ageAt(born, born + Growth.STAGE_MILLIS - 1))
-        assertEquals(Animal.FIRST_AGE + 1, Growth.ageAt(born, born + Growth.STAGE_MILLIS))
-        assertEquals(Animal.FIRST_AGE + 4, Growth.ageAt(born, born + Growth.STAGE_MILLIS * 4))
+    fun `a pet grows one stage per stage worth of growing`() {
+        assertEquals(Animal.FIRST_AGE, Growth.ageOf(0L))
+        assertEquals(Animal.FIRST_AGE, Growth.ageOf(Growth.STAGE_MILLIS - 1))
+        assertEquals(Animal.FIRST_AGE + 1, Growth.ageOf(Growth.STAGE_MILLIS))
+        assertEquals(Animal.FIRST_AGE + 1, Growth.ageOf(Growth.STAGE_MILLIS * 3 / 2))
+        assertEquals(Animal.FIRST_AGE + 4, Growth.ageOf(Growth.STAGE_MILLIS * 4))
     }
 
     @Test
-    fun `a pet whose age cannot be told is at the youngest stage`() {
-        val born = 5_000_000L
+    fun `a pet that has not grown at all is at the youngest stage`() {
+        assertEquals(Animal.FIRST_AGE, Growth.ageOf(-Growth.STAGE_MILLIS))
+        assertEquals(Animal.FIRST_AGE, Growth.ageOf(Long.MIN_VALUE))
+    }
 
-        assertEquals(Animal.FIRST_AGE, Growth.ageAt(Growth.NOT_BORN, born))
-        assertEquals(Animal.FIRST_AGE, Growth.ageAt(born, born - Growth.STAGE_MILLIS * 3))
+    @Test
+    fun `a pet grown beyond any stage count does not overflow`() {
+        assertEquals(Int.MAX_VALUE, Growth.ageOf(Long.MAX_VALUE))
     }
 }

@@ -72,7 +72,6 @@ import androidx.compose.ui.zIndex
 import com.legacy.fingame.DemoMode
 import com.legacy.fingame.game.GameUiState
 import com.legacy.fingame.game.Screen
-import com.legacy.fingame.game.economy.Economy
 import com.legacy.fingame.game.items.GoalLine
 import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.items.ItemSelection
@@ -472,7 +471,8 @@ private fun heldApart(start: Int, end: Int): Pair<Int, Int> =
  *   from the pet, its age stage and what it wears (see [GameScene.of]), so this screen doesn't have
  *   to know how the assets are laid out. Defaults to the demo content pet alone.
  * @param subLocationTitles titles for each sub-location, indexed by
- *   [GameUiState.subLocationIndex]; defaults to the demo content titles.
+ *   [GameUiState.subLocationIndex]; kept for callers, but no longer shown: the badge above the pet
+ *   says only its name.
  * @param onPetTap called when the player pats the pet — taps it in the game area — and the pat
  *   counts, i.e. no more often than [PetTouchController.MIN_TAP_INTERVAL_MILLIS]; the hearts over
  *   the pet are the screen's own business, the sound of the pat is the caller's.
@@ -573,7 +573,8 @@ fun MainScreen(
                     scene = scene,
                     title = stageTitleOf(
                         petName = state.petName,
-                        subLocationTitle = subLocationTitles.getOrNull(state.subLocationIndex)
+                        // Локаций в игре больше нет: над питомцем — только его имя.
+                        subLocationTitle = null
                     ),
                     // Only an upright screen holds the area to a share of the width: on a wide one
                     // the band between the corner blocks is narrow enough as it is.
@@ -583,6 +584,8 @@ fun MainScreen(
                         Dp.Unspecified
                     },
                     dailyBonusAvailable = state.dailyBonusAvailable,
+                    dailyIncome = state.dailyIncome,
+                    careHint = state.careHint,
                     onClaimDailyBonus = onClaimDailyBonus,
                     onPetTap = onPetTap
                 )
@@ -1100,6 +1103,9 @@ private fun PrimaryActions(
  *   width of the column.
  * @param dailyBonusAvailable whether the daily bonus is there to take, i.e. whether the button
  *   under the pet is shown at all.
+ * @param dailyIncome сколько монет даст бонус дня сейчас (см. [GameUiState.dailyIncome]).
+ * @param careHint подсказка, почему питомец растёт медленнее или бонус меньше, или null, когда
+ *   всё хорошо (см. [GameUiState.careHint]).
  * @param onClaimDailyBonus called when the player takes the bonus.
  * @param onPetTap called when the player pats the pet (see [PetStage]).
  * @param modifier modifier applied to the column.
@@ -1110,6 +1116,8 @@ private fun PetColumn(
     title: String?,
     stageMaxWidth: Dp,
     dailyBonusAvailable: Boolean,
+    dailyIncome: Int,
+    careHint: String?,
     onClaimDailyBonus: () -> Unit,
     onPetTap: () -> Unit,
     modifier: Modifier = Modifier
@@ -1131,12 +1139,17 @@ private fun PetColumn(
                 .widthIn(max = stageMaxWidth)
         )
 
+        if (careHint != null) {
+            Spacer(modifier = Modifier.height(StageGap))
+            CareHint(text = careHint, modifier = Modifier.widthIn(max = stageMaxWidth))
+        }
+
         if (dailyBonusAvailable) {
             Spacer(modifier = Modifier.height(StageGap))
             // The one filled button of the screen: taking the bonus is the thing the player is
             // meant to press here, and everything else on the screen is quieter than it.
             PillButton(
-                text = "Бонус дня +${Economy.DAILY_BONUS}",
+                text = "Бонус дня +$dailyIncome",
                 onClick = onClaimDailyBonus,
                 style = PillStyle.Primary
             )
@@ -1287,10 +1300,9 @@ internal fun PetStage(
  * of the one is exactly as big on the screen as a pixel of the other.
  *
  * The pet does not stand in the middle of the room but on its floor: the pet and everything on its
- * grid — the clothes it wears, and the placeholder for missing art that is drawn in its place — are
- * lowered by [SceneViewport.petFloorShift], a whole number of screen pixels that grows with the
- * scene as it is pinched, so the pet stays on the room's pixel grid at any size ([isOnPetGrid],
- * [loweredOntoFloor]).
+ * grid — the clothes it wears — are lowered by [SceneViewport.petFloorShift], a whole number of
+ * screen pixels that grows with the scene as it is pinched, so the pet stays on the room's pixel
+ * grid at any size ([isOnPetGrid], [loweredOntoFloor]).
  *
  * Every sprite is rendered directly on its layer, and if any sprite file is missing, [SpriteLoader]
  * automatically provides an error placeholder sprite for that specific layer.
@@ -1374,7 +1386,6 @@ private fun SceneLayers(
         }
 
         PetHearts(bursts = bursts, nowMillis = { nowMillis }, viewport = viewport)
-
     }
 }
 
@@ -1530,6 +1541,34 @@ private fun StageBadge(
             textAlign = TextAlign.Center,
             maxLines = StageBadgeMaxLines,
             overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+/**
+ * Подсказка под питомцем: почему он растёт медленнее и почему бонус меньше. Тихая, как и бейдж
+ * над питомцем, — она объясняет, а не ругает.
+ *
+ * @param text текст подсказки (см. [com.legacy.fingame.game.rules.PetCareRules.explain]).
+ * @param modifier модификатор подсказки.
+ */
+@Composable
+private fun CareHint(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, GameColors.cardStroke)
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
         )
     }
 }

@@ -58,7 +58,6 @@ import com.legacy.fingame.game.economy.BudgetDraft
 import com.legacy.fingame.game.economy.BudgetResult
 import com.legacy.fingame.game.economy.BudgetState
 import com.legacy.fingame.game.economy.Deposit
-import com.legacy.fingame.game.economy.Economy
 import com.legacy.fingame.game.economy.MoneyEntry
 import com.legacy.fingame.game.economy.MoneyLog
 import com.legacy.fingame.game.economy.SpendKind
@@ -281,7 +280,11 @@ fun BudgetScreen(
             }
 
             if (showBonus) {
-                DailyBonusCard(onClaimDailyBonus = onClaimDailyBonus)
+                DailyBonusCard(
+                    income = state.dailyIncome,
+                    careHint = state.careHint,
+                    onClaimDailyBonus = onClaimDailyBonus
+                )
             } else if (showPlanning) {
                 PlanningCard(
                     total = state.totalToPlan,
@@ -445,17 +448,27 @@ private fun ResultRow(
  * Карточка бонуса дня: новый период начинается с него, поэтому, пока бонус не получен, других
  * решений на экране нет.
  *
+ * @param income сколько монет даст бонус (см. [GameUiState.dailyIncome]).
+ * @param careHint почему бонус меньше обычного, или null, когда он полный.
  * @param onClaimDailyBonus вызывается по кнопке.
  * @param modifier модификатор карточки.
  */
 @Composable
-private fun DailyBonusCard(onClaimDailyBonus: () -> Unit, modifier: Modifier = Modifier) {
+private fun DailyBonusCard(
+    income: Int,
+    careHint: String?,
+    onClaimDailyBonus: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     BudgetCard(title = "Новый день", modifier = modifier) {
         HintText(text = "Получите бонус дня, чтобы спланировать бюджет")
+        if (careHint != null) {
+            HintText(text = careHint)
+        }
         // Пока бонус не получен, это единственное действие экрана — значит, ему и достаётся
         // единственная залитая кнопка.
         PillButton(
-            text = "Бонус дня +${Economy.DAILY_BONUS}",
+            text = "Бонус дня +$income",
             onClick = onClaimDailyBonus,
             modifier = Modifier.fillMaxWidth(),
             style = PillStyle.Primary

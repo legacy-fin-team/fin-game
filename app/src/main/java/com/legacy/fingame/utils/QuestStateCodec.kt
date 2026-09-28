@@ -2,6 +2,7 @@ package com.legacy.fingame.utils
 
 import android.util.Log
 import com.legacy.fingame.game.quests.Quest
+import com.legacy.fingame.game.quests.QuestCheck
 import com.legacy.fingame.game.quests.QuestOutcome
 import com.legacy.fingame.game.quests.QuestProgress
 import com.legacy.fingame.game.quests.QuestStatus
@@ -15,12 +16,13 @@ import com.legacy.fingame.game.stats.StatKind
  * управляющих символа вычищаются из текстов при кодировании, так что формат не ломается.
  *
  * Поля записи: id квеста, узел, момент доступности, прогресс, статус, есть ли выбор (`0`/`1`),
- * надпись варианта, текст результата, куда ведёт, эффекты, деньги, изменение прогресса и, самым
- * последним, флаг «взрослый включил квест снова» (`0`/`1`, [QuestProgress.enabledAgain]). Без
- * выбора шесть полей после него пустые/нулевые.
+ * надпись варианта, текст результата, куда ведёт, эффекты, деньги, изменение прогресса, флаг
+ * «взрослый включил квест снова» (`0`/`1`, [QuestProgress.enabledAgain]) и, самым последним,
+ * проверка этапа взрослым ([QuestProgress.check], имя [QuestCheck]). Без выбора шесть полей после
+ * него пустые/нулевые.
  *
- * Запись без последнего поля (старый сейв, где [QuestProgress.enabledAgain] ещё не было) читается
- * как есть — тринадцатое поле тогда считается ложью, ровно как оно и было раньше.
+ * Записи старых сейвов читаются как есть: без проверки (13 полей) — проверки нет
+ * ([QuestCheck.NONE]); ещё и без флага включения (12 полей) — флаг ложь.
  */
 object QuestStateCodec {
 
@@ -31,7 +33,10 @@ object QuestStateCodec {
     private const val EFFECT_SEPARATOR = '\u001D'
     private const val EFFECT_VALUE_SEPARATOR = '='
 
-    private const val FIELDS_PER_RECORD = 13
+    private const val FIELDS_PER_RECORD = 14
+
+    /** Сколько полей была запись до [QuestProgress.check] — старые сейвы читаются и так. */
+    private const val FIELDS_BEFORE_CHECK = 13
 
     /** Сколько полей была запись до [QuestProgress.enabledAgain] — старые сейвы читаются и так. */
     private const val LEGACY_FIELDS_PER_RECORD = 12
@@ -77,22 +82,29 @@ object QuestStateCodec {
             encodeEffects(choice?.statEffects.orEmpty()),
             (choice?.moneyDelta ?: 0).toString(),
             (choice?.progressDelta ?: 0).toString(),
-            if (progress.enabledAgain) ENABLED_AGAIN else NOT_ENABLED_AGAIN
+            if (progress.enabledAgain) ENABLED_AGAIN else NOT_ENABLED_AGAIN,
+            progress.check.name
         ).joinToString(FIELD_SEPARATOR.toString())
     }
 
     private fun decodeRecord(record: String): QuestProgress? {
         val fields = record.split(FIELD_SEPARATOR)
-        val enabledAgain = when {
-            fields.size == FIELDS_PER_RECORD -> when (fields[LEGACY_FIELDS_PER_RECORD]) {
+        val enabledAgain = when (fields.size) {
+            FIELDS_PER_RECORD, FIELDS_BEFORE_CHECK -> when (fields[LEGACY_FIELDS_PER_RECORD]) {
                 NOT_ENABLED_AGAIN -> false
                 ENABLED_AGAIN -> true
                 else -> return dropped(record)
             }
             // Сейв прежней версии, без флага «включён взрослым снова»: читается как есть, флаг —
             // ложь, ровно как он и вёл себя до появления этого поля.
-            fields.size == LEGACY_FIELDS_PER_RECORD -> false
+            LEGACY_FIELDS_PER_RECORD -> false
             else -> return dropped(record)
+        }
+        // Сейв до проверки взрослым: проверки нет.
+        val check = if (fields.size == FIELDS_PER_RECORD) {
+            QuestCheck.entries.find { it.name == fields[FIELDS_BEFORE_CHECK] } ?: return dropped(record)
+        } else {
+            QuestCheck.NONE
         }
 
         val questId = fields[0]
@@ -119,7 +131,9 @@ object QuestStateCodec {
             progress = progress.coerceIn(Quest.MIN_PROGRESS, Quest.MAX_PROGRESS),
             status = status,
             lastChoice = lastChoice,
-            enabledAgain = enabledAgain
+            enabledAgain = enabledAgain,
+            // Ждать проверки может только этап со сданным выбором.
+            check = if (check == QuestCheck.WAITING && lastChoice == null) QuestCheck.NONE else check
         )
     }
 

@@ -11,6 +11,18 @@ enum class QuestStatus {
     FINISHED
 }
 
+/** Где этап квеста с [Quest.requiresAdultCheck] в проверке взрослым. */
+enum class QuestCheck {
+    /** Проверки нет: этап не сдавался или уже засчитан. */
+    NONE,
+
+    /** Ребёнок сдал этап — выбор сделан, награда ждёт «Засчитать» взрослого. */
+    WAITING,
+
+    /** Взрослый не засчитал: этап снова в работе, ребёнок выбирает заново. */
+    REJECTED
+}
+
 /**
  * Что вышло из выбора игрока: показывается после нажатия и до перехода к следующему шагу.
  *
@@ -49,6 +61,8 @@ data class QuestOutcome(
  * [QuestEngine.availabilityOf] не смотрит ни на [Quest.repeatable], ни на кулдаун. Ставится
  * [QuestEngine.enable], снимается автоматически, когда квест начинается заново ([QuestEngine.start]
  * строит новую запись без этого флага).
+ * @property check проверка этапа взрослым (только у квестов с [Quest.requiresAdultCheck]): пока
+ * [QuestCheck.WAITING], [lastChoice] — сданный выбор, награда за который ещё не выдана.
  */
 data class QuestProgress(
     val questId: String,
@@ -57,10 +71,14 @@ data class QuestProgress(
     val progress: Int = Quest.MIN_PROGRESS,
     val status: QuestStatus = QuestStatus.ACTIVE,
     val lastChoice: QuestOutcome? = null,
-    val enabledAgain: Boolean = false
+    val enabledAgain: Boolean = false,
+    val check: QuestCheck = QuestCheck.NONE
 ) {
     /** Идёт ли квест. */
     val isActive: Boolean get() = status == QuestStatus.ACTIVE
+
+    /** Ждёт ли этап проверки взрослым. */
+    val isAwaitingCheck: Boolean get() = isActive && check == QuestCheck.WAITING
 
     /** Пройден ли квест. */
     val isFinished: Boolean get() = status == QuestStatus.FINISHED
