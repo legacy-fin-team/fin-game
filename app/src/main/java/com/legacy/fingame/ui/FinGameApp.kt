@@ -150,11 +150,6 @@ fun FinGameApp(
                 }
             }
 
-            // The stage the pet is drawn at, not the raw age: a pet keeps growing by the calendar
-            // past its last painted stage, and the clothes on it must not ask for a stage there are
-            // no pictures of.
-            val petStage = animalRegistry.getAgeStage(pet.animalId, state.petAge)
-
             AnimatedContent(
                 targetState = state.screen,
                 transitionSpec = { fadeIn() togetherWith fadeOut() },
@@ -181,14 +176,17 @@ fun FinGameApp(
                                 assetPath = animalRegistry.getIdleSpritePath(
                                     animalId = pet.animalId,
                                     variantId = pet.variantId,
-                                    age = petStage
+                                    age = state.petAge
                                 ),
                                 description = "Питомец"
                             ),
                             animalId = pet.animalId,
                             worn = state.worn,
                             catalog = itemRegistry,
-                            animalAge = petStage
+                            // The stage the pet is drawn at, not the raw age: a pet keeps growing
+                            // by the calendar past its last painted stage, and the clothes on it
+                            // must not ask for a stage there are no pictures of.
+                            animalAge = animalRegistry.coerceAge(pet.animalId, state.petAge)
                         ),
                         // Patting the pet only makes it happy to see: hearts on the screen and a
                         // sound, no stats and no money.

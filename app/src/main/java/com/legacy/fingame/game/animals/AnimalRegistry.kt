@@ -53,13 +53,13 @@ class AnimalRegistry(private val animalsMap: Map<String, Animal>) {
     }
 
     /**
-     * @param animalId id of an animal.
-     * @param age age stage the pet has grown to (see [Growth.ageAt]).
-     * @return Age stage of this animal the pet is drawn at, see [Animal.getAgeStage].
+     * Coerces [age] to the valid age stages of [animalId] (between [Animal.FIRST_AGE] and `ageCount - 1`).
+     * If the animal is unknown, returns [age] clamped to at least [Animal.FIRST_AGE].
      */
-    fun getAgeStage(animalId: String, age: Int): Int {
-        val animal = animalsMap.getValue(animalId)
-        return animal.getAgeStage(age)
+    fun coerceAge(animalId: String?, age: Int): Int {
+        if (animalId == null) return age.coerceAtLeast(Animal.FIRST_AGE)
+        val animal = animalsMap[animalId] ?: return age.coerceAtLeast(Animal.FIRST_AGE)
+        return animal.coerceAge(age)
     }
 
     /**

@@ -224,7 +224,7 @@ class GameSceneTest {
         )
         val registry = AnimalRegistry(mapOf(cat.id to cat))
         val age = Growth.ageOf(growthMillis = 9 * Growth.STAGE_MILLIS)
-        val stage = registry.getAgeStage(animalId, age)
+        val stage = registry.coerceAge(animalId, age)
 
         val scene = GameScene.of(
             background = background,

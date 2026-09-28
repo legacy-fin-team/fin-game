@@ -29,17 +29,9 @@ data class Animal(
     }
 
     /**
-     * Tells which of this animal's own age stages a pet of the given age is drawn at.
-     *
-     * [Growth] counts stages up without an upper bound, while an animal is painted at [ageCount]
-     * stages only: a pet grown past the last one stays at it. Everything drawn for the pet — its own
-     * sprite and the clothes on it — has to take its stage from here, so the clothes never ask for a
-     * stage the animal has no pictures of.
-     *
-     * @param age age stage the pet has grown to, counted from [FIRST_AGE] (see [Growth.ageAt]).
-     * @return [age] coerced into `FIRST_AGE until ageCount`.
+     * Coerces [age] to the valid age stages of this animal (between [FIRST_AGE] and `ageCount - 1`).
      */
-    fun getAgeStage(age: Int): Int = age.coerceIn(FIRST_AGE, ageCount - 1)
+    fun coerceAge(age: Int): Int = age.coerceIn(FIRST_AGE, (ageCount - 1).coerceAtLeast(FIRST_AGE))
 
     /**
      * Builds the path to the idle sprite of an animal variant at the given age stage.
@@ -52,6 +44,7 @@ data class Animal(
      */
     fun getIdleSpritePath(variantId: String, age: Int): String {
         val variantPath = variants.getValue(variantId)
-        return "$variantPath/${getAgeStage(age)}/$IDLE_SPRITE_FILE"
+        val ageStage = coerceAge(age)
+        return "$variantPath/$ageStage/$IDLE_SPRITE_FILE"
     }
 }
