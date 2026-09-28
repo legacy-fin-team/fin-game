@@ -191,13 +191,13 @@ class ItemReaderTest {
     fun `the data the app ships with is read the same way`() {
         val items = readShippedItems()
 
-        val hat = items.getValue("hat")
-        assertEquals(ItemCategory.CLOTHES, hat.category)
-        assertEquals(listOf("black", "white", "violet"), hat.variantIds)
-        assertEquals("items/hat/black/icon.webp", hat.getIconPath("black"))
+        val bow = items.getValue("bow")
+        assertEquals(ItemCategory.CLOTHES, bow.category)
+        assertEquals(listOf("red", "green", "violet"), bow.variantIds)
+        assertEquals("items/bow/red/icon.webp", bow.getIconPath("red"))
         assertEquals(
-            "items/hat/violet/equipped-cat-1.webp",
-            hat.getEquippedSpritePath(variantId = "violet", animalId = "cat", animalAge = 1)
+            "items/bow/violet/equipped-cat-1.webp",
+            bow.getEquippedSpritePath(variantId = "violet", animalId = "cat", animalAge = 1)
         )
 
         val apple = items.getValue("apple")
@@ -244,8 +244,8 @@ class ItemReaderTest {
             items.getValue("apple").effects
         )
         assertEquals(
-            mapOf(StatKind.HUNGER to 30, StatKind.PLEASURE to 15, StatKind.HEALTH to -5),
-            items.getValue("cake").effects
+            mapOf(StatKind.HUNGER to 50, StatKind.PLEASURE to 10, StatKind.HEALTH to 10),
+            items.getValue("kibble").effects
         )
         assertEquals(
             mapOf(StatKind.PLEASURE to 20, StatKind.HUNGER to -5),
