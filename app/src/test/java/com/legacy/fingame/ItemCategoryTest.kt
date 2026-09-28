@@ -4,7 +4,10 @@ import com.legacy.fingame.game.items.ItemCategory
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** Какое слово подписывает кнопку, что кладёт предмет категории на питомца или в комнату, и убирает его оттуда. */
+/**
+ * Какое слово подписывает кнопку, что кладёт предмет категории на питомца или в комнату и убирает
+ * его оттуда, и какое — карточку уже надетого или поставленного предмета.
+ */
 class ItemCategoryTest {
 
     @Test
@@ -17,5 +20,15 @@ class ItemCategoryTest {
     fun `a decoration is stood in the room and taken away from it, not worn`() {
         assertEquals("Поставить", ItemCategory.DECOR.wearActionTitle(worn = false))
         assertEquals("Убрать", ItemCategory.DECOR.wearActionTitle(worn = true))
+    }
+
+    @Test
+    fun `a worn piece of clothing is marked as worn`() {
+        assertEquals("Надето", ItemCategory.CLOTHES.wornStateTitle())
+    }
+
+    @Test
+    fun `a placed decoration is marked as standing, not worn`() {
+        assertEquals("Стоит", ItemCategory.DECOR.wornStateTitle())
     }
 }
