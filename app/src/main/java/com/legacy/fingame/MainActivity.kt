@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity() {
                         settings = savedSettings,
                         // Отладочная сборка (debug и releaseDebuggable) проверяет квесты без
                         // ожидания; в обычном release кулдаун и паузы между шагами действуют.
-                        ignoreQuestDelays = BuildConfig.DEBUG
+                        ignoreQuestDelays = false
                     )
                 }
             )
