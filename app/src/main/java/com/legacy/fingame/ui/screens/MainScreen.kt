@@ -54,7 +54,6 @@ import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.layout.MultiContentMeasurePolicy
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsPropertyKey
@@ -1290,16 +1289,12 @@ internal fun PetStage(
  * of the one is exactly as big on the screen as a pixel of the other.
  *
  * The pet does not stand in the middle of the room but on its floor: the pet and everything on its
- * grid — the clothes it wears, and the placeholder for missing art that is drawn in its place — are
- * lowered by [SceneViewport.petFloorShift], a whole number of screen pixels that grows with the
- * scene as it is pinched, so the pet stays on the room's pixel grid at any size ([isOnPetGrid],
- * [loweredOntoFloor]).
+ * grid — the clothes it wears — are lowered by [SceneViewport.petFloorShift], a whole number of
+ * screen pixels that grows with the scene as it is pinched, so the pet stays on the room's pixel
+ * grid at any size ([isOnPetGrid], [loweredOntoFloor]).
  *
- * A sprite whose file is not in the assets yet is not drawn here at all: [SpriteLoader] would hand
- * back the same placeholder for every one of them, and the scene would stack a pile of them on top
- * of each other — the scenery, the pet and everything it wears, all at once. Instead the scene
- * draws what it has and adds a single placeholder over it, so the missing art is still plain to see
- * without the pile.
+ * Every sprite is rendered directly on its layer, and if any sprite file is missing, [SpriteLoader]
+ * automatically provides an error placeholder sprite for that specific layer.
  *
  * The pet sprite itself listens for taps: a tap on it pats the pet, which sends a wave of hearts up
  * over its head on a layer above everything else in the room ([PetHearts]) and calls [onPetTap].
@@ -1323,12 +1318,8 @@ private fun SceneLayers(
     onPetTap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    val loader = remember(context) { SpriteLoader(context) }
-    val (drawn, anythingMissing) = remember(scene, loader) {
-        val all = GameLayer.DRAW_ORDER.flatMap { layer -> scene[layer].map { layer to it } }
-        val present = all.filter { (_, sprite) -> loader.hasSprite(sprite.assetPath) }
-        present to (present.size < all.size)
+    val all = remember(scene) {
+        GameLayer.DRAW_ORDER.flatMap { layer -> scene[layer].map { layer to it } }
     }
 
     val touch = remember { PetTouchController() }
@@ -1364,7 +1355,7 @@ private fun SceneLayers(
         modifier = modifier.sceneIn(viewport = viewport, moved = moved),
         contentAlignment = Alignment.Center
     ) {
-        drawn.forEach { (layer, sprite) ->
+        all.forEach { (layer, sprite) ->
             Sprite(
                 assetPath = sprite.assetPath,
                 contentDescription = sprite.description,
@@ -1384,18 +1375,6 @@ private fun SceneLayers(
         }
 
         PetHearts(bursts = bursts, nowMillis = { nowMillis }, viewport = viewport)
-
-        if (anythingMissing) {
-            Sprite(
-                assetPath = SpriteLoader.MISSING_SPRITE,
-                contentDescription = "Часть картинок ещё не нарисована",
-                modifier = Modifier
-                    .zIndex(GameLayer.CLOTHES.zIndex)
-                    .loweredOntoFloor(enabled = true, viewport = viewport)
-                    .fillMaxSize(GameLayer.ANIMAL.sizeFraction)
-                    .aspectRatio(1f)
-            )
-        }
     }
 }
 

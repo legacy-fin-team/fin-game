@@ -90,7 +90,7 @@ import com.legacy.fingame.ui.theme.GameDimens
  */
 private val CloseButtonSize = 40.dp
 private val CategoryButtonSize = 56.dp
-private val StarButtonSize = 40.dp
+private val StarButtonSize = 30.dp
 private val VariantButtonSize = 36.dp
 
 /**
@@ -163,7 +163,7 @@ internal val ItemCellMinSize = 152.dp
  * given the room the screen turns out to have, see [shortScreenCardSpriteSize].
  */
 internal val ShortScreenItemCellMinSize = 288.dp
-private val ShortScreenStarButtonSize = 28.dp
+private val ShortScreenStarButtonSize = 20.dp
 private val ShortScreenVariantButtonSize = 32.dp
 private val ShortScreenCloseButtonSize = 48.dp
 
