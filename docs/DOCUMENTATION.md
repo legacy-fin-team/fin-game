@@ -63,7 +63,7 @@ Fin Game — игра для Android, которая в форме тамаго�
 | `app/src/main/assets/textures/` | Спрайты WebP: животные, интерфейс, магазин, локации, декор, запасной спрайт ошибки |
 | `app/src/main/assets/audio/` | Фоновая музыка и звуки питомца (OGG) с файлами атрибуции лицензий |
 | `app/src/main/res/` | Иконка приложения, тема, строка названия, шрифт `press_start_2p_regular.ttf` и его лицензия (`res/raw`) |
-| `app/src/test/` | Юнит-тесты JUnit 4 (36 классов, 385 тестов, из них 2 падают — раздел 10.1) |
+| `app/src/test/` | Юнит-тесты JUnit 4 (36 классов, 383 теста, из них 2 падают — раздел 10.1) |
 | `app/src/androidTest/` | Инструментальные тесты Compose UI (3 класса, 10 тестов) |
 | `docs/` | Эта документация (`DOCUMENTATION.md`) и её версия в Word |
 
@@ -1011,7 +1011,8 @@ M в процессе» и карточка на каждую тему. Стат
 ### 10.1. Юнит-тесты
 
 Запуск: `./gradlew :app:testDebugUnitTest`. Прогон 28.09.2026 на смёрженном `main` (`3173776`,
-после PR #19 и #27): 385 тестов, **2 падения**, 0 пропусков — см. предупреждение ниже.
+после PR #19 и #27): 383 теста, из них **2 падения** (381 успешный), 0 пропусков — см. предупреждение
+ниже.
 
 | Группа | Классы (число тестов) | Итого |
 |---|---|---|
@@ -1024,7 +1025,7 @@ M в процессе» и карточка на каждую тему. Стат
 | Вёрстка и форматирование | `MainScreenLayoutTest` (18), `MoneyFormatTest` (14), `ShopCardSizingTest` (14), `AmountStepsTest` (9), `PillButtonSizingTest` (6), `BudgetLabelSizeTest` (4) | 65 |
 | Настройки, звук и поглаживание питомца | `AudioReaderTest` (7), `HeartBurstTest` (12), `PetTouchAssetsTest` (4, из них 2 падают) | 23 |
 | Шаблон | `ExampleUnitTest` (1) | 1 |
-| **Всего** | 36 классов | **383 успешных + 2 падения = 385** |
+| **Всего** | 36 классов | **383 (381 успешный + 2 падения)** |
 
 **Падения после слияния PR #27 (`sounds`)**: `PetTouchAssetsTest` (`app/src/test/java/com/legacy/fingame/PetTouchAssetsTest.kt`) —
 тесты `` `the pat sound is an OGG file under its key` `` и `` `the cat has its own OGG sounds` ``
