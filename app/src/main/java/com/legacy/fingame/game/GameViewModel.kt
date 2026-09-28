@@ -1151,6 +1151,7 @@ class GameViewModel(
                 today = today
             ),
             todayDay = today,
+            careTuning = careTuning,
             settings = _state.value.settings
         )
         persist()

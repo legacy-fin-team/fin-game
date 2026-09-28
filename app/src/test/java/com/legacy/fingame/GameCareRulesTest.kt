@@ -159,6 +159,20 @@ class GameCareRulesTest {
     }
 
     @Test
+    fun `a new game keeps playing by the same care rules`() {
+        val clock = FakeGameClock()
+        val vm = testGameViewModel(
+            store = storeWithPet(clock),
+            clock = clock,
+            careTuning = NO_CARE_RULES
+        )
+
+        vm.resetProgress()
+
+        assertEquals(NO_CARE_RULES, vm.state.value.careTuning)
+    }
+
+    @Test
     fun `a cart whose price went up is not paid at the old price`() {
         val clock = FakeGameClock()
         val vm = testGameViewModel(
