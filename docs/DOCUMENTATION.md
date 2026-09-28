@@ -1,10 +1,12 @@
 # Fin Game — сопроводительная документация
 
-Версия документа: 1.0 от 28.09.2026. Версия приложения: 1.0 (versionCode 1).
-Состояние кода: ветка `main` на коммите `7d5dd7f` плюс ветки, перечисленные в разделе 5:
-PR #19 (`options`), PR #20 (`stef-quests`, коммит `f31b106`), PR #21 (`stef-adult`, интеграционная
-ветка: `main` + `options` + `stef-quests` + взрослый режим, коммит `caf1bee`), а также готовые ветки
-`stef-growth` и `stef-onboarding`, для которых PR готовится.
+Версия документа: 1.1 от 28.09.2026. Версия приложения: 1.0 (versionCode 1).
+Состояние кода: ветка `main` на коммите `3173776` — включает слияние PR #19 (бывшая ветка `options`:
+звук, музыка, тема, сброс прогресса, поглаживание питомца) и PR #27 (`sounds`: финальные аудиофайлы,
+новые предметы декора, полка на фоне) — плюс ветки, перечисленные в разделе 5: PR #20 (`stef-quests`,
+коммит `f31b106`), PR #21 (`stef-adult`, интеграционная ветка: `main` + `stef-quests` + взрослый
+режим, коммит `caf1bee`), а также готовые ветки `stef-growth` и `stef-onboarding`, для которых PR
+готовится.
 
 Условные обозначения:
 
@@ -57,11 +59,12 @@ Fin Game — игра для Android, которая в форме тамаго�
 | `app/build.gradle.kts` | Модуль приложения: SDK, buildTypes, демо-режим, зависимости |
 | `app/src/main/AndroidManifest.xml` | Манифест: одна Activity, разрешений нет |
 | `app/src/main/java/com/legacy/fingame/` | Исходный код (см. раздел 3) |
-| `app/src/main/assets/data/` | Игровые данные в XML: `animals.xml`, `items.xml` (+ `quests.xml`, `audio.xml` в ветках) |
-| `app/src/main/assets/textures/` | Спрайты WebP: животные, интерфейс, магазин, локации, запасной спрайт ошибки |
-| `app/src/main/res/` | Иконка приложения, тема, строка названия, шрифт `press_start_2p_regular.ttf` |
-| `app/src/test/` | Юнит-тесты JUnit 4 (33 класса, 354 теста) |
-| `app/src/androidTest/` | Инструментальные тесты Compose UI (2 класса, 6 тестов) |
+| `app/src/main/assets/data/` | Игровые данные в XML: `animals.xml`, `items.xml`, `audio.xml` (+ `quests.xml` в ветках) |
+| `app/src/main/assets/textures/` | Спрайты WebP: животные, интерфейс, магазин, локации, декор, запасной спрайт ошибки |
+| `app/src/main/assets/audio/` | Фоновая музыка и звуки питомца (OGG) с файлами атрибуции лицензий |
+| `app/src/main/res/` | Иконка приложения, тема, строка названия, шрифт `press_start_2p_regular.ttf` и его лицензия (`res/raw`) |
+| `app/src/test/` | Юнит-тесты JUnit 4 (36 классов, 385 тестов, из них 2 падают — раздел 10.1) |
+| `app/src/androidTest/` | Инструментальные тесты Compose UI (3 класса, 10 тестов) |
 | `docs/` | Эта документация (`DOCUMENTATION.md`) и её версия в Word |
 
 ### 1.3. Быстрый запуск
@@ -291,21 +294,20 @@ flowchart TD
 | `game/animals` | `Animal`, `AnimalReader`, `AnimalRegistry`, `AnimalSelection`, `Growth` | Каталог животных из XML, выбор, этапы роста |
 | `game/items` | `Item`, `ItemReader`, `ItemRegistry`, `ItemCatalog`, `ItemCategory`, `ItemUse`, `Inventory`, `Cart`, `ShopShelf`, `ItemSprites`, `Goals` | Каталог товаров, категории и способ использования, корзина, инвентарь, цели |
 | `game/stats` | `PetStats`, `StatKind` | Шкалы питомца и их убывание |
-| `game/scene` | `GameScene`, `GameLayer`, `SceneViewport` | Слои сцены (фон, декор, питомец, одежда), масштаб и сдвиг сцены жестами |
+| `game/scene` | `GameScene`, `GameLayer`, `SceneViewport`, `PetTouch` | Слои сцены (фон, декор, питомец, одежда), масштаб и сдвиг сцены жестами, поглаживание питомца касанием (сердечки, звук) |
+| `game/settings` | `GameSettings`, `GameSettingsRepository`, `AudioManager`, `AudioReader`, `ThemeMode` | Настройки звука, музыки и темы; чтение каталога треков `audio.xml`, хранилище `fin_game_settings` |
 | `ui` | `FinGameApp` | Корневой Composable: навигация по `Screen`, системная кнопка «Назад», периодический тик |
-| `ui/screens` | `MainScreen`, `AnimalSelectScreen`, `ShopScreen`, `InventoryScreen`, `BudgetScreen`, `LogScreen`, `GoalsCarousel`, `PlaceholderScreen` | Экраны игры |
+| `ui/screens` | `MainScreen`, `AnimalSelectScreen`, `ShopScreen`, `InventoryScreen`, `BudgetScreen`, `LogScreen`, `GoalsCarousel`, `SettingsScreen`, `PlaceholderScreen` | Экраны игры |
 | `ui/screens` | `MoneyFormat`, `GoalFormat`, `AmountSteps`, `ShopCardSizing` | Форматирование сумм и дат, шаги ввода сумм, расчёт размеров карточек |
 | `ui/components` | `GameComponents`, `GameDialog`, `Sprites`, `PillButtonSizing` | Общие пиксельные кнопки, шкалы, диалоги, доступ к спрайтам |
 | `ui/theme` | `Theme`, `Color`, `Type`, `Fonts`, `Dimens` | Цвета, типографика на пиксельном шрифте, размеры для телефона и планшета |
 | `utils` | `PlayerPreferences` | Сохранение и загрузка `PlayerState`, миграция старых ключей |
 | `utils` | `MoneyLogCodec`, `GoalsCodec` | Сериализация журнала и целей в строку |
 | `utils` | `SpriteLoader` | Загрузка WebP из `assets/textures`, подстановка `error/error.webp` при отсутствии файла |
-| данные | `assets/data/*.xml` | Животные, товары (в ветках — квесты, аудио) |
-| ассеты | `assets/textures/**` | Пиксельные спрайты |
+| данные | `assets/data/*.xml` | Животные, товары, каталог аудио (в ветках — ещё квесты) |
+| ассеты | `assets/textures/**`, `assets/audio/**` | Пиксельные спрайты, фоновая музыка и звуки питомца |
 
-Компоненты из веток (раздел 5): `game/quests/*` и `ui/screens/QuestsScreen.kt` (`stef-quests`);
-`game/settings/*` (`GameSettings`, `GameSettingsRepository`, `AudioManager`, `AudioReader`),
-`game/scene/PetTouch.kt`, `ui/screens/SettingsScreen.kt` (ветка `options`); `game/adult/*`
+Компоненты из веток (раздел 5): `game/quests/*` и `ui/screens/QuestsScreen.kt` (`stef-quests`); `game/adult/*`
 (`ParentLock`, `AdultReports`), `game/economy/BudgetHistory.kt`, `game/items/CustomItems.kt`,
 `game/quests/CustomQuests.kt`, `game/quests/QuestAvailability.kt`, `game/quests/QuestTopic.kt`,
 `game/quests/QuestLog.kt`, `game/adult/AdultMoney.kt`, `game/adult/AdultProgress.kt`,
@@ -323,13 +325,13 @@ flowchart TD
 |---|---|---|
 | Окно знакомства (онбординг) | Первый запуск, ветка `stef-onboarding` | Модальное окно «Привет!» с тремя короткими правилами; закрывается только кнопкой «Понятно!» |
 | Выбор питомца | Первый запуск (питомец не выбран) | Выбор животного и окраса, ввод имени |
-| `MAIN` | После выбора; кнопка «Назад» с любого экрана | Сцена с питомцем и подлокациями, шкалы статов, баланс, бонус дня, карусель целей, кнопки разделов, в демо — «Вперёд на 12 часов» |
+| `MAIN` | После выбора; кнопка «Назад» с любого экрана | Сцена с питомцем и подлокациями (в том числе полкой с декором на фоне), шкалы статов, баланс, бонус дня, карусель целей, кнопки разделов, поглаживание питомца касанием, в демо — «Вперёд на 12 часов» |
 | `SHOP` | Кнопка магазина; нажатие на цель | Категории, карточки товаров с эффектами, выбор варианта, корзина, предупреждение о перерасходе плана, звёздочка «цель» |
 | `INVENTORY` | Кнопка инвентаря | Использовать еду/игрушку, надеть/снять одежду и декор |
 | `BUDGET` | Автоматически после бонуса дня; кнопка бюджета; из журнала | Итог прошлого периода «план/факт/разница», раскладка нового периода, открытие и досрочное закрытие вклада |
 | `LOG` | Кнопка журнала; из бюджета | Все движения денег по дням, новейшие сверху |
 | `QUESTS` | Кнопка квестов | В `main` — заглушка; в ветке `stef-quests` — доска квестов: активные сверху, доступность («Доступен через N мин», «Не хватает монет», «Пройден»), шаги с выбором; в `stef-adult` — ещё статус «Ждём, пока взрослый проверит» |
-| `OPTIONS` | Кнопка настроек | В `main` — заглушка; в ветке `options` — звук, музыка, тема, сброс прогресса, вход во взрослый режим |
+| `OPTIONS` | Кнопка настроек | Звук, музыка, тема (светлая/тёмная/авто), сброс прогресса; в `stef-adult` — ещё вход во взрослый режим |
 | `ADULT_LOCK`, `ADULT_MODE` | Настройки → «Режим взрослого» | Только в ветке `stef-adult`: замок (три примера на умножение) и хаб взрослого с вкладками «Прогресс», «Дни», «Покупки», «Квесты» (раздел «На проверку» со счётчиком, история, конструктор своих квестов), «Цели», «Вещи», «Награды» (со счётчиком новых), «Журнал» (с кнопкой «Изменить монеты»), «Товары» (свои товары). Вкладки на телефоне идут строками по три, в альбоме — одним рядом с прокруткой |
 | «Помощь» (`HelpScreen`) | Из настроек, ветка `stef-onboarding` | Словарик из 11 терминов с объяснениями для ребёнка |
 
@@ -413,7 +415,7 @@ flowchart TD
 `care_judged_days`, `care_day_best`, `care_neglect_streak` (правила ухода, `stef-growth`; старый сейв
 без этих ключей мигрирует через `PetCare.migrated`: прожитые сутки засчитываются как рост, серия
 начинается с нуля); `onboarding_seen` (окно знакомства показано, `stef-onboarding`). Настройки
-(ветка `options`) хранятся отдельно — `SharedPreferences` `fin_game_settings`: `sound_enabled`,
+звука, музыки и темы хранятся отдельно — `SharedPreferences` `fin_game_settings`: `sound_enabled`,
 `music_enabled`, `theme_mode`.
 
 ### 4.3. Игровая экономика
@@ -480,8 +482,9 @@ flowchart TD
 | Мишка | `teddy` | 120 | игрушки | default | настроение +30 |
 | Шляпа | `hat` | 100 | одежда | black, white, violet | — |
 | Шарф | `scarf` | 80 | одежда | red, green | — |
-| Лампа | `lamp` | 150 | декор | default | — |
-| Коврик | `rug` | 90 | декор | beige, blue | — |
+| Растение | `plant` | 150 | декор | default | — |
+| Комод | `dresser` | 90 | декор | default | — |
+| Книги | `books` | 90 | декор | default | — |
 
 Читатели (`AnimalReader`, `ItemReader`) пропускают некорректные записи с сообщением в logcat, а не
 роняют игру; если не прочиталось ни одного животного, показывается понятный экран ошибки.
@@ -525,8 +528,8 @@ flowchart TD
 `QuestLog` из `QuestChoice` с отметкой проверки `QuestCheckEvent`: `SENT`, `APPROVED`, `REJECTED`
 (не более 200 записей).
 
-`assets/data/audio.xml` (ветка `options`): список фоновых треков `<background><track file=…/>`
-относительно `assets/audio/`; звуки питомца лежат в `assets/audio/sounds/animal/`.
+`assets/data/audio.xml`: список фоновых треков `<background><track file=…/>` относительно
+`assets/audio/`; звуки питомца лежат в `assets/audio/sounds/animal/`.
 
 `assets/data/care.xml` (ветка `stef-growth`): один элемент `<care …/>` с параметрами правил ухода
 (значения — в разделе 6.3). Атрибут, которого нет или который не читается, берётся по умолчанию из
@@ -581,9 +584,9 @@ flowchart TD
 | 17б | Ручное изменение монет взрослым с обязательной причиной | готово, ветка `stef-adult`, PR #21 | вкладка «Журнал» → «Изменить монеты»; `AdultMoney`, `GameViewModel.adjustBalanceByAdult` | `AdultMoneyTest`, `MoneyLogCodecTest` |
 | 17в | Награды из жизни (категория «Другое») и журнал их использования | готово, ветка `stef-adult`, PR #21 | инвентарь → «Использовать»; вкладка «Награды»; `RewardUsage.kt` | `RewardUsageLogTest` |
 | 17г | Прогресс ребёнка по темам финансовой грамотности без оценок | готово, ветка `stef-adult`, PR #21 | вкладка «Прогресс»; `AdultProgress.kt`, `QuestTopic` | `AdultProgressTest` |
-| 18 | Настройки: звуки, музыка, тема (светлая/тёмная/авто) | в ветке `options`, PR #19 | `SettingsScreen`, `game/settings/*` | `AudioReaderTest` |
-| 19 | Сброс прогресса | в ветке `options`, PR #19 | `SettingsScreen`, `GameViewModel.resetProgress` | `GameViewModelTest` (в ветке) |
-| 20 | Взаимодействие с питомцем касанием (сердечки, звук) | в ветке `options`, PR #19 | `game/scene/PetTouch.kt` | `HeartBurstTest`, `PetTouchAssetsTest` |
+| 18 | Настройки: звуки, музыка, тема (светлая/тёмная/авто) | готово, PR #19 | `SettingsScreen`, `game/settings/*` | `AudioReaderTest` |
+| 19 | Сброс прогресса | готово, PR #19 | `SettingsScreen`, `GameViewModel.resetProgress` | `GameViewModelTest` |
+| 20 | Взаимодействие с питомцем касанием (сердечки, звук) | готово, PR #19 | `game/scene/PetTouch.kt` | `HeartBurstTest`, `PetTouchAssetsTest` |
 | 21 | Онбординг: окно знакомства при первом запуске | готово, ветка `stef-onboarding`, PR готовится | `game/OnboardingGate.kt`, `utils/OnboardingPreferences.kt`, `ui/components/OnboardingDialog.kt` | `OnboardingGateTest` |
 | 21а | Раздел «Помощь»: словарик финансовых терминов | готово, ветка `stef-onboarding`, PR готовится | `ui/screens/HelpScreen.kt`, `game/help/*`, `help.xml` | `HelpReaderTest` |
 | 22 | Сохранение прогресса между запусками, в том числе при закрытом приложении | готово | `utils/PlayerPreferences.kt` | `RestartTest`, `PlayerPreferencesKeysTest` |
@@ -594,9 +597,10 @@ flowchart TD
 | 27 | Работа без сети, локальное хранение данных | готово | `AndroidManifest.xml` | проверка манифеста (раздел 9) |
 
 Слияния в `main`: PR #18 (экономика, бюджет, вклад, рост, выбор питомца, демо-режим), PR #22 (цели),
-PR #23 (сообщения об ошибках чтения данных). Открыты: PR #19 `options` (музыка, звуки, настройки,
-вход во взрослый режим), PR #20 `stef-quests` (система квестов), PR #21 `stef-adult` (взрослый режим;
-ветка включает `options` и `stef-quests`). PR #20 и #21 готовы к слиянию.
+PR #23 (сообщения об ошибках чтения данных), PR #19 (музыка, звуки, настройки, поглаживание
+питомца), PR #27 `sounds` (финальные аудиофайлы, новые предметы декора, полка на фоне). Открыты:
+PR #20 `stef-quests` (система квестов), PR #21 `stef-adult` (взрослый режим; интеграционная ветка
+включает `stef-quests`). PR #20 и #21 готовы к слиянию.
 Ветки `stef-growth` и `stef-onboarding` готовы, PR готовится.
 
 ---
@@ -946,8 +950,8 @@ M в процессе» и карточка на каждую тему. Стат
 | Альбомная ориентация | поддерживается, раскладка главного экрана перестраивается | `MainScreen.kt` |
 | Ограничение ширины контента на планшете | 560 dp | `Dimens.ContentMaxWidth` |
 | Edge-to-edge и системные отступы | есть | `MainActivity.kt` |
-| Отключаемые звуки и музыка | в ветке `options` | `SettingsScreen.kt`, `GameSettings` |
-| Тёмная тема (светлая / тёмная / авто) | в `main` тема следует системной; выбор вручную — в ветке `options` | `ui/theme/Theme.kt`, `ThemeMode` |
+| Отключаемые звуки и музыка | готово | `SettingsScreen.kt`, `GameSettings` |
+| Тёмная тема (светлая / тёмная / авто, выбор вручную) | готово | `ui/theme/Theme.kt`, `ThemeMode` |
 | Отдельная настройка размера шрифта в игре | нет, используется системный масштаб шрифта | — |
 
 <!-- TODO ревьюер: сверить перечень с требованиями ТЗ к доступности (контраст, минимальный размер касания 48 dp, возрастные требования). Минимальная зона нажатия на главном экране 40 dp — меньше рекомендации Material 48 dp. -->
@@ -964,8 +968,8 @@ M в процессе» и карточка на каждую тему. Стат
 пользователю. Проверено командой `aapt2 dump permissions` на релизном APK.
 
 Опасных разрешений (камера, микрофон, геолокация, контакты, хранилище) нет. Разрешения `INTERNET`
-нет, поэтому приложение технически не может передавать данные по сети. Ветка `options` добавляет в
-манифест только тег `<attribution>`, разрешений не добавляет.
+нет, поэтому приложение технически не может передавать данные по сети. Настройки звука и музыки
+добавляют в манифест только тег `<attribution>`, разрешений не добавляют.
 
 ### 9.2. Какие данные собираются
 
@@ -973,7 +977,7 @@ M в процессе» и карточка на каждую тему. Стат
 |---|---|---|
 | Имя питомца (вводит ребёнок), выбранное животное | `SharedPreferences` `player` | нет |
 | Игровой прогресс: баланс, вклад, бюджет, покупки, цели, шкалы, журнал, квесты | `SharedPreferences` `player` | нет |
-| Настройки звука, музыки, темы (ветка `options`) | `SharedPreferences` `fin_game_settings` | нет |
+| Настройки звука, музыки, темы | `SharedPreferences` `fin_game_settings` | нет |
 | Флаг «окно знакомства показано» (ветка `stef-onboarding`) | `SharedPreferences` `player`, ключ `onboarding_seen` | нет |
 | Тексты, введённые взрослым: причины изменения монет, свои товары и квесты; журнал использованных наград (ветка `stef-adult`) | `SharedPreferences` `player` | нет |
 
@@ -990,7 +994,7 @@ M в процессе» и карточка на каждую тему. Стат
 
 ### 9.3. Удаление профиля
 
-1. **Сброс прогресса в игре** (ветка `options`): «Настройки» → «Сбросить прогресс» → подтверждение
+1. **Сброс прогресса в игре**: «Настройки» → «Сбросить прогресс» → подтверждение
    «Вы уверены, что хотите сбросить весь прогресс? Это действие нельзя отменить.» Удаляются
    питомец, деньги, бюджет, вклад, предметы, цели и журнал; игра возвращается к выбору питомца.
    Настройки звука и темы сохраняются.
@@ -1006,8 +1010,8 @@ M в процессе» и карточка на каждую тему. Стат
 
 ### 10.1. Юнит-тесты
 
-Запуск: `./gradlew :app:testDebugUnitTest`. Прогон 28.09.2026 на `main` (`7d5dd7f`): 354 теста,
-0 падений, 0 пропусков.
+Запуск: `./gradlew :app:testDebugUnitTest`. Прогон 28.09.2026 на смёрженном `main` (`3173776`,
+после PR #19 и #27): 385 тестов, **2 падения**, 0 пропусков — см. предупреждение ниже.
 
 | Группа | Классы (число тестов) | Итого |
 |---|---|---|
@@ -1015,32 +1019,44 @@ M в процессе» и карточка на каждую тему. Стат
 | Цели | `GameViewModelGoalsTest` (15), `GoalFormatTest` (10), `GoalsCodecTest` (7), `GoalsTest` (6) | 38 |
 | Питомец и уход | `PetCareTest` (18), `PetStatsTest` (11), `ItemEffectsTest` (8), `AnimalReaderTest` (8), `AnimalRegistryTest` (3), `AnimalSelectionSaverTest` (3) | 51 |
 | Каталог товаров | `ItemReaderTest` (7), `ItemSpritesTest` (7) | 14 |
-| ViewModel и сохранение | `GameViewModelTest` (22), `RestartTest` (8), `PlayerPreferencesKeysTest` (4) | 34 |
-| Сцена | `SceneViewportTest` (22), `GameSceneTest` (10) | 32 |
+| ViewModel и сохранение | `GameViewModelTest` (26), `RestartTest` (8), `PlayerPreferencesKeysTest` (4) | 38 |
+| Сцена | `SceneViewportTest` (24), `GameSceneTest` (10) | 34 |
 | Вёрстка и форматирование | `MainScreenLayoutTest` (18), `MoneyFormatTest` (14), `ShopCardSizingTest` (14), `AmountStepsTest` (9), `PillButtonSizingTest` (6), `BudgetLabelSizeTest` (4) | 65 |
+| Настройки, звук и поглаживание питомца | `AudioReaderTest` (7), `HeartBurstTest` (12), `PetTouchAssetsTest` (4, из них 2 падают) | 23 |
 | Шаблон | `ExampleUnitTest` (1) | 1 |
-| **Всего** | 33 класса | **354** |
+| **Всего** | 36 классов | **383 успешных + 2 падения = 385** |
+
+**Падения после слияния PR #27 (`sounds`)**: `PetTouchAssetsTest` (`app/src/test/java/com/legacy/fingame/PetTouchAssetsTest.kt`) —
+тесты `` `the pat sound is an OGG file under its key` `` и `` `the cat has its own OGG sounds` ``
+ищут файл `audio/sounds/animal/pat.ogg` (по ключу `AudioManager.SOUND_PAT = "pat"`), а PR #27
+переименовал звук поглаживания в `pat1.ogg` и `pat2.ogg` (сам `AudioManager` это уже поддерживает
+через `animalSoundKeys`, см. раздел 3.2) — тест не обновили вместе с ассетами.
+
+<!-- TODO ревьюер: поправить `PetTouchAssetsTest`, чтобы он ждал `pat1.ogg`/`pat2.ogg`
+(по аналогии с `cat1`/`cat2`), а не единственный `pat.ogg`. Это код тестов, не документация,
+поэтому здесь не исправлено. -->
 
 Тесты в ветках (в итог выше не входят):
 
 | Ветка | Всего юнит-тестов в ветке | Новые классы тестов |
 |---|---|---|
 | `stef-quests` (PR #20) | 480 | `QuestEngineTest`, `QuestReaderTest`, `QuestBoardTest`, `QuestFormatTest`, `QuestStateCodecTest`, `ShippedQuestsTest`, `GameViewModelQuestTest` |
-| `options` (PR #19) | — | `AudioReaderTest`, `HeartBurstTest`, `PetTouchAssetsTest` |
-| `stef-adult` (PR #21) — интеграционная ветка: `main` + `options` + `stef-quests` + цели + взрослый режим | 641 | `ParentLockTest`, `AdultReportsTest`, `AdultFormatTest`, `AdultMoneyTest` (5), `AdultProgressTest` (6), `RewardUsageLogTest` (4), `BudgetHistoryCodecTest`, `CustomItemsTest`, `CustomQuestsTest`, `GameViewModelAdultCheckTest` (3), `GameViewModelAdultDataTest`, `GameViewModelAdultModeTest`, `GameViewModelCustomItemsTest`, `GameViewModelCustomQuestsTest` |
+| `stef-adult` (PR #21) — интеграционная ветка: `main` + `stef-quests` + цели + взрослый режим | 641 | `ParentLockTest`, `AdultReportsTest`, `AdultFormatTest`, `AdultMoneyTest` (5), `AdultProgressTest` (6), `RewardUsageLogTest` (4), `BudgetHistoryCodecTest`, `CustomItemsTest`, `CustomQuestsTest`, `GameViewModelAdultCheckTest` (3), `GameViewModelAdultDataTest`, `GameViewModelAdultModeTest`, `GameViewModelCustomItemsTest`, `GameViewModelCustomQuestsTest` |
 | `stef-growth` | 392 | `PetCareRulesTest` (11), `PetCareProgressTest` (8), `GameCareRulesTest` (14), `PetCareTuningReaderTest` (4) |
 | `stef-onboarding` | — | `OnboardingGateTest` (6), `HelpReaderTest` (6) |
 
-Числа для веток взяты из отчётов о прогоне в самих ветках; итоговое число после слияния всех веток
-не сводится простым сложением, так как `stef-adult` уже содержит тесты `options` и `stef-quests`.
+Числа для веток взяты из отчётов о прогоне в самих ветках (до слияния PR #19/#27 в `main`);
+итоговое число после слияния всех веток не сводится простым сложением, так как `stef-adult` уже
+содержит тесты `stef-quests`.
 
-<!-- TODO ревьюер: после слияния всех веток обновить общее число тестов. -->
+<!-- TODO ревьюер: после слияния `stef-quests` и `stef-adult` обновить общее число тестов. -->
 
 ### 10.2. Инструментальные тесты
 
 | Класс | Тестов | Что проверяет |
 |---|---|---|
-| `SceneGesturesTest` | 5 | Масштаб щипком и перемещение сцены жестами на реальном Compose UI |
+| `SceneGesturesTest` | 7 | Масштаб щипком и перемещение сцены жестами на реальном Compose UI |
+| `ClickSoundTest` | 2 | Настройка «Звуки» выключает щелчок при нажатии у всех кнопок, а не у одной |
 | `ExampleInstrumentedTest` | 1 | Шаблон: правильный пакет приложения |
 
 Запуск — раздел 2.4.
@@ -1067,7 +1083,7 @@ M в процессе» и карточка на каждую тему. Стат
 | M16 | Доступность | Включить TalkBack, пройти главный экран, магазин, бюджет | Все кнопки озвучиваются осмысленно |
 | M17 | Адаптивность | Проверить ширину 360 dp, шрифт 1,3, альбом, планшет 600+ dp | Нет обрезанных подписей и наложений |
 | M18 | Квест (ветка `stef-quests`) | Пройти «Копилку», выбрать «В копилку» → «Копить дальше» | +40 монет, запись в журнале |
-| M19 | Сброс (ветка `options`) | Настройки → «Сбросить прогресс» → подтвердить | Экран выбора питомца, баланс 200 |
+| M19 | Сброс прогресса | Настройки → «Сбросить прогресс» → подтвердить | Экран выбора питомца, баланс 200 |
 | M20 | Замок взрослого (ветка `stef-adult`) | Настройки → «Режим взрослого», ввести неверный и верный ответы | Неверные ответы не пускают, верные открывают отчёты |
 | M21 | Первый запуск, онбординг и помощь (ветка `stef-onboarding`) | Установить заново, открыть → окно «Привет!» → нажать мимо окна → «Понятно!» → Настройки → «Помощь»; перезапустить приложение | Окно не закрывается нажатием мимо, закрывается кнопкой «Понятно!»; в «Помощи» 11 терминов; после перезапуска окно больше не показывается |
 | M22 | Штрафы за плохой уход (ветка `stef-growth`, демо-сборка) | Не кормить питомца; перемотать время на 24–48 ч; получить бонус дня, открыть магазин | Под питомцем подсказка о причине; бонус дня 45, затем 40; одежда и декор дороже на 10 % за день серии, еда и игрушки по прежней цене |
@@ -1100,12 +1116,12 @@ M в процессе» и карточка на каждую тему. Стат
 | Один профиль на установку | Двое детей не могут играть на одном устройстве раздельно |
 | Одна локаль (русский), строки в коде | Перевод потребует выноса строк в ресурсы |
 | Баланс не откалиброван | Цены, доход, ставки вклада, скорость убывания шкал и награды квестов подобраны вручную и не проверены на детях |
-| Звуки и музыка временные (ветка `options`) | Требуется замена на финальные ресурсы с подтверждённой лицензией |
+| Авторство части графики не задокументировано | Спрайты животных, иконки интерфейса, фон локации, спрайт-заглушка ошибки и иконка приложения — без указания источника и лицензии (см. раздел 12.3); лицензии музыки и звуков питомца зафиксированы в `attributions.xml` |
 | Рост от ухода начисляется порциями (ветка `stef-growth`) | Рост и штрафы пересчитываются в конце каждого дня питомца, а не непрерывно |
 | Лазейка в оценке дня (ветка `stef-growth`) | День оценивается по лучшему индексу, поэтому полная забота перед самым концом дня засчитывает его как хороший; выигрыш — не больше одного дня |
 | Скорость убывания шкал не пересматривалась при вводе правил ухода | Баланс роста и штрафов требует проверки на детях |
 | Онбординг и «Помощь» пока не в `main` | Готовы в ветке `stef-onboarding`, PR готовится |
-| Разделы «Квесты» и «Настройки» в `main` — заглушки | Функции в ветках `stef-quests`, `options`, `stef-adult` |
+| Раздел «Квесты» в `main` — заглушка | Функция в ветках `stef-quests`, `stef-adult`; настройки уже в `main` |
 | Замок взрослого — задачи на умножение | Защищает от маленьких детей, но не от школьника, знающего таблицу умножения |
 | Релизная подпись ручная, R8 отключён | APK больше, чем мог бы быть; нет автоматизации выпуска |
 | Картинки квестов не нарисованы | На карточках квестов показывается общая иконка |
@@ -1119,7 +1135,7 @@ M в процессе» и карточка на каждую тему. Стат
 
 ### 11.2. План развития
 
-1. Слить PR #19–#21 и готовые ветки `stef-growth`, `stef-onboarding`.
+1. Слить PR #20–#21 (PR #19 и #27 уже в `main`) и готовые ветки `stef-growth`, `stef-onboarding`.
 2. Откалибровать экономику на тестовой группе детей и родителей.
 3. Добавить профили нескольких детей на одном устройстве.
 4. Вынести строки в ресурсы, добавить английскую локаль.
@@ -1127,7 +1143,8 @@ M в процессе» и карточка на каждую тему. Стат
 6. Опциональная синхронизация родителя и ребёнка (потребует сервера, согласия родителя и политики
    конфиденциальности).
 7. Настроить подпись релиза и R8, CI со сборкой и тестами.
-8. Заменить временные звуки и дорисовать иллюстрации квестов.
+8. Задокументировать авторство и лицензии спрайтов и иконок (раздел 12.3) и дорисовать иллюстрации
+   квестов.
 
 <!-- TODO ревьюер: согласовать план развития с командой и требованиями к презентации. -->
 
@@ -1162,7 +1179,7 @@ Kotlin (все под Apache-2.0).
 
 | Шрифт | Файл | Автор | Лицензия |
 |---|---|---|---|
-| Press Start 2P, версия 3.000 | `app/src/main/res/font/press_start_2p_regular.ttf` | CodeMan38 (Cody Boisclair), © 2012 The Press Start 2P Project Authors | SIL Open Font License 1.1 (указана в метаданных файла шрифта) |
+| Press Start 2P, версия 3.000 | `app/src/main/res/font/press_start_2p_regular.ttf` | © 2012 The Press Start 2P Project Authors (cody@zone38.net), зарезервированное имя шрифта «Press Start 2P» | SIL Open Font License 1.1 — полный текст лежит рядом, в `app/src/main/res/raw/press_start_2p_regular.txt` |
 
 OFL разрешает встраивать шрифт в приложение, в том числе коммерческое; нельзя продавать сам шрифт
 отдельно и выпускать изменённую версию под именем «Press Start 2P». Текст лицензии рекомендуется
@@ -1170,16 +1187,41 @@ OFL разрешает встраивать шрифт в приложение, 
 
 ### 12.3. Изображения и звуки
 
+Графика (спрайты, иконки, фоны) в репозитории атрибуций не несёт — происхождение не
+зафиксировано. Музыка и звуки, наоборот, сопровождаются файлами `attributions.xml` рядом с
+аудиофайлами (по одному на папку); ниже — их содержимое.
+
 | Ресурс | Путь | Происхождение | Лицензия |
 |---|---|---|---|
 | Спрайты животных (кот, рыба; 3 этапа) | `assets/textures/animals/**` | <!-- TODO ревьюер: указать автора/источник --> не указано | <!-- TODO ревьюер: лицензия --> не указана |
 | Иконки интерфейса, шкал, категорий магазина | `assets/textures/ui/**`, `assets/textures/shop/**` | <!-- TODO ревьюер: указать автора/источник --> не указано | <!-- TODO ревьюер: лицензия --> не указана |
-| Фон локации | `assets/textures/locations/0/background.webp` | <!-- TODO ревьюер: указать автора/источник --> не указано | <!-- TODO ревьюер: лицензия --> не указана |
+| Иконки и спрайты предметов (еда, игрушки, одежда, декор — в том числе новые `apple`, `ball`, `books`, `dresser`, `fish`, `plant`) | `assets/textures/items/**` | <!-- TODO ревьюер: указать автора/источник --> не указано | <!-- TODO ревьюер: лицензия --> не указана |
+| Фон локации (с полкой с декором) | `assets/textures/locations/0/background.webp` | <!-- TODO ревьюер: указать автора/источник --> не указано | <!-- TODO ревьюер: лицензия --> не указана |
 | Спрайт-заглушка ошибки | `assets/textures/error/error.webp` | <!-- TODO ревьюер: указать автора/источник --> не указано | <!-- TODO ревьюер: лицензия --> не указана |
 | Иконка приложения | `res/mipmap-*`, `res/drawable/ic_launcher_*` | <!-- TODO ревьюер: указать автора/источник --> не указано | <!-- TODO ревьюер: лицензия --> не указана |
-| Эффект сердечка (ветка `options`) | `assets/textures/fx/heart.webp` | <!-- TODO ревьюер: указать автора/источник --> не указано | <!-- TODO ревьюер: лицензия --> не указана |
-| Фоновая музыка (3 трека, ветка `options`) | `assets/audio/music/background/*.ogg` | <!-- TODO ревьюер: указать автора/источник --> не указано | <!-- TODO ревьюер: лицензия --> не указана |
-| Звуки питомца (ветка `options`) | `assets/audio/sounds/animal/*.ogg` | <!-- TODO ревьюер: указать автора/источник --> не указано | <!-- TODO ревьюер: лицензия --> не указана |
+| Эффект сердечка (поглаживание питомца) | `assets/textures/fx/heart.webp` | <!-- TODO ревьюер: указать автора/источник --> не указано | <!-- TODO ревьюер: лицензия --> не указана |
 
-Происхождение графики и звуков в репозитории не зафиксировано. До публикации нужно подтвердить,
-что все ресурсы созданы командой или используются по совместимой лицензии.
+Фоновая музыка (`assets/audio/music/background/attributions.xml`):
+
+| Файл | Источник | Лицензия |
+|---|---|---|
+| `piano-208-octave-long.ogg` | freesound-пользователь josefpres, https://freesound.org/people/josefpres/sounds/853163/; звук сконвертирован из WAV в OGG | CC0-1.0 |
+| `piano-214-octave-down-long.ogg` | freesound-пользователь josefpres, https://freesound.org/people/josefpres/sounds/870334/; звук сконвертирован из WAV в OGG | CC0-1.0 |
+| `piano-214-octave-long.ogg` | freesound-пользователь josefpres, https://freesound.org/people/josefpres/sounds/866781/; звук сконвертирован из WAV в OGG | CC0-1.0 |
+
+Звуки питомца (`assets/audio/sounds/animal/attributions.xml`):
+
+| Файл | Источник | Лицензия |
+|---|---|---|
+| `cat1.ogg` | На основе «Meow 4.wav» пользователя TRNGLE, https://freesound.org/people/TRNGLE/sounds/368006/; обрезан, разведён в моно, сконвертирован в OGG | CC-BY-3.0 |
+| `cat2.ogg` | Пользователь TRNGLE, https://freesound.org/people/TRNGLE/sounds/362652/; разведён в моно, сконвертирован в OGG | CC-BY-3.0 |
+| `pat1.ogg` | «pop.ogg» автора mirrorcult (GitHub), https://github.com/space-wizards/space-station-14/blob/9168fc629c555b8c395d695d291faea1eeda1db6/Resources/Audio/Effects/pop.ogg | CC0-1.0 |
+| `pat2.ogg` | «Pop, High, A (H1).wav» автора InspectorJ (jshaw.co.uk), https://freesound.org/people/InspectorJ/sounds/411642/; сведён из стерео в моно | CC-BY-4.0 |
+
+Треки CC-BY-3.0 и CC-BY-4.0 (`cat1.ogg`, `cat2.ogg`, `pat2.ogg`) требуют указания авторства при
+распространении — оно приведено в таблице выше и в самих файлах `attributions.xml` в составе APK;
+отдельного экрана «Об авторах» в игре нет.
+
+<!-- TODO ревьюер: указать автора/источник и лицензию для спрайтов, иконок, фона и иконки
+приложения (строки без источника выше) — до публикации нужно подтвердить, что все они созданы
+командой или используются по совместимой лицензии. -->
