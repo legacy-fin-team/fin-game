@@ -53,6 +53,33 @@ class GameViewModelAdultCheckTest {
     }
 
     @Test
+    fun `without the waits of a debug build the check still stands, and the next step opens at once`() {
+        val vm = testGameViewModel(
+            store = store(),
+            clock = clock,
+            questCatalog = QuestCatalog.of(listOf(checked)),
+            ignoreQuestDelays = true
+        )
+        vm.startQuest("picnic")
+        assertTrue(vm.chooseQuestOption("picnic", 0))
+
+        // Ожидание снято, а проверка — нет: ни награды, ни «Дальше», ни второго выбора.
+        assertEquals(150, vm.state.value.balance)
+        assertEquals(50, vm.state.value.stats[StatKind.HUNGER])
+        assertFalse(vm.advanceQuest("picnic"))
+        assertFalse(vm.chooseQuestOption("picnic", 0))
+        assertEquals(QuestCheck.WAITING, vm.state.value.questProgressOf("picnic")?.check)
+
+        vm.enterAdultMode()
+        assertTrue(vm.approveQuestCheck("picnic"))
+        vm.exitAdultMode()
+        assertEquals(110, vm.state.value.balance)
+        // Паузы узла после «Засчитать» в отладочной сборке нет.
+        assertTrue(vm.advanceQuest("picnic"))
+        assertEquals("games", vm.state.value.questProgressOf("picnic")?.nodeId)
+    }
+
+    @Test
     fun `only the adult approves, and the reward comes with the approval`() {
         val vm = vmOver(store())
         vm.startQuest("picnic")
