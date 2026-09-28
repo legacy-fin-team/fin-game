@@ -45,6 +45,10 @@ import com.legacy.fingame.game.quests.QuestKind
 import com.legacy.fingame.game.quests.QuestLog
 import com.legacy.fingame.game.quests.QuestOutcome
 import com.legacy.fingame.game.quests.QuestProgress
+import com.legacy.fingame.game.rules.CarePricedCatalog
+import com.legacy.fingame.game.rules.PetCare
+import com.legacy.fingame.game.rules.PetCareRules
+import com.legacy.fingame.game.rules.PetCareTuning
 import com.legacy.fingame.game.settings.GameSettings
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.ui.DemoContent
@@ -138,11 +142,15 @@ enum class Screen {
  * [GameViewModel.tick] as time passes.
  * @property statsUpdatedAtMillis moment [stats] were last brought up to date, kept here so it can be
  * saved back into [PlayerState]; the screens ask [stats] instead.
- * @property petAge age stage the pet has grown to, worked out from [petBornAtMillis] rather than
- * saved (see [Growth.ageAt]). Resolving it against the stages the animal actually has is left to
+ * @property petAge age stage the pet has grown to, worked out from [care] rather than saved (see
+ * [Growth.ageOf]). Resolving it against the stages the animal actually has is left to
  * [com.legacy.fingame.game.animals.Animal.getIdleSpritePath].
  * @property petBornAtMillis moment the pet was taken in, kept here only so it can be saved back into
  * [PlayerState]; the screens ask [petAge] instead.
+ * @property care как питомцу живётся: рост и серия дней без заботы (см. [PetCare]),
+ * восстанавливается из [PlayerState.care].
+ * @property careTuning правила ухода, по которым играет эта игра; здесь — чтобы [dailyIncome] и
+ * [careHint] считались из того же, из чего считает [GameViewModel].
  * @property subLocationIndex index of the currently displayed sub-location within
  * [DemoContent.subLocationTitles], restored from [PlayerState.subLocationIndex].
  * @property todayDay the game day it is right now, on the same scale as [Deposit.maturityDay]: days
@@ -194,6 +202,8 @@ data class GameUiState(
     val statsUpdatedAtMillis: Long = PlayerState.NEVER_UPDATED,
     val petAge: Int = Animal.FIRST_AGE,
     val petBornAtMillis: Long = Growth.NOT_BORN,
+    val care: PetCare = PetCare(),
+    val careTuning: PetCareTuning = PetCareTuning.DEFAULT,
     val subLocationIndex: Int = 0,
     val todayDay: Long = 0L,
     val quests: List<QuestProgress> = emptyList(),
@@ -233,6 +243,24 @@ data class GameUiState(
 
     /** Whether the cart holds something the player can actually pay for. */
     val canBuyCart: Boolean get() = hasCart && canAffordCart
+
+    /**
+     * Сколько монет даст бонус дня, если взять его сейчас: меньше обычного, пока питомцем не
+     * занимаются (см. [PetCareRules.dailyIncome]).
+     */
+    val dailyIncome: Int
+        get() = PetCareRules.dailyIncome(Economy.DAILY_BONUS, care.neglectStreak, careTuning)
+
+    /**
+     * Добрая подсказка ребёнку, почему питомец растёт медленнее или бонус меньше, или null, когда
+     * всё хорошо (см. [PetCareRules.explain]).
+     */
+    val careHint: String?
+        get() = if (selection == null) {
+            null
+        } else {
+            PetCareRules.explain(stats, care.dayBestCare, care.neglectStreak, careTuning)
+        }
 
     /** Сколько денег игрок может разложить: всё, что на текущем счёте. Тело вклада сюда не входит. */
     val totalToPlan: Int get() = balance
@@ -299,6 +327,8 @@ data class GameUiState(
  * @param ignoreQuestDelays не ждать ни кулдауна квестов, ни паузы между шагами — всё доступно
  * сразу (см. [QuestEngine]). В приложении это отладочная сборка (см. [factory]); по умолчанию
  * выключено, так что тесты сами решают, нужно ли им ожидание.
+ * @param careTuning правила ухода: как уход влияет на рост питомца, бонус дня и цены (см.
+ * [PetCareRules]).
  * @param settings the settings the app starts with, as they were saved: they are in the state from
  * its very first value, so nothing that follows the state — the music, the click sound, the theme —
  * ever sees the defaults for a frame.
@@ -310,6 +340,7 @@ class GameViewModel(
     questCatalog: QuestCatalog = QuestCatalog.EMPTY,
     private val random: Random = Random.Default,
     private val allowRestart: Boolean = DemoMode.ENABLED,
+    private val careTuning: PetCareTuning = PetCareTuning.DEFAULT,
     settings: GameSettings = GameSettings(),
     val ignoreQuestDelays: Boolean = false
 ) : ViewModel() {
@@ -367,6 +398,7 @@ class GameViewModel(
          * @param clock where the current day comes from; defaults to the device's calendar day.
          * @param questCatalog какие квесты есть в игре.
          * @param allowRestart можно ли проходить квесты ещё раз; по умолчанию — только в демо.
+         * @param careTuning правила ухода.
          * @param settings the saved settings the app starts with.
          * @param ignoreQuestDelays снять ожидание в квестах; по умолчанию — в отладочной сборке
          * (`BuildConfig.DEBUG`: debug и releaseDebuggable), в обычном release ожидание действует.
@@ -378,6 +410,7 @@ class GameViewModel(
             clock: GameClock = GameClock.DEVICE,
             questCatalog: QuestCatalog = QuestCatalog.EMPTY,
             allowRestart: Boolean = DemoMode.ENABLED,
+            careTuning: PetCareTuning = PetCareTuning.DEFAULT,
             settings: GameSettings = GameSettings(),
             ignoreQuestDelays: Boolean = BuildConfig.DEBUG
         ): ViewModelProvider.Factory = viewModelFactory {
@@ -388,6 +421,7 @@ class GameViewModel(
                     clock,
                     questCatalog,
                     allowRestart = allowRestart,
+                    careTuning = careTuning,
                     settings = settings,
                     ignoreQuestDelays = ignoreQuestDelays
                 )
@@ -396,6 +430,17 @@ class GameViewModel(
     }
 
     private val _state = MutableStateFlow(restoredState(settings))
+
+    /**
+     * Витрина магазина: тот же каталог, но с ценами, которые игрок видит и платит, — необязательные
+     * товары дорожают, пока питомцем не занимаются (см. [CarePricedCatalog]). Экран магазина,
+     * корзина и цели берут товары отсюда, а покупка считается по ним же.
+     */
+    // this.catalog — итоговый каталог со своими предметами взрослого, а не параметр конструктора
+    // с одними предметами игры: надбавка ложится и на них.
+    val shopCatalog: ItemCatalog = CarePricedCatalog(this.catalog, careTuning) {
+        _state.value.care.neglectStreak
+    }
 
     /** Current [GameUiState], observed by the UI. */
     val state: StateFlow<GameUiState> = _state.asStateFlow()
@@ -643,7 +688,8 @@ class GameViewModel(
             stats = PetStats.FULL,
             statsUpdatedAtMillis = now,
             petAge = Animal.FIRST_AGE,
-            petBornAtMillis = now
+            petBornAtMillis = now,
+            care = PetCare()
         )
         persist()
     }
@@ -666,14 +712,15 @@ class GameViewModel(
         val current = _state.value
         val now = clock.nowMillis()
         val ticks = PetStats.ticksBetween(current.statsUpdatedAtMillis, now)
-        val age = Growth.ageAt(current.petBornAtMillis, now)
-        val lived = if (ticks == 0L && age == current.petAge) {
+        val care = current.livedCare(now)
+        val lived = if (ticks == 0L && care == current.care) {
             current
         } else {
             current.copy(
                 stats = current.stats.decayedBy(ticks),
                 statsUpdatedAtMillis = current.statsUpdatedAtMillis + ticks * PetStats.TICK_MILLIS,
-                petAge = age,
+                care = care,
+                petAge = Growth.ageOf(care.growthMillis),
                 todayDay = clock.today()
             )
         }
@@ -1058,9 +1105,14 @@ class GameViewModel(
             current.rewardUsageLog
         }
 
+        val stats = current.stats.changedBy(item.effects)
+        // День, который успел закончиться, судится без этой заботы: она достаётся новому дню.
+        val care = current.livedCare(clock.nowMillis()).noticed(stats)
         _state.value = current.copy(
             owned = owned,
-            stats = current.stats.changedBy(item.effects),
+            stats = stats,
+            care = care,
+            petAge = Growth.ageOf(care.growthMillis),
             rewardUsageLog = rewardUsageLog
         )
         persist()
@@ -1223,6 +1275,8 @@ class GameViewModel(
         if (readOnly) return false
         val current = _state.value
         if (!current.canBuyCart) return false
+        // Цена могла измениться, пока корзина лежала: платится та, что сейчас.
+        if (priceOf(current.quantities) > current.balance) return false
 
         val owned = current.owned.toMutableMap()
         val bought = mutableSetOf<ItemSelection>()
@@ -1231,7 +1285,7 @@ class GameViewModel(
         var spentWant = 0
         current.quantities.forEach { (itemId, quantity) ->
             if (quantity <= 0) return@forEach
-            val item = catalog.findItemById(itemId) ?: return@forEach
+            val item = shopCatalog.findItemById(itemId) ?: return@forEach
             val key = ItemSelection(itemId, current.pickedVariantOf(item))
             owned[key] = (owned[key] ?: 0) + quantity
             bought += key
@@ -1378,7 +1432,9 @@ class GameViewModel(
      */
     fun claimDailyBonus(): Boolean {
         if (readOnly) return false
-        settleMaturedDeposit()
+        // Бонус зависит от того, как жилось питомцу, так что сперва питомец догоняет часы (и
+        // вклад, дошедший до срока, закрывается — это tick делает первым делом).
+        tick()
 
         val current = _state.value
         val today = clock.today()
@@ -1398,8 +1454,9 @@ class GameViewModel(
                 startDay = it.startDay
             )
         }
+        val income = current.dailyIncome
         _state.value = current.copy(
-            balance = current.balance + Economy.DAILY_BONUS,
+            balance = current.balance + income,
             lastDailyBonusDay = today,
             dailyBonusAvailable = false,
             budget = null,
@@ -1408,7 +1465,7 @@ class GameViewModel(
                 ?: current.budgetHistory,
             budgetDraft = null,
             planningOpen = true
-        ).logged(MoneyLog.REASON_DAILY_BONUS, Economy.DAILY_BONUS)
+        ).logged(MoneyLog.REASON_DAILY_BONUS, income)
         persist()
         openScreen(Screen.BUDGET)
         return true
@@ -1545,6 +1602,13 @@ class GameViewModel(
      * @param quantities the cart contents.
      * @return This state with the new cart and its price.
      */
+    /**
+     * @param now текущий момент.
+     * @return Уход за питомцем, в котором закрыты все дни питомца, закончившиеся к [now].
+     */
+    private fun GameUiState.livedCare(now: Long): PetCare =
+        care.lived(petBornAtMillis, stats, statsUpdatedAtMillis, now, careTuning)
+
     private fun GameUiState.withCart(quantities: Map<String, Int>): GameUiState =
         copy(quantities = quantities, cartPrice = priceOf(quantities))
 
@@ -1555,7 +1619,7 @@ class GameViewModel(
      */
     private fun priceOf(quantities: Map<String, Int>): Int =
         quantities.entries.sumOf { (itemId, quantity) ->
-            if (quantity <= 0) 0 else (catalog.findItemById(itemId)?.price ?: 0) * quantity
+            if (quantity <= 0) 0 else (shopCatalog.findItemById(itemId)?.price ?: 0) * quantity
         }
 
     /**
@@ -1595,6 +1659,10 @@ class GameViewModel(
                 quest.node(progress.nodeId) == null
             if (stepVanished) QuestEngine.advance(quest, restored, now) ?: restored else restored
         }
+        // Сохранение, сделанное до правил ухода, не знает, как жилось питомцу: он сохраняет
+        // возраст, который успел набрать, а дни без заботы начинают считаться с этого запуска.
+        val care = (saved.care ?: PetCare.migrated(bornAt, now, saved.stats.decayedBy(ticks)))
+            .lived(bornAt, saved.stats, statsUpdatedAt, now, careTuning)
 
         return GameUiState(
             selection = saved.selection,
@@ -1618,8 +1686,10 @@ class GameViewModel(
             goals = goalsOf(saved.goals, saved.owned),
             stats = saved.stats.decayedBy(ticks),
             statsUpdatedAtMillis = statsUpdatedAt + ticks * PetStats.TICK_MILLIS,
-            petAge = Growth.ageAt(bornAt, now),
+            petAge = Growth.ageOf(care.growthMillis),
             petBornAtMillis = bornAt,
+            care = care,
+            careTuning = careTuning,
             subLocationIndex = existingSubLocation(saved.subLocationIndex),
             todayDay = clock.today(),
             quests = quests,
@@ -1717,6 +1787,7 @@ class GameViewModel(
                 stats = current.stats,
                 statsUpdatedAtMillis = current.statsUpdatedAtMillis,
                 petBornAtMillis = current.petBornAtMillis,
+                care = current.care,
                 gameNowMillis = clock.nowMillis(),
                 clockShiftMillis = clock.shiftMillis,
                 quests = current.quests,

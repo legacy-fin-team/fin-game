@@ -6,6 +6,8 @@ import com.legacy.fingame.game.help.HelpRegistry
 import com.legacy.fingame.game.hints.HintRegistry
 import com.legacy.fingame.game.items.ItemRegistry
 import com.legacy.fingame.game.quests.QuestRegistry
+import com.legacy.fingame.game.rules.PetCareTuning
+import com.legacy.fingame.game.rules.PetCareTuningReader
 import com.legacy.fingame.utils.PlayerPreferences
 
 
@@ -29,6 +31,12 @@ class FinGameApplication : Application() {
     lateinit var helpRegistry: HelpRegistry
         private set
 
+    /**
+     * Правила ухода за питомцем: по умолчанию, с переопределениями из
+     * [PetCareTuningReader.ASSET_PATH], если такой файл есть.
+     */
+    var careTuning: PetCareTuning = PetCareTuning.DEFAULT
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -39,5 +47,8 @@ class FinGameApplication : Application() {
         playerPreferences = PlayerPreferences(applicationContext)
         hintRegistry = HintRegistry(applicationContext)
         helpRegistry = HelpRegistry(applicationContext)
+        careTuning = runCatching {
+            assets.open(PetCareTuningReader.ASSET_PATH).use(PetCareTuningReader::read)
+        }.getOrDefault(PetCareTuning.DEFAULT)
     }
 }

@@ -101,7 +101,8 @@ fun FinGameApp(
             GameViewModel.factory(
                 store = playerPreferences,
                 catalog = itemRegistry,
-                questCatalog = questRegistry
+                questCatalog = questRegistry,
+                careTuning = careTuning
             )
         }
     ),
@@ -187,13 +188,16 @@ fun FinGameApp(
                         // Patting the pet only makes it happy to see: hearts on the screen and a
                         // sound, no stats and no money.
                         onPetTap = { onPlayAnimalSound(pet.animalId) },
-                        goals = Goals.linesOf(goals = state.goals, catalog = itemRegistry),
+                        // Цели показывают те же цены, что и магазин (см. GameViewModel.shopCatalog).
+                        goals = Goals.linesOf(goals = state.goals, catalog = vm.shopCatalog),
                         onOpenGoal = vm::openGoal
                     )
 
                     Screen.SHOP -> ShopScreen(
                         state = state,
-                        items = itemRegistry.getItemsByCategory(state.selectedCategory),
+                        // Цены — с надбавкой ухода (см. [GameViewModel.shopCatalog]), поверх
+                        // предметов игры и своих предметов взрослого.
+                        items = vm.shopCatalog.getItemsByCategory(state.selectedCategory),
                         // Пустой раздел — «Другое» без своих предметов — в магазине не показывается.
                         categories = ItemCategory.entries.filter { category ->
                             category == state.selectedCategory ||
@@ -202,7 +206,7 @@ fun FinGameApp(
                         cartLines = Cart.linesOf(
                             quantities = state.quantities,
                             pickedVariants = state.pickedVariants,
-                            catalog = itemRegistry
+                            catalog = vm.shopCatalog
                         ),
                         onSelectCategory = vm::selectCategory,
                         onPickVariant = vm::pickVariant,
@@ -276,7 +280,8 @@ fun FinGameApp(
 
                     Screen.ADULT_MODE -> AdultScreen(
                         state = state,
-                        itemCatalog = itemRegistry,
+                        // Цены целей — те же, что видит ребёнок (см. [GameViewModel.shopCatalog]).
+                        itemCatalog = vm.shopCatalog,
                         questCatalog = questRegistry,
                         onAddItem = vm::addCustomItem,
                         onRemoveItem = vm::removeCustomItem,

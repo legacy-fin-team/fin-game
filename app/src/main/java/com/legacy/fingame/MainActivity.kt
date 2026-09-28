@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
                         store = playerPreferences,
                         catalog = itemRegistry,
                         questCatalog = questRegistry,
+                        careTuning = careTuning,
                         settings = savedSettings,
                         // Отладочная сборка (debug и releaseDebuggable) проверяет квесты без
                         // ожидания; в обычном release кулдаун и паузы между шагами действуют.
