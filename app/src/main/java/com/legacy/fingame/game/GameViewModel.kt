@@ -1859,6 +1859,7 @@ class GameViewModel(
             // Свои предметы и квесты — взрослого, а не игры ребёнка: они переживают новую игру.
             customItems = _state.value.customItems,
             customQuests = _state.value.customQuests,
+            careTuning = careTuning,
             settings = _state.value.settings
         )
         persist()

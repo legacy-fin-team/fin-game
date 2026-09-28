@@ -6,6 +6,9 @@ import com.legacy.fingame.game.animals.AnimalSelection
 import com.legacy.fingame.game.animals.Growth
 import com.legacy.fingame.game.economy.Economy
 import com.legacy.fingame.game.economy.MoneyLog
+import com.legacy.fingame.game.items.CustomItemDraft
+import com.legacy.fingame.game.items.CustomItemIcons
+import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.rules.PetCare
 import com.legacy.fingame.game.stats.PetStats
@@ -156,6 +159,47 @@ class GameCareRulesTest {
             Economy.STARTING_BALANCE - 120 - TestItems.APPLE.price,
             vm.state.value.balance
         )
+    }
+
+    @Test
+    fun `an adult's own reward costs more too, like the game's own optional goods`() {
+        val clock = FakeGameClock()
+        val vm = testGameViewModel(store = storeWithPet(clock), clock = clock)
+        vm.enterAdultMode()
+        assertTrue(
+            vm.addCustomItem(
+                CustomItemDraft(
+                    name = "Поход в кино",
+                    price = 100,
+                    category = ItemCategory.OTHER,
+                    iconPath = CustomItemIcons.ALL.first()
+                )
+            )
+        )
+        vm.exitAdultMode()
+        val cinema = vm.state.value.customItems.single()
+        leaveAlone(vm, clock, days = 3)
+
+        assertEquals(100, vm.catalog.findItemById(cinema.id)?.price)
+        assertEquals(120, vm.shopCatalog.findItemById(cinema.id)?.price)
+        assertEquals(
+            listOf(120),
+            vm.shopCatalog.getItemsByCategory(ItemCategory.OTHER).map { it.price }
+        )
+    }
+
+    @Test
+    fun `a new game keeps playing by the same care rules`() {
+        val clock = FakeGameClock()
+        val vm = testGameViewModel(
+            store = storeWithPet(clock),
+            clock = clock,
+            careTuning = NO_CARE_RULES
+        )
+
+        vm.resetProgress()
+
+        assertEquals(NO_CARE_RULES, vm.state.value.careTuning)
     }
 
     @Test
