@@ -105,6 +105,9 @@ class GameViewModelGoalsTest {
 
         assertEquals(listOf(ball, whiteHat), vm.state.value.goals)
         assertEquals(listOf(ball, whiteHat), store.state.goals)
+        // Купленная цель засчитана — её помнит раздел «Прогресс» взрослого.
+        assertEquals(1, vm.state.value.goalsReached)
+        assertEquals(1, store.state.goalsReached)
     }
 
     @Test

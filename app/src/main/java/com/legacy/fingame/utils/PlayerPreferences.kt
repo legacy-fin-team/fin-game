@@ -1,5 +1,7 @@
 package com.legacy.fingame.utils
 
+import com.legacy.fingame.game.items.CustomItemsCodec
+import com.legacy.fingame.game.quests.CustomQuestsCodec
 import android.content.Context
 import android.util.Log
 import com.legacy.fingame.game.PlayerState
@@ -10,6 +12,7 @@ import com.legacy.fingame.game.economy.BudgetResult
 import com.legacy.fingame.game.economy.BudgetState
 import com.legacy.fingame.game.economy.Deposit
 import com.legacy.fingame.game.items.ItemSelection
+import com.legacy.fingame.game.rules.PetCare
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.game.stats.StatKind
 
@@ -19,10 +22,12 @@ import com.legacy.fingame.game.stats.StatKind
  *
  * Every value is stored under a key of its own rather than as one blob, so a state that grew a
  * new field still reads back on a device that saved it before the field existed. The exceptions
- * are [PlayerState.moneyLog] and [PlayerState.goals]: both are lists of variable length, and a key
- * per record would turn the preferences into a file of thousands of lines, so each is written as a
- * single string, by [MoneyLogCodec] and [GoalsCodec] respectively. The goals are a string rather
- * than a string set because their order is the player's own, and a set would lose it.
+ * are [PlayerState.moneyLog], [PlayerState.quests], [PlayerState.goals],
+ * [PlayerState.budgetHistory] and [PlayerState.questLog]: all are lists of variable length, and a
+ * key per record would turn the preferences into a file of thousands of lines, so each is written
+ * as a single string, by [MoneyLogCodec], [QuestStateCodec], [GoalsCodec], [BudgetHistoryCodec]
+ * and [QuestLogCodec] respectively. The goals are a string rather than a string set because their order
+ * is the player's own, and a set would lose it.
  *
  * @param context current local application context. Used to get access to SharedPreferences.
  */
@@ -31,6 +36,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
     companion object {
         private const val TAG = "PlayerPreferences"
 
+        /** Name of the SharedPreferences file the player's game is kept in. */
         private const val PREFERENCES_NAME = "player"
         private const val KEY_ANIMAL_ID = "selected_animal_id"
         private const val KEY_ANIMAL_VARIANT_ID = "selected_animal_variant_id"
@@ -65,6 +71,7 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             "previous_budget_planned_savings_left"
         private const val KEY_PREVIOUS_BUDGET_ACTUAL_SAVINGS = "previous_budget_actual_savings"
         private const val KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT = "previous_budget_planned_deposit"
+        private const val KEY_PREVIOUS_BUDGET_START_DAY = "previous_budget_start_day"
         private const val KEY_BUDGET_DRAFT_PRESENT = "budget_draft_present"
         private const val KEY_BUDGET_DRAFT_MUST = "budget_draft_must"
         private const val KEY_BUDGET_DRAFT_WANT = "budget_draft_want"
@@ -73,6 +80,41 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         private const val KEY_PLANNING_OPEN = "planning_open"
         private const val KEY_MONEY_LOG = "money_log"
         private const val KEY_GOALS = "goals"
+        private const val KEY_HINTS_SEEN = "hints_seen"
+
+        /** Состояние квестов одной строкой, см. [QuestStateCodec]. */
+        internal const val KEY_QUESTS = "quests"
+
+        /** Момент последнего взгляда на экран квестов. */
+        internal const val KEY_QUESTS_SEEN_AT = "quests_seen_at"
+
+        /** Момент, когда выпал последний случайный квест. */
+        internal const val KEY_LAST_RANDOM_QUEST_AT = "last_random_quest_at"
+
+        /** История бюджета одной строкой, см. [BudgetHistoryCodec]. */
+        internal const val KEY_BUDGET_HISTORY = "budget_history"
+
+        /** Журнал выборов в квестах одной строкой, см. [QuestLogCodec]. */
+        internal const val KEY_QUEST_LOG = "quest_log"
+
+        /** Свои предметы взрослого одной строкой, см. [CustomItemsCodec]. */
+        internal const val KEY_CUSTOM_ITEMS = "custom_items"
+
+        /** Свои квесты взрослого одной строкой, см. [CustomQuestsCodec]. */
+        internal const val KEY_CUSTOM_QUESTS = "custom_quests"
+
+        /** Журнал использованных наград одной строкой, см. [RewardUsageLogCodec]. */
+        internal const val KEY_REWARD_USAGE_LOG = "reward_usage_log"
+
+        /** Когда взрослый последний раз смотрел журнал наград. */
+        internal const val KEY_REWARD_USAGE_SEEN_AT = "reward_usage_seen_at"
+
+        /** Сколько целей ребёнок купил, см. [PlayerState.goalsReached]. */
+        internal const val KEY_GOALS_REACHED = "goals_reached"
+        private const val KEY_CARE_GROWTH = "care_growth_millis"
+        private const val KEY_CARE_JUDGED_DAYS = "care_judged_days"
+        private const val KEY_CARE_DAY_BEST = "care_day_best"
+        private const val KEY_CARE_NEGLECT_STREAK = "care_neglect_streak"
 
         /** Key the savings account was stored under, read once more to hand the money back. */
         private const val KEY_RETIRED_SAVINGS = "savings"
@@ -94,7 +136,9 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             "budget_draft_savings",
             "previous_budget_planned",
             "previous_budget_planned_savings",
-            "previous_budget_actual"
+            "previous_budget_actual",
+            // Флаг единого приветственного окна: его сменили подсказки по экранам (hints_seen).
+            "onboarding_seen"
         )
 
         /**
@@ -135,6 +179,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS_LEFT,
             KEY_PREVIOUS_BUDGET_ACTUAL_SAVINGS,
             KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT,
+            KEY_PREVIOUS_BUDGET_START_DAY,
+            KEY_BUDGET_HISTORY,
             KEY_BUDGET_DRAFT_PRESENT,
             KEY_BUDGET_DRAFT_MUST,
             KEY_BUDGET_DRAFT_WANT,
@@ -142,7 +188,21 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             KEY_BUDGET_DRAFT_DEPOSIT_TERM_DAYS,
             KEY_PLANNING_OPEN,
             KEY_MONEY_LOG,
-            KEY_GOALS
+            KEY_QUESTS,
+            KEY_QUESTS_SEEN_AT,
+            KEY_LAST_RANDOM_QUEST_AT,
+            KEY_QUEST_LOG,
+            KEY_GOALS,
+            KEY_CUSTOM_ITEMS,
+            KEY_CUSTOM_QUESTS,
+            KEY_REWARD_USAGE_LOG,
+            KEY_REWARD_USAGE_SEEN_AT,
+            KEY_GOALS_REACHED,
+            KEY_HINTS_SEEN,
+            KEY_CARE_GROWTH,
+            KEY_CARE_JUDGED_DAYS,
+            KEY_CARE_DAY_BEST,
+            KEY_CARE_NEGLECT_STREAK
         )
 
         /** Prefix of the key one stat bar is stored under, completed by [StatKind.xmlName]. */
@@ -186,6 +246,9 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             deposit = readDeposit(),
             budget = readBudget(),
             previousBudgetResult = readPreviousBudgetResult(),
+            budgetHistory = BudgetHistoryCodec.decode(
+                preferences.getString(KEY_BUDGET_HISTORY, null)
+            ),
             budgetDraft = readBudgetDraft(),
             planningOpen = preferences.getBoolean(KEY_PLANNING_OPEN, defaults.planningOpen),
             moneyLog = MoneyLogCodec.decode(preferences.getString(KEY_MONEY_LOG, null)),
@@ -202,8 +265,29 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
                 defaults.statsUpdatedAtMillis
             ),
             petBornAtMillis = preferences.getLong(KEY_PET_BORN_AT, defaults.petBornAtMillis),
+            care = readCare(),
             gameNowMillis = preferences.getLong(KEY_GAME_NOW, defaults.gameNowMillis),
-            clockShiftMillis = preferences.getLong(KEY_CLOCK_SHIFT, defaults.clockShiftMillis)
+            clockShiftMillis = preferences.getLong(KEY_CLOCK_SHIFT, defaults.clockShiftMillis),
+            quests = QuestStateCodec.decode(preferences.getString(KEY_QUESTS, null)),
+            questsSeenAtMillis = preferences.getLong(
+                KEY_QUESTS_SEEN_AT,
+                defaults.questsSeenAtMillis
+            ),
+            lastRandomQuestAtMillis = preferences.getLong(
+                KEY_LAST_RANDOM_QUEST_AT,
+                defaults.lastRandomQuestAtMillis
+            ),
+            questLog = QuestLogCodec.decode(preferences.getString(KEY_QUEST_LOG, null)),
+            customItems = CustomItemsCodec.decode(preferences.getString(KEY_CUSTOM_ITEMS, null)),
+            customQuests = CustomQuestsCodec.decode(preferences.getString(KEY_CUSTOM_QUESTS, null)),
+            rewardUsageLog = RewardUsageLogCodec.decode(preferences.getString(KEY_REWARD_USAGE_LOG, null)),
+            rewardUsageSeenAtMillis = preferences.getLong(
+                KEY_REWARD_USAGE_SEEN_AT,
+                defaults.rewardUsageSeenAtMillis
+            ),
+            goalsReached = preferences.getInt(KEY_GOALS_REACHED, defaults.goalsReached),
+            hintsSeen = preferences.getStringSet(KEY_HINTS_SEEN, null)?.toSet()
+                ?: defaults.hintsSeen
         )
     }
 
@@ -255,6 +339,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
                 KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT,
                 state.previousBudgetResult?.plannedDeposit ?: 0
             )
+            .putLong(KEY_PREVIOUS_BUDGET_START_DAY, state.previousBudgetResult?.startDay ?: 0L)
+            .putString(KEY_BUDGET_HISTORY, BudgetHistoryCodec.encode(state.budgetHistory))
             .putBoolean(KEY_BUDGET_DRAFT_PRESENT, state.budgetDraft != null)
             .putInt(KEY_BUDGET_DRAFT_MUST, state.budgetDraft?.mustSpend ?: 0)
             .putInt(KEY_BUDGET_DRAFT_WANT, state.budgetDraft?.wantSpend ?: 0)
@@ -265,7 +351,30 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             )
             .putBoolean(KEY_PLANNING_OPEN, state.planningOpen)
             .putString(KEY_MONEY_LOG, MoneyLogCodec.encode(state.moneyLog))
+            .putString(KEY_QUESTS, QuestStateCodec.encode(state.quests))
+            .putLong(KEY_QUESTS_SEEN_AT, state.questsSeenAtMillis)
+            .putLong(KEY_LAST_RANDOM_QUEST_AT, state.lastRandomQuestAtMillis)
             .putString(KEY_GOALS, GoalsCodec.encode(state.goals))
+            .putString(KEY_QUEST_LOG, QuestLogCodec.encode(state.questLog))
+            .putString(KEY_CUSTOM_ITEMS, CustomItemsCodec.encode(state.customItems))
+            .putString(KEY_CUSTOM_QUESTS, CustomQuestsCodec.encode(state.customQuests))
+            .putString(KEY_REWARD_USAGE_LOG, RewardUsageLogCodec.encode(state.rewardUsageLog))
+            .putLong(KEY_REWARD_USAGE_SEEN_AT, state.rewardUsageSeenAtMillis)
+            .putInt(KEY_GOALS_REACHED, state.goalsReached)
+            .putStringSet(KEY_HINTS_SEEN, state.hintsSeen.toSet())
+
+        val care = state.care
+        if (care == null) {
+            editor.remove(KEY_CARE_GROWTH)
+                .remove(KEY_CARE_JUDGED_DAYS)
+                .remove(KEY_CARE_DAY_BEST)
+                .remove(KEY_CARE_NEGLECT_STREAK)
+        } else {
+            editor.putLong(KEY_CARE_GROWTH, care.growthMillis)
+                .putLong(KEY_CARE_JUDGED_DAYS, care.judgedDays)
+                .putFloat(KEY_CARE_DAY_BEST, care.dayBestCare.toFloat())
+                .putInt(KEY_CARE_NEGLECT_STREAK, care.neglectStreak)
+        }
 
         StatKind.entries.forEach { stat ->
             editor.putInt(KEY_STAT_PREFIX + stat.xmlName, state.stats[stat])
@@ -348,6 +457,22 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
      *
      * @return The player's deposit, or null when there is none.
      */
+    /**
+     * Уход за питомцем, или null, когда сохранение сделано до правил ухода: его достроит
+     * [com.legacy.fingame.game.GameViewModel] (см. [PetCare.migrated]).
+     */
+    private fun readCare(): PetCare? {
+        if (!preferences.contains(KEY_CARE_GROWTH)) return null
+
+        return PetCare(
+            growthMillis = preferences.getLong(KEY_CARE_GROWTH, 0L).coerceAtLeast(0L),
+            judgedDays = preferences.getLong(KEY_CARE_JUDGED_DAYS, 0L).coerceAtLeast(0L),
+            dayBestCare = preferences.getFloat(KEY_CARE_DAY_BEST, 1f).toDouble().coerceIn(0.0, 1.0),
+            neglectStreak = preferences.getInt(KEY_CARE_NEGLECT_STREAK, 0)
+                .coerceIn(0, PetCare.MAX_STREAK)
+        )
+    }
+
     private fun readDeposit(): Deposit? {
         val amount = preferences.getInt(KEY_DEPOSIT_AMOUNT, 0)
         if (amount <= 0) return null
@@ -409,7 +534,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             actualWant = preferences.getInt(KEY_PREVIOUS_BUDGET_ACTUAL_WANT, 0),
             plannedSavings = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_SAVINGS_LEFT, 0),
             actualSavings = preferences.getInt(KEY_PREVIOUS_BUDGET_ACTUAL_SAVINGS, 0),
-            plannedDeposit = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT, 0)
+            plannedDeposit = preferences.getInt(KEY_PREVIOUS_BUDGET_PLANNED_DEPOSIT, 0),
+            startDay = preferences.getLong(KEY_PREVIOUS_BUDGET_START_DAY, 0L)
         )
     }
 

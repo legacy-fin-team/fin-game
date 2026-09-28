@@ -1,5 +1,6 @@
 package com.legacy.fingame.game
 
+import com.legacy.fingame.game.adult.RewardUsageLog
 import com.legacy.fingame.game.animals.AnimalSelection
 import com.legacy.fingame.game.animals.Growth
 import com.legacy.fingame.game.economy.BudgetDraft
@@ -9,7 +10,12 @@ import com.legacy.fingame.game.economy.Deposit
 import com.legacy.fingame.game.economy.Economy
 import com.legacy.fingame.game.economy.FastForwardClock
 import com.legacy.fingame.game.economy.MoneyLog
+import com.legacy.fingame.game.items.Item
 import com.legacy.fingame.game.items.ItemSelection
+import com.legacy.fingame.game.quests.Quest
+import com.legacy.fingame.game.quests.QuestLog
+import com.legacy.fingame.game.quests.QuestProgress
+import com.legacy.fingame.game.rules.PetCare
 import com.legacy.fingame.game.stats.PetStats
 
 /**
@@ -48,8 +54,11 @@ import com.legacy.fingame.game.stats.PetStats
  * [NEVER_UPDATED] when the pet's stats were never touched. The decay of the time between it and the
  * next launch is applied by [GameViewModel] when it restores the state.
  * @property petBornAtMillis moment the pet was taken in, in milliseconds, or [Growth.NOT_BORN] when
- * there is no pet yet. The pet's age stage is worked out from it (see [Growth.ageAt]) instead of
- * being saved, so the pet grows while the app is closed and the stage can never drift.
+ * there is no pet yet. The pet's own days, by which its care is judged, are counted from it (see
+ * [PetCare]).
+ * @property care как питомцу жилось: сколько он вырос и сколько дней подряд им не занимались, или
+ * null в сохранении, сделанном до правил ухода, — тогда [GameViewModel] достраивает его через
+ * [PetCare.migrated], и питомец сохраняет возраст, который у него был.
  * @property gameNowMillis moment the game's own clock had reached when this state was saved, in
  * milliseconds, or [CLOCK_NEVER_SAVED] when no run has saved one yet. It is the floor the next
  * launch holds its clock to (see [FastForwardClock.fastForwardTo]), so a device clock moved back in
@@ -66,11 +75,31 @@ import com.legacy.fingame.game.stats.PetStats
  * начинался — до самого первого планирования или пока идёт планирование следующего.
  * @property previousBudgetResult итог прошлого периода, который показывается при планировании,
  * или null, когда ни один период ещё не закрывался.
+ * @property budgetHistory итоги закрытых периодов, новейший первым, не больше
+ * [com.legacy.fingame.game.economy.BudgetHistory.MAX]; последний из них — [previousBudgetResult].
+ * Её смотрит взрослый.
  * @property budgetDraft раскладка, которую игрок набрал, но не подтвердил, или null, когда он к
  * ней не притрагивался. Хранится, чтобы экран планирования можно было закрыть и вернуться к нему.
  * @property planningOpen открыто ли планирование: становится true при получении бонуса дня и
  * false при подтверждении бюджета.
  * @property moneyLog журнал изменений текущего счёта, новейшее первым.
+ * @property quests где игрок в каждом квесте, который он брал или который ему выпал; квест, которого
+ * здесь нет, не начинался.
+ * @property questsSeenAtMillis момент по игровым часам, когда игрок последний раз видел экран
+ * квестов, или [QUESTS_NEVER_SEEN]. Шаг, ставший доступным позже, — непросмотренный, и на кнопке
+ * квестов горит точка.
+ * @property lastRandomQuestAtMillis момент, когда выпал последний случайный квест, или
+ * [NO_RANDOM_QUEST]; следующий выпадает не раньше, чем через шесть игровых часов.
+ * @property questLog выборы игрока в квестах, новейший первым, — история квестов для взрослого.
+ * @property rewardUsageLog использованные награды из жизни (раздел «Другое»), новейшая первой, —
+ * журнал «Использованные награды» для взрослого.
+ * @property rewardUsageSeenAtMillis когда взрослый последний раз смотрел журнал наград, или
+ * [RewardUsageLog.NEVER_SEEN]; записи новее — «новые», их число — на вкладке «Награды».
+ * @property goalsReached сколько целей ребёнок купил — цель после покупки из [goals] уходит, а
+ * раздел взрослого «Прогресс» помнит, что до цели дошли.
+ * @property hintsSeen ключи подсказок к экранам, которые игрок уже закрыл (см.
+ * [com.legacy.fingame.game.hints.HintKeys]): каждая подсказка показывается один раз, пока игрок не
+ * попросит показать их заново или не начнёт игру сначала.
  */
 data class PlayerState(
     val selection: AnimalSelection? = null,
@@ -80,6 +109,7 @@ data class PlayerState(
     val deposit: Deposit? = null,
     val budget: BudgetState? = null,
     val previousBudgetResult: BudgetResult? = null,
+    val budgetHistory: List<BudgetResult> = emptyList(),
     val budgetDraft: BudgetDraft? = null,
     val planningOpen: Boolean = false,
     val moneyLog: MoneyLog = MoneyLog.EMPTY,
@@ -90,8 +120,19 @@ data class PlayerState(
     val stats: PetStats = PetStats.FULL,
     val statsUpdatedAtMillis: Long = NEVER_UPDATED,
     val petBornAtMillis: Long = Growth.NOT_BORN,
+    val care: PetCare? = null,
     val gameNowMillis: Long = CLOCK_NEVER_SAVED,
-    val clockShiftMillis: Long = FastForwardClock.NO_SHIFT
+    val clockShiftMillis: Long = FastForwardClock.NO_SHIFT,
+    val quests: List<QuestProgress> = emptyList(),
+    val questsSeenAtMillis: Long = QUESTS_NEVER_SEEN,
+    val lastRandomQuestAtMillis: Long = NO_RANDOM_QUEST,
+    val questLog: QuestLog = QuestLog.EMPTY,
+    val customItems: List<Item> = emptyList(),
+    val customQuests: List<Quest> = emptyList(),
+    val rewardUsageLog: RewardUsageLog = RewardUsageLog.EMPTY,
+    val rewardUsageSeenAtMillis: Long = RewardUsageLog.NEVER_SEEN,
+    val goalsReached: Int = 0,
+    val hintsSeen: Set<String> = emptySet()
 ) {
     companion object {
         /**
@@ -107,5 +148,14 @@ data class PlayerState(
          * no moment to pick the clock up at, so it simply starts at the device's own.
          */
         const val CLOCK_NEVER_SAVED = Long.MIN_VALUE
+
+        /** Значение [questsSeenAtMillis]: игрок ещё ни разу не открывал экран квестов. */
+        const val QUESTS_NEVER_SEEN = Long.MIN_VALUE
+
+        /**
+         * Значение [lastRandomQuestAtMillis]: случайных квестов ещё не было, шесть часов считаются
+         * от момента, когда игрок завёл питомца.
+         */
+        const val NO_RANDOM_QUEST = Long.MIN_VALUE
     }
 }

@@ -16,8 +16,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
@@ -57,11 +57,13 @@ private val CloseButtonSize = 64.dp
  * - Чекбоксы «Звуки» и «Музыка».
  * - Выбор темы: Светлая / Тёмная / Авто.
  * - Кнопка «Режим взрослого» → переход на отдельный экран (заглушка).
+ * - Кнопка «Помощь» → список игровых терминов с объяснением.
  * - Кнопка «Сбросить прогресс» → модальное окно с подтверждением.
  *
  * @param settings текущие настройки игры.
  * @param onSettingsChanged вызывается при изменении любого параметра.
  * @param onOpenAdultMode открыть экран «Режим взрослого».
+ * @param onOpenHelp открыть экран «Помощь» со списком терминов.
  * @param onResetProgress вызывается при подтверждении сброса прогресса.
  * @param onBack закрыть экран настроек.
  * @param modifier модификатор для корневого контейнера.
@@ -71,6 +73,7 @@ fun SettingsScreen(
     settings: GameSettings,
     onSettingsChanged: (GameSettings) -> Unit,
     onOpenAdultMode: () -> Unit,
+    onOpenHelp: () -> Unit,
     onResetProgress: () -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
@@ -165,6 +168,12 @@ fun SettingsScreen(
         SettingsButton(
             text = "Режим взрослого",
             onClick = onOpenAdultMode
+        )
+
+        // --- Помощь ---
+        SettingsButton(
+            text = "Помощь",
+            onClick = onOpenHelp
         )
 
         // --- Сбросить прогресс ---
@@ -321,6 +330,7 @@ private fun SettingsScreenLightPreview() {
                 settings = GameSettings(),
                 onSettingsChanged = {},
                 onOpenAdultMode = {},
+                onOpenHelp = {},
                 onResetProgress = {},
                 onBack = {}
             )
@@ -338,6 +348,7 @@ private fun SettingsScreenDarkPreview() {
                 settings = GameSettings(soundVolume = 0, themeMode = ThemeMode.DARK),
                 onSettingsChanged = {},
                 onOpenAdultMode = {},
+                onOpenHelp = {},
                 onResetProgress = {},
                 onBack = {}
             )
@@ -355,6 +366,7 @@ private fun SettingsScreenLandscapePreview() {
                 settings = GameSettings(),
                 onSettingsChanged = {},
                 onOpenAdultMode = {},
+                onOpenHelp = {},
                 onResetProgress = {},
                 onBack = {}
             )

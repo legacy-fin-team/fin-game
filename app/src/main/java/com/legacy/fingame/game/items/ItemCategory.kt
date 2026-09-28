@@ -23,7 +23,45 @@ enum class ItemCategory(
     FOOD("food", ItemUse.CONSUMED, null, SpendKind.MUST),
     TOYS("toys", ItemUse.REUSABLE, null, SpendKind.MUST),
     CLOTHES("clothes", ItemUse.WEARABLE, GameLayer.CLOTHES, SpendKind.WANT),
-    DECOR("decor", ItemUse.WEARABLE, GameLayer.ENVIRONMENT_BACK, SpendKind.WANT);
+    DECOR("decor", ItemUse.WEARABLE, GameLayer.ENVIRONMENT_BACK, SpendKind.WANT),
+
+    /**
+     * «Другое» — награды из жизни от взрослого, которые сама игра не использует; в магазине виден,
+     * только когда не пуст. Предмет отсюда можно только «Использовать» один раз ([ItemUse.REDEEMED]).
+     */
+    OTHER("other", ItemUse.REDEEMED, null, SpendKind.WANT);
+
+    /**
+     * What the button that puts an item of this category on the pet, or takes it off, says.
+     *
+     * Clothes are put on and taken off; a decoration is stood in the room and taken away from it —
+     * the same toggle worded for what each category's items actually do, so the inventory asks the
+     * category for the word instead of guessing it itself.
+     *
+     * Meaningful only for a category whose items are [ItemUse.WEARABLE]; a caller already checks
+     * that through [Item.isWearable] before it ever asks for the label.
+     *
+     * @param worn whether the item is currently on the pet (or standing in the room).
+     * @return The Russian label of the action.
+     */
+    fun wearActionTitle(worn: Boolean): String = when (this) {
+        DECOR -> if (worn) "Убрать" else "Поставить"
+        else -> if (worn) "Снять" else "Надеть"
+    }
+
+    /**
+     * What the inventory card of an item of this category says while the item is on the pet (or
+     * standing in the room): clothes are worn, a decoration stands — the same wording split as in
+     * [wearActionTitle], so the card and its button never disagree.
+     *
+     * Meaningful only for a category whose items are [ItemUse.WEARABLE].
+     *
+     * @return The Russian label of the state.
+     */
+    fun wornStateTitle(): String = when (this) {
+        DECOR -> "Стоит"
+        else -> "Надето"
+    }
 
     companion object {
         /**

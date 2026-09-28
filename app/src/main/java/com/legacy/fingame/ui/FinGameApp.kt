@@ -11,6 +11,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -19,20 +20,27 @@ import com.legacy.fingame.DemoMode
 import com.legacy.fingame.FinGameApplication
 import com.legacy.fingame.game.GameViewModel
 import com.legacy.fingame.game.Screen
+import com.legacy.fingame.game.hints.HintKeys
 import com.legacy.fingame.game.items.Cart
 import com.legacy.fingame.game.items.Goals
 import com.legacy.fingame.game.items.Inventory
+import com.legacy.fingame.game.items.ItemCategory
+import com.legacy.fingame.game.quests.QuestBoard
 import com.legacy.fingame.game.scene.GameScene
 import com.legacy.fingame.game.scene.SceneSprite
 import com.legacy.fingame.game.settings.AudioManager
 import com.legacy.fingame.game.stats.PetStats
+import com.legacy.fingame.ui.components.ScreenHint
 import com.legacy.fingame.ui.components.Sprites
+import com.legacy.fingame.ui.screens.AdultLockScreen
+import com.legacy.fingame.ui.screens.AdultScreen
 import com.legacy.fingame.ui.screens.AnimalSelectScreen
 import com.legacy.fingame.ui.screens.BudgetScreen
+import com.legacy.fingame.ui.screens.HelpScreen
 import com.legacy.fingame.ui.screens.InventoryScreen
 import com.legacy.fingame.ui.screens.LogScreen
 import com.legacy.fingame.ui.screens.MainScreen
-import com.legacy.fingame.ui.screens.PlaceholderScreen
+import com.legacy.fingame.ui.screens.QuestsScreen
 import com.legacy.fingame.ui.screens.SettingsScreen
 import com.legacy.fingame.ui.screens.ShopScreen
 import kotlinx.coroutines.delay
@@ -57,15 +65,22 @@ private const val TICK_POLLS_PER_TICK = 10L
  * actually picked.
  *
  * Layout: a full-size [Surface] with an [AnimatedContent] that cross-fades between
- * [MainScreen], [ShopScreen], [InventoryScreen], [BudgetScreen], [LogScreen], [SettingsScreen]
- * and the [PlaceholderScreen] instances for the yet-unspecified sections (quests, adult mode), based on
- * [GameUiState.screen].
+ * [MainScreen], [ShopScreen], [InventoryScreen], [QuestsScreen], [BudgetScreen], [LogScreen],
+ * [SettingsScreen], [HelpScreen], the lock in front of the adult mode ([AdultLockScreen]) and the
+ * adult hub ([AdultScreen]), based on [GameUiState.screen].
  *
  * While there is a pet to look after, this is also where its life goes on: a loop asks
  * [GameViewModel.tick] to catch up with the clock, so the stat bars fall and the pet grows up in
  * front of the player instead of only between launches. In a demo build ([DemoMode.ENABLED]) the
  * main screen also gets the button that pushes that same clock forward, so a demo can show a day of
  * the pet's life without waiting one out.
+ *
+ * The game is explained in small steps rather than in one welcome window: the first time the player
+ * lands on the pet selection screen, on the main screen and on each of the other screens, a
+ * [ScreenHint] about that screen is shown on top of it, once. Which one is due is decided by
+ * [HintKeys.pending] out of [GameUiState.hintsSeen]; closing it is remembered by
+ * [GameViewModel.markHintSeen]. Only one hint is ever on screen, and the pet selection hint and the
+ * main screen one never follow each other without the player picking a pet in between.
  *
  * @param modifier modifier applied to the root surface.
  * @param vm view model providing [GameUiState] and the navigation/action callbacks passed down
@@ -83,7 +98,12 @@ fun FinGameApp(
     modifier: Modifier = Modifier,
     vm: GameViewModel = viewModel(
         factory = with(LocalContext.current.applicationContext as FinGameApplication) {
-            GameViewModel.factory(store = playerPreferences, catalog = itemRegistry)
+            GameViewModel.factory(
+                store = playerPreferences,
+                catalog = itemRegistry,
+                questCatalog = questRegistry,
+                careTuning = careTuning
+            )
         }
     ),
     onPlaySound: (String) -> Unit = {},
@@ -92,11 +112,20 @@ fun FinGameApp(
     val state by vm.state.collectAsStateWithLifecycle()
     val application = LocalContext.current.applicationContext as FinGameApplication
     val animalRegistry = application.animalRegistry
-    val itemRegistry = application.itemRegistry
+    // Предметы игры и свои предметы взрослого вместе (см. [GameViewModel.catalog]).
+    val itemRegistry = vm.catalog
+    // Квесты игры и свои квесты взрослого вместе (см. [GameViewModel.questCatalog]).
+    val questRegistry = vm.questCatalog
 
     val savedSelection = state.selection
     val pet = savedSelection?.takeIf { animalRegistry.hasVariant(it.animalId, it.variantId) }
+    val pendingHint = HintKeys.pending(
+        hasPet = pet != null,
+        screen = state.screen,
+        seen = state.hintsSeen
+    )?.let(application.hintRegistry::find)
 
+    // «Назад» из режима взрослого и из замка ведёт в настройки (см. [GameViewModel.closeScreen]).
     BackHandler(enabled = state.screen != Screen.MAIN) { vm.closeScreen() }
 
     Surface(
@@ -154,22 +183,33 @@ fun FinGameApp(
                             animalId = pet.animalId,
                             worn = state.worn,
                             catalog = itemRegistry,
+                            // The stage the pet is drawn at, not the raw age: a pet keeps growing
+                            // by the calendar past its last painted stage, and the clothes on it
+                            // must not ask for a stage there are no pictures of.
                             animalAge = animalRegistry.coerceAge(pet.animalId, state.petAge)
                         ),
                         // Patting the pet only makes it happy to see: hearts on the screen and a
                         // sound, no stats and no money.
                         onPetTap = { onPlayAnimalSound(pet.animalId) },
-                        goals = Goals.linesOf(goals = state.goals, catalog = itemRegistry),
+                        // Цели показывают те же цены, что и магазин (см. GameViewModel.shopCatalog).
+                        goals = Goals.linesOf(goals = state.goals, catalog = vm.shopCatalog),
                         onOpenGoal = vm::openGoal
                     )
 
                     Screen.SHOP -> ShopScreen(
                         state = state,
-                        items = itemRegistry.getItemsByCategory(state.selectedCategory),
+                        // Цены — с надбавкой ухода (см. [GameViewModel.shopCatalog]), поверх
+                        // предметов игры и своих предметов взрослого.
+                        items = vm.shopCatalog.getItemsByCategory(state.selectedCategory),
+                        // Пустой раздел — «Другое» без своих предметов — в магазине не показывается.
+                        categories = ItemCategory.entries.filter { category ->
+                            category == state.selectedCategory ||
+                                itemRegistry.getItemsByCategory(category).isNotEmpty()
+                        },
                         cartLines = Cart.linesOf(
                             quantities = state.quantities,
                             pickedVariants = state.pickedVariants,
-                            catalog = itemRegistry
+                            catalog = vm.shopCatalog
                         ),
                         onSelectCategory = vm::selectCategory,
                         onPickVariant = vm::pickVariant,
@@ -192,7 +232,21 @@ fun FinGameApp(
                         onClose = vm::closeScreen
                     )
 
-                    Screen.QUESTS -> PlaceholderScreen("Квесты", Sprites.QUESTS, vm::closeScreen)
+                    Screen.QUESTS -> QuestsScreen(
+                        entries = remember(state.quests, state.customQuests) {
+                            QuestBoard.entriesOf(questRegistry, state.quests)
+                        },
+                        currentMillis = vm::nowMillis,
+                        onStart = { questId -> vm.startQuest(questId) },
+                        onChoose = { questId, index -> vm.chooseQuestOption(questId, index) },
+                        onAdvance = { questId -> vm.advanceQuest(questId) },
+                        onRestart = { questId -> vm.restartQuest(questId) },
+                        onClose = vm::closeScreen,
+                        balance = state.balance,
+                        depositAmount = state.depositAmount,
+                        canRestart = DemoMode.ENABLED,
+                        ignoreDelays = vm.ignoreQuestDelays
+                    )
 
                     Screen.BUDGET -> BudgetScreen(
                         state = state,
@@ -214,18 +268,54 @@ fun FinGameApp(
                     Screen.OPTIONS -> SettingsScreen(
                         settings = state.settings,
                         onSettingsChanged = vm::updateSettings,
-                        onOpenAdultMode = { vm.openScreen(Screen.ADULT_MODE) },
+                        onOpenAdultMode = { vm.openScreen(Screen.ADULT_LOCK) },
+                        onOpenHelp = { vm.openScreen(Screen.HELP) },
+                        // A reset makes the player new again in every sense: the screen hints come
+                        // back with it, starting with the one on the pet selection screen.
                         onResetProgress = vm::resetProgress,
                         onBack = vm::closeScreen
                     )
 
-                    Screen.ADULT_MODE -> PlaceholderScreen(
-                        "Режим взрослого",
-                        Sprites.SETTINGS,
-                        vm::closeScreen
+                    Screen.ADULT_LOCK -> AdultLockScreen(
+                        onSolved = vm::enterAdultMode,
+                        onClose = vm::closeScreen
+                    )
+
+                    Screen.ADULT_MODE -> AdultScreen(
+                        state = state,
+                        // Цены целей — те же, что видит ребёнок (см. [GameViewModel.shopCatalog]).
+                        itemCatalog = vm.shopCatalog,
+                        questCatalog = questRegistry,
+                        onAddItem = vm::addCustomItem,
+                        onRemoveItem = vm::removeCustomItem,
+                        onAddQuest = vm::addCustomQuest,
+                        onRemoveQuest = vm::removeCustomQuest,
+                        onUpdateQuest = vm::updateCustomQuest,
+                        onEnableQuest = vm::enableQuest,
+                        onApproveCheck = vm::approveQuestCheck,
+                        onRejectCheck = vm::rejectQuestCheck,
+                        onAdjustMoney = vm::adjustBalanceByAdult,
+                        onRewardsSeen = vm::markRewardUsagesSeen,
+                        onClose = vm::exitAdultMode
+                    )
+
+                    Screen.HELP -> HelpScreen(
+                        entries = application.helpRegistry.getEntries(),
+                        hints = application.hintRegistry.getHints(),
+                        hintsAlreadyReset = state.hintsSeen.isEmpty(),
+                        onResetHints = vm::resetHints,
+                        onClose = { vm.openScreen(Screen.OPTIONS) }
                     )
                 }
             }
+
+        }
+
+        if (pendingHint != null) {
+            ScreenHint(
+                hint = pendingHint,
+                onDismiss = { vm.markHintSeen(pendingHint.key) }
+            )
         }
     }
 }

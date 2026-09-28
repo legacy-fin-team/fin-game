@@ -99,6 +99,9 @@ private val PopupScreenMargin = 12.dp
  * @param onToggleWorn called with the item that should be put on or taken off.
  * @param onClose called when the close button is pressed.
  * @param modifier modifier applied to the screen root.
+ * @param readOnly инвентарь глазами взрослого: заголовок «Инвентарь ребёнка», окно предмета
+ *   показывает только имя и эффекты, без кнопок. Такой инвентарь живёт внутри хаба взрослого, у
+ *   которого свой крестик и свои поля, поэтому своего крестика и полей экрана у него нет.
  */
 @Composable
 fun InventoryScreen(
@@ -107,7 +110,8 @@ fun InventoryScreen(
     onUseItem: (ItemSelection) -> Unit,
     onToggleWorn: (ItemSelection) -> Unit,
     onClose: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    readOnly: Boolean = false
 ) {
     var picked by remember { mutableStateOf<ItemSelection?>(null) }
     // The item is looked up again on every change of the inventory, so the window always shows what
@@ -115,30 +119,41 @@ fun InventoryScreen(
     val pickedEntry = entries.find { it.selection == picked }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .systemBarsPadding()
-            .padding(16.dp)
+        modifier = if (readOnly) {
+            modifier.fillMaxSize()
+        } else {
+            modifier
+                .fillMaxSize()
+                .systemBarsPadding()
+                .padding(16.dp)
+        }
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Инвентарь",
-                style = MaterialTheme.typography.headlineSmall,
+                text = if (readOnly) "Инвентарь ребёнка" else "Инвентарь",
+                // Внутри хаба взрослого заголовок экрана уже есть — этот тише, как у журнала там же.
+                style = if (readOnly) {
+                    MaterialTheme.typography.titleLarge
+                } else {
+                    MaterialTheme.typography.headlineSmall
+                },
                 color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
-            SpriteButton(
-                assetPath = Sprites.CLOSE,
-                contentDescription = "Закрыть инвентарь",
-                onClick = onClose,
-                size = CloseButtonSize,
-                showIndicator = false
-            )
+            if (!readOnly) {
+                SpriteButton(
+                    assetPath = Sprites.CLOSE,
+                    contentDescription = "Закрыть инвентарь",
+                    onClick = onClose,
+                    size = CloseButtonSize,
+                    showIndicator = false
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -184,7 +199,8 @@ fun InventoryScreen(
                                     entry = pickedEntry,
                                     onUse = { onUseItem(pickedEntry.selection) },
                                     onToggleWorn = { onToggleWorn(pickedEntry.selection) },
-                                    onDismiss = { picked = null }
+                                    onDismiss = { picked = null },
+                                    readOnly = readOnly
                                 )
                             }
                         }
@@ -282,8 +298,11 @@ private fun InventoryCell(
             )
 
             if (entry.worn) {
+                // Небольшой зазор: без него строка состояния прилипает к названию, а на крупном
+                // шрифте почти налезает на него.
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "Надето",
+                    text = entry.item.category.wornStateTitle(),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
@@ -339,7 +358,8 @@ private fun ItemActionPopup(
     entry: InventoryEntry,
     onUse: () -> Unit,
     onToggleWorn: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    readOnly: Boolean = false
 ) {
     val density = LocalDensity.current
     val gapPx = with(density) { PopupGap.roundToPx() }
@@ -357,7 +377,8 @@ private fun ItemActionPopup(
             entry = entry,
             onUse = onUse,
             onToggleWorn = onToggleWorn,
-            onDismiss = onDismiss
+            onDismiss = onDismiss,
+            readOnly = readOnly
         )
     }
 }
@@ -381,6 +402,7 @@ private fun ItemActionPopup(
  * @param onToggleWorn called when the item should be put on or taken off.
  * @param onDismiss called when the cross is pressed.
  * @param modifier modifier applied to the block root.
+ * @param readOnly окно для взрослого: вместо действия — имя предмета и надет ли он.
  */
 @Composable
 private fun ItemActionBlock(
@@ -388,7 +410,8 @@ private fun ItemActionBlock(
     onUse: () -> Unit,
     onToggleWorn: () -> Unit,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    readOnly: Boolean = false
 ) {
     // Half of the cross hangs outside the card, so the card keeps that much room around itself.
     val overhang = GameDimens.buttonSize(PopupCloseButtonSize) / 2
@@ -409,6 +432,14 @@ private fun ItemActionBlock(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                if (readOnly) {
+                    Text(
+                        text = entry.item.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+                }
                 if (entry.item.effects.isNotEmpty()) {
                     Row(
                         modifier = Modifier.horizontalScroll(rememberScrollState()),
@@ -420,12 +451,30 @@ private fun ItemActionBlock(
                     }
                 }
 
-                if (entry.item.isWearable) {
+                if (readOnly) {
+                    if (entry.item.isWearable) {
+                        Text(
+                            text = if (entry.worn) "Сейчас надето" else "Сейчас не надето",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else if (entry.item.isWearable) {
                     PillButton(
-                        text = if (entry.worn) "Убрать" else "Надеть",
+                        text = entry.item.category.wearActionTitle(entry.worn),
                         onClick = onToggleWorn
                     )
                 } else {
+                    if (entry.item.category.use == ItemUse.REDEEMED) {
+                        Text(
+                            text = "Награда от взрослого. Используешь — и она исчезнет, а взрослый " +
+                                "увидит это у себя.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                     PillButton(text = entry.item.useActionTitle(), onClick = onUse)
                 }
             }
@@ -482,10 +531,12 @@ private class CellAnchoredPositionProvider(
 /**
  * What the button that uses an item says.
  *
- * @return The Russian label of the action: food is eaten, anything else that is used is played with.
+ * @return The Russian label of the action: food is eaten, a reward from the adult is used, anything
+ * else that is used is played with.
  */
 private fun Item.useActionTitle(): String = when (category.use) {
     ItemUse.CONSUMED -> "Съесть"
+    ItemUse.REDEEMED -> "Использовать"
     else -> "Поиграть"
 }
 
