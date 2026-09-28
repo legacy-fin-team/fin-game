@@ -25,8 +25,11 @@ enum class ItemCategory(
     CLOTHES("clothes", ItemUse.WEARABLE, GameLayer.CLOTHES, SpendKind.WANT),
     DECOR("decor", ItemUse.WEARABLE, GameLayer.ENVIRONMENT_BACK, SpendKind.WANT),
 
-    /** «Другое» — раздел для своих предметов взрослого; в магазине виден, только когда не пуст. */
-    OTHER("other", ItemUse.REUSABLE, null, SpendKind.WANT);
+    /**
+     * «Другое» — награды из жизни от взрослого, которые сама игра не использует; в магазине виден,
+     * только когда не пуст. Предмет отсюда можно только «Использовать» один раз ([ItemUse.REDEEMED]).
+     */
+    OTHER("other", ItemUse.REDEEMED, null, SpendKind.WANT);
 
     companion object {
         /**

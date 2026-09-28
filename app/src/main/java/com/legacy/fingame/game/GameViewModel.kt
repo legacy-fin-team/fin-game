@@ -6,13 +6,15 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.legacy.fingame.DemoMode
 import com.legacy.fingame.game.adult.AdultMoney
+import com.legacy.fingame.game.adult.RewardUsage
+import com.legacy.fingame.game.adult.RewardUsageLog
 import com.legacy.fingame.game.animals.Animal
 import com.legacy.fingame.game.animals.AnimalSelection
 import com.legacy.fingame.game.animals.Growth
 import com.legacy.fingame.game.economy.Budget
 import com.legacy.fingame.game.economy.BudgetDraft
-import com.legacy.fingame.game.economy.BudgetResult
 import com.legacy.fingame.game.economy.BudgetHistory
+import com.legacy.fingame.game.economy.BudgetResult
 import com.legacy.fingame.game.economy.BudgetState
 import com.legacy.fingame.game.economy.Deposit
 import com.legacy.fingame.game.economy.Economy
@@ -30,10 +32,10 @@ import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.items.ItemSelection
 import com.legacy.fingame.game.items.ItemUse
 import com.legacy.fingame.game.items.customItemOf
-import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.CompositeQuestCatalog
 import com.legacy.fingame.game.quests.CustomQuestDraft
 import com.legacy.fingame.game.quests.CustomQuests
+import com.legacy.fingame.game.quests.Quest
 import com.legacy.fingame.game.quests.QuestCatalog
 import com.legacy.fingame.game.quests.QuestCheckEvent
 import com.legacy.fingame.game.quests.QuestChoice
@@ -45,10 +47,10 @@ import com.legacy.fingame.game.quests.QuestProgress
 import com.legacy.fingame.game.settings.GameSettings
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.ui.DemoContent
+import kotlin.random.Random
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlin.random.Random
 
 /**
  * The screens the player can navigate between.
@@ -195,6 +197,8 @@ data class GameUiState(
     val adultMode: Boolean = false,
     val customItems: List<Item> = emptyList(),
     val customQuests: List<Quest> = emptyList(),
+    val rewardUsageLog: RewardUsageLog = RewardUsageLog.EMPTY,
+    val rewardUsageSeenAtMillis: Long = RewardUsageLog.NEVER_SEEN,
     val settings: GameSettings = GameSettings()
 ) {
     /**
@@ -786,6 +790,18 @@ class GameViewModel(
     }
 
     /**
+     * Взрослый открыл журнал «Использованные награды»: всё, что в нём есть, больше не «новое», и
+     * счётчик на вкладке гаснет.
+     */
+    fun markRewardUsagesSeen() {
+        val current = _state.value
+        if (!current.adultMode) return
+        if (current.rewardUsageLog.unseenCount(current.rewardUsageSeenAtMillis) == 0) return
+        _state.value = current.copy(rewardUsageSeenAtMillis = clock.nowMillis())
+        persist()
+    }
+
+    /**
      * Взрослый вручную добавляет ребёнку монеты или убирает их — с причиной. Запись в журнале денег
      * помечена [MoneyEntry.fromAdult], причина — «Взрослый добавил 50: за уборку»; её видит и
      * ребёнок. В бюджет периода это не идёт, как и деньги за квесты. Ниже нуля баланс не уходит —
@@ -973,6 +989,10 @@ class GameViewModel(
      * anything the pet can wear is not used at all — it is put on and taken off through
      * [toggleWorn].
      *
+     * Награда из жизни (раздел «Другое», [ItemUse.REDEEMED]) используется один раз: пропадает из
+     * инвентаря, а в журнал «Использованные награды» ([GameUiState.rewardUsageLog]) пишется, что,
+     * кто (питомец) и когда её использовал — это видит взрослый.
+     *
      * @param selection the item and the variant of it to use, as the inventory holds it.
      * @return True when the item was used, false when the player doesn't own it, it is not registered
      * any more, or it is worn rather than used.
@@ -986,15 +1006,30 @@ class GameViewModel(
         val count = current.owned[selection] ?: 0
         if (count <= 0) return false
 
-        val owned = if (item.category.use == ItemUse.CONSUMED) {
+        val usedUp = item.category.use == ItemUse.CONSUMED || item.category.use == ItemUse.REDEEMED
+        val owned = if (usedUp) {
             if (count == 1) current.owned - selection else current.owned + (selection to count - 1)
         } else {
             current.owned
         }
+        val rewardUsageLog = if (item.category.use == ItemUse.REDEEMED) {
+            current.rewardUsageLog.plus(
+                RewardUsage(
+                    itemId = item.id,
+                    itemName = item.name,
+                    petName = current.petName,
+                    gameDay = clock.today(),
+                    timestampMillis = clock.nowMillis()
+                )
+            )
+        } else {
+            current.rewardUsageLog
+        }
 
         _state.value = current.copy(
             owned = owned,
-            stats = current.stats.changedBy(item.effects)
+            stats = current.stats.changedBy(item.effects),
+            rewardUsageLog = rewardUsageLog
         )
         persist()
         return true
@@ -1560,6 +1595,8 @@ class GameViewModel(
             hasUnseenQuestStep = QuestEngine.hasUnseenStep(quests, saved.questsSeenAtMillis, now),
             customItems = customItems,
             customQuests = customQuests,
+            rewardUsageLog = saved.rewardUsageLog,
+            rewardUsageSeenAtMillis = saved.rewardUsageSeenAtMillis,
             settings = settings
         )
     }
@@ -1651,7 +1688,9 @@ class GameViewModel(
                 questsSeenAtMillis = current.questsSeenAtMillis,
                 lastRandomQuestAtMillis = current.lastRandomQuestAtMillis,
                 customItems = current.customItems,
-                customQuests = current.customQuests
+                customQuests = current.customQuests,
+                rewardUsageLog = current.rewardUsageLog,
+                rewardUsageSeenAtMillis = current.rewardUsageSeenAtMillis
             )
         )
     }

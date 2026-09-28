@@ -75,4 +75,12 @@ class PlayerPreferencesKeysTest {
         assertTrue(PlayerPreferences.KEY_CUSTOM_QUESTS in PlayerPreferences.LIVE_KEYS)
         assertEquals("custom_quests", PlayerPreferences.KEY_CUSTOM_QUESTS)
     }
+
+    @Test
+    fun `the reward usage log and its last look are among the live keys`() {
+        assertTrue(PlayerPreferences.KEY_REWARD_USAGE_LOG in PlayerPreferences.LIVE_KEYS)
+        assertTrue(PlayerPreferences.KEY_REWARD_USAGE_SEEN_AT in PlayerPreferences.LIVE_KEYS)
+        assertEquals("reward_usage_log", PlayerPreferences.KEY_REWARD_USAGE_LOG)
+        assertEquals("reward_usage_seen_at", PlayerPreferences.KEY_REWARD_USAGE_SEEN_AT)
+    }
 }

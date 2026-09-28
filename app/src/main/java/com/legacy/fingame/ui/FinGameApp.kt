@@ -269,6 +269,7 @@ fun FinGameApp(
                         onApproveCheck = vm::approveQuestCheck,
                         onRejectCheck = vm::rejectQuestCheck,
                         onAdjustMoney = vm::adjustBalanceByAdult,
+                        onRewardsSeen = vm::markRewardUsagesSeen,
                         onClose = vm::exitAdultMode
                     )
                 }

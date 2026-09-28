@@ -463,6 +463,15 @@ private fun ItemActionBlock(
                         onClick = onToggleWorn
                     )
                 } else {
+                    if (entry.item.category.use == ItemUse.REDEEMED) {
+                        Text(
+                            text = "Награда от взрослого. Используешь — и она исчезнет, а взрослый " +
+                                "увидит это у себя.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center
+                        )
+                    }
                     PillButton(text = entry.item.useActionTitle(), onClick = onUse)
                 }
             }
@@ -519,10 +528,12 @@ private class CellAnchoredPositionProvider(
 /**
  * What the button that uses an item says.
  *
- * @return The Russian label of the action: food is eaten, anything else that is used is played with.
+ * @return The Russian label of the action: food is eaten, a reward from the adult is used, anything
+ * else that is used is played with.
  */
 private fun Item.useActionTitle(): String = when (category.use) {
     ItemUse.CONSUMED -> "Съесть"
+    ItemUse.REDEEMED -> "Использовать"
     else -> "Поиграть"
 }
 

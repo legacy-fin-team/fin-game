@@ -100,6 +100,12 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         /** Свои квесты взрослого одной строкой, см. [CustomQuestsCodec]. */
         internal const val KEY_CUSTOM_QUESTS = "custom_quests"
 
+        /** Журнал использованных наград одной строкой, см. [RewardUsageLogCodec]. */
+        internal const val KEY_REWARD_USAGE_LOG = "reward_usage_log"
+
+        /** Когда взрослый последний раз смотрел журнал наград. */
+        internal const val KEY_REWARD_USAGE_SEEN_AT = "reward_usage_seen_at"
+
         /** Key the savings account was stored under, read once more to hand the money back. */
         private const val KEY_RETIRED_SAVINGS = "savings"
 
@@ -176,7 +182,9 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             KEY_QUEST_LOG,
             KEY_GOALS,
             KEY_CUSTOM_ITEMS,
-            KEY_CUSTOM_QUESTS
+            KEY_CUSTOM_QUESTS,
+            KEY_REWARD_USAGE_LOG,
+            KEY_REWARD_USAGE_SEEN_AT
         )
 
         /** Prefix of the key one stat bar is stored under, completed by [StatKind.xmlName]. */
@@ -252,7 +260,12 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             ),
             questLog = QuestLogCodec.decode(preferences.getString(KEY_QUEST_LOG, null)),
             customItems = CustomItemsCodec.decode(preferences.getString(KEY_CUSTOM_ITEMS, null)),
-            customQuests = CustomQuestsCodec.decode(preferences.getString(KEY_CUSTOM_QUESTS, null))
+            customQuests = CustomQuestsCodec.decode(preferences.getString(KEY_CUSTOM_QUESTS, null)),
+            rewardUsageLog = RewardUsageLogCodec.decode(preferences.getString(KEY_REWARD_USAGE_LOG, null)),
+            rewardUsageSeenAtMillis = preferences.getLong(
+                KEY_REWARD_USAGE_SEEN_AT,
+                defaults.rewardUsageSeenAtMillis
+            )
         )
     }
 
@@ -323,6 +336,8 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             .putString(KEY_QUEST_LOG, QuestLogCodec.encode(state.questLog))
             .putString(KEY_CUSTOM_ITEMS, CustomItemsCodec.encode(state.customItems))
             .putString(KEY_CUSTOM_QUESTS, CustomQuestsCodec.encode(state.customQuests))
+            .putString(KEY_REWARD_USAGE_LOG, RewardUsageLogCodec.encode(state.rewardUsageLog))
+            .putLong(KEY_REWARD_USAGE_SEEN_AT, state.rewardUsageSeenAtMillis)
 
         StatKind.entries.forEach { stat ->
             editor.putInt(KEY_STAT_PREFIX + stat.xmlName, state.stats[stat])

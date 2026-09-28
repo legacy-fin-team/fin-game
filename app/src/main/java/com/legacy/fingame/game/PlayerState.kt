@@ -1,5 +1,6 @@
 package com.legacy.fingame.game
 
+import com.legacy.fingame.game.adult.RewardUsageLog
 import com.legacy.fingame.game.animals.AnimalSelection
 import com.legacy.fingame.game.animals.Growth
 import com.legacy.fingame.game.economy.BudgetDraft
@@ -86,6 +87,10 @@ import com.legacy.fingame.game.stats.PetStats
  * @property lastRandomQuestAtMillis момент, когда выпал последний случайный квест, или
  * [NO_RANDOM_QUEST]; следующий выпадает не раньше, чем через шесть игровых часов.
  * @property questLog выборы игрока в квестах, новейший первым, — история квестов для взрослого.
+ * @property rewardUsageLog использованные награды из жизни (раздел «Другое»), новейшая первой, —
+ * журнал «Использованные награды» для взрослого.
+ * @property rewardUsageSeenAtMillis когда взрослый последний раз смотрел журнал наград, или
+ * [RewardUsageLog.NEVER_SEEN]; записи новее — «новые», их число — на вкладке «Награды».
  */
 data class PlayerState(
     val selection: AnimalSelection? = null,
@@ -113,7 +118,9 @@ data class PlayerState(
     val lastRandomQuestAtMillis: Long = NO_RANDOM_QUEST,
     val questLog: QuestLog = QuestLog.EMPTY,
     val customItems: List<Item> = emptyList(),
-    val customQuests: List<Quest> = emptyList()
+    val customQuests: List<Quest> = emptyList(),
+    val rewardUsageLog: RewardUsageLog = RewardUsageLog.EMPTY,
+    val rewardUsageSeenAtMillis: Long = RewardUsageLog.NEVER_SEEN
 ) {
     companion object {
         /**

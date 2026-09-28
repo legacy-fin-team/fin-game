@@ -148,4 +148,59 @@ class GameViewModelCustomItemsTest {
             )
         )
     }
+
+    @Test
+    fun `a reward from real life is used once, leaves the inventory and is logged for the adult`() {
+        val store = FakePlayerStateStore(store().state.copy(petName = "Мурка"))
+        val vm = testGameViewModel(store = store, clock = clock)
+        vm.enterAdultMode()
+        vm.addCustomItem(puzzle.copy(name = "Поход в кино"))
+        vm.exitAdultMode()
+        val cinema = vm.state.value.customItems.single()
+        vm.selectCategory(ItemCategory.OTHER)
+        vm.increaseQty(cinema.id)
+        assertTrue(vm.buyCart())
+        val selection = ItemSelection(cinema.id, cinema.defaultVariantId)
+        val statsBefore = vm.state.value.stats
+
+        assertTrue(vm.useItem(selection))
+
+        val state = vm.state.value
+        assertEquals(null, state.owned[selection])
+        assertEquals(statsBefore, state.stats)
+        val usage = state.rewardUsageLog.entries.single()
+        assertEquals("Поход в кино", usage.itemName)
+        assertEquals(cinema.id, usage.itemId)
+        assertEquals("Мурка", usage.petName)
+        assertEquals(clock.millis, usage.timestampMillis)
+        assertFalse(vm.useItem(selection))
+        // Журнал сохраняется и переживает перезапуск.
+        assertEquals(state.rewardUsageLog, testGameViewModel(store = store, clock = clock).state.value.rewardUsageLog)
+        // Использованную награду можно купить снова.
+        vm.increaseQty(cinema.id)
+        assertTrue(vm.buyCart())
+    }
+
+    @Test
+    fun `the adult sees how many rewards are new until the log is looked at`() {
+        val store = store()
+        val vm = testGameViewModel(store = store, clock = clock)
+        vm.enterAdultMode()
+        vm.addCustomItem(puzzle)
+        vm.exitAdultMode()
+        val item = vm.state.value.customItems.single()
+        val selection = ItemSelection(item.id, item.defaultVariantId)
+        vm.selectCategory(ItemCategory.OTHER)
+        vm.increaseQty(item.id)
+        vm.buyCart()
+        vm.useItem(selection)
+
+        assertEquals(1, vm.state.value.rewardUsageLog.unseenCount(vm.state.value.rewardUsageSeenAtMillis))
+        vm.markRewardUsagesSeen()
+        assertEquals(1, vm.state.value.rewardUsageLog.unseenCount(vm.state.value.rewardUsageSeenAtMillis))
+        vm.enterAdultMode()
+        vm.markRewardUsagesSeen()
+        assertEquals(0, vm.state.value.rewardUsageLog.unseenCount(vm.state.value.rewardUsageSeenAtMillis))
+        assertEquals(clock.millis, store.state.rewardUsageSeenAtMillis)
+    }
 }

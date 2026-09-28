@@ -114,17 +114,17 @@ private val TitleMinSize = 16.dp
 /** Мельче этого подписи в карточках не ужимаются. */
 private val LabelMinSize = 9.dp
 
-/** Сколько вкладок в первой строке, когда их две: 4 + 3. */
-private const val TabsInFirstRow = 4
+/** Сколько вкладок в строке, когда шапка стоит столбиком: строки по три. */
+private const val TabsPerRow = 3
 
 /** Шаг между вкладками в строке. */
 private val TabGap = 8.dp
 
 /**
- * Ширина ряда вкладок (в dp, делённых на масштаб шрифта), с которой 4 вкладки встают в строку,
- * чуть ужав подписи. Уже — строки прокручиваются вбок, подписи целиком.
+ * Ширина ряда вкладок (в dp, делённых на масштаб шрифта), с которой [TabsPerRow] вкладки встают в
+ * строку, чуть ужав подписи. Уже — строки прокручиваются вбок, подписи целиком.
  */
-private val FitTabsMinWidth = 340.dp
+private val FitTabsMinWidth = 280.dp
 
 /** Поля кнопки вкладки в «буквах» — добавка к длине подписи, когда делится ширина строки. */
 private const val TabPaddingChars = 3
@@ -143,6 +143,7 @@ enum class AdultTab(val title: String) {
     QUESTS("Квесты"),
     GOALS("Цели"),
     INVENTORY("Вещи"),
+    REWARDS("Награды"),
     LOG("Журнал"),
     ITEMS("Товары")
 }
@@ -183,12 +184,16 @@ fun AdultScreen(
     onApproveCheck: (String) -> Boolean = { false },
     onRejectCheck: (String) -> Boolean = { false },
     onAdjustMoney: (amount: Int, add: Boolean, reason: String) -> Boolean = { _, _, _ -> false },
+    onRewardsSeen: () -> Unit = {},
     initialTab: AdultTab = AdultTab.DAYS,
     initialQuestFormOpen: Boolean = false
 ) {
     var tab by rememberSaveable { mutableStateOf(initialTab) }
     // Счётчики на вкладках: что ждёт взрослого.
-    val badges = mapOf(AdultTab.QUESTS to QuestEngine.awaitingCheck(state.quests).size)
+    val badges = mapOf(
+        AdultTab.QUESTS to QuestEngine.awaitingCheck(state.quests).size,
+        AdultTab.REWARDS to state.rewardUsageLog.unseenCount(state.rewardUsageSeenAtMillis)
+    )
     val short = GameDimens.isShortScreen
     val firstDay = adultFirstDayOf(state.moneyLog, state.budgetHistory, state.todayDay, state.questLog)
     // Две колонки карточек нужны только лёжа: стоя — и на планшете — одна колонка читается легче.
@@ -288,6 +293,12 @@ fun AdultScreen(
                     onAdd = onAddItem,
                     onRemove = onRemoveItem
                 )
+                AdultTab.REWARDS -> RewardsTab(
+                    log = state.rewardUsageLog,
+                    seenAtMillis = state.rewardUsageSeenAtMillis,
+                    firstDay = firstDay,
+                    onSeen = onRewardsSeen
+                )
                 AdultTab.LOG -> LogTab(state, firstDay, onAdjustMoney)
             }
         }
@@ -345,7 +356,7 @@ private fun AdultClose(onClose: () -> Unit) {
 }
 
 /**
- * Вкладки. Стоя — всегда две строки 4 + 3. На обычном телефоне вкладки делят строку по длине
+ * Вкладки. Стоя — строки по три вкладки. На обычном телефоне вкладки делят строку по длине
  * подписей и при нехватке места чуть ужимают подписи. На узком экране с крупным шрифтом так уже не
  * помещается: строка, которой не хватает ширины, прокручивается вбок, подписи целиком, выбранная
  * вкладка въезжает в середину, а край соседней подсказывает, что дальше есть ещё. Лёжа высоты нет,
@@ -375,7 +386,7 @@ private fun AdultTabs(
     }
     // Вес — по длине подписи: остаток строки достаётся длинным подписям.
     fun weightOf(entry: AdultTab): Float = (labelOf(entry).length + TabPaddingChars).toFloat()
-    val rows = listOf(AdultTab.entries.take(TabsInFirstRow), AdultTab.entries.drop(TabsInFirstRow))
+    val rows = AdultTab.entries.chunked(TabsPerRow)
     if (wrap) {
         BoxWithConstraints(modifier = modifier) {
             val fits = maxWidth / LocalDensity.current.fontScale >= FitTabsMinWidth

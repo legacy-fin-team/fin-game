@@ -74,6 +74,21 @@ private fun StatKind.formTitle(): String = when (this) {
     StatKind.PLEASURE -> "Настроение"
 }
 
+/**
+ * Подсказка под выбором раздела: всё, что сама игра не использует, — в «Другое».
+ *
+ * @param category выбранный раздел.
+ */
+internal fun customItemCategoryHint(category: ItemCategory): String = when (category) {
+    ItemCategory.OTHER ->
+        "«Другое» — для наград из жизни: поход в кино, час мультиков. Ребёнок покупает награду " +
+            "за монеты и нажимает «Использовать», а вы видите это во вкладке «Награды»."
+    ItemCategory.FOOD, ItemCategory.TOYS ->
+        "Еда и игрушки меняют шкалы питомца. Награды из жизни кладите в «Другое»."
+    ItemCategory.CLOTHES, ItemCategory.DECOR ->
+        "Одежду и декор питомец надевает. Награды из жизни кладите в «Другое»."
+}
+
 /** Со знаком: «+10», «−5», «0». */
 internal fun signed(value: Int): String = when {
     value > 0 -> "+$value"
@@ -306,6 +321,11 @@ internal fun CustomItemForm(
                 )
             }
         }
+        Text(
+            text = customItemCategoryHint(category),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
     val effectsBlock: @Composable ColumnScope.() -> Unit = {
         if (CustomItems.hasEffects(category)) {
