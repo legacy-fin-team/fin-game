@@ -245,6 +245,9 @@ fun FinGameApp(
 
                     Screen.HELP -> HelpScreen(
                         entries = application.helpRegistry.getEntries(),
+                        hints = application.hintRegistry.getHints(),
+                        hintsAlreadyReset = state.hintsSeen.isEmpty(),
+                        onResetHints = vm::resetHints,
                         onClose = { vm.openScreen(Screen.OPTIONS) }
                     )
                 }

@@ -19,10 +19,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.legacy.fingame.game.help.HelpEntry
+import com.legacy.fingame.game.hints.Hint
+import com.legacy.fingame.ui.components.PillButton
+import com.legacy.fingame.ui.components.PillStyle
+import com.legacy.fingame.ui.components.ScreenHintContent
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.theme.FinGameTheme
@@ -35,13 +40,17 @@ private val HeaderGap = 8.dp
 private val ListGap = 12.dp
 private val RowVerticalPadding = 10.dp
 private val RowTextGap = 4.dp
+private val SectionTopPadding = 20.dp
+private val SectionGap = 8.dp
 
 /** Размер кнопки «Назад» — тот же, что у крестика на остальных экранах. */
 private val BackButtonSize = 40.dp
 
 /**
  * Экран справки: список игровых терминов и их объяснение простыми словами, открывается из
- * [OptionsScreen].
+ * [OptionsScreen]. Под терминами — раздел «Подсказки по экранам»: все подсказки, которые
+ * появляются при первом входе на экраны, их можно перелистать здесь, и кнопка «Показать подсказки
+ * заново», после которой каждая снова появится на своём экране.
  *
  * Устроен как [LogScreen] — список, а не окно: список тем длиннее диалога и явно предполагает
  * прокрутку, а не разовое чтение. Каждый термин — одна строка списка, объединённая в один узел для
@@ -52,12 +61,20 @@ private val BackButtonSize = 40.dp
  * [com.legacy.fingame.game.help.HelpRegistry].
  * @param onClose вызывается при нажатии «Назад».
  * @param modifier модификатор корня экрана.
+ * @param hints подсказки по экранам в порядке [com.legacy.fingame.game.hints.HintRegistry];
+ * пустой список — раздела нет.
+ * @param hintsAlreadyReset все подсказки уже ждут показа (ни одна не закрыта): кнопка сброса тогда
+ * неактивна, а под ней сказано, что подсказки появятся снова.
+ * @param onResetHints вызывается кнопкой «Показать подсказки заново».
  */
 @Composable
 fun HelpScreen(
     entries: List<HelpEntry>,
     onClose: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hints: List<Hint> = emptyList(),
+    hintsAlreadyReset: Boolean = false,
+    onResetHints: () -> Unit = {}
 ) {
     Column(
         modifier = modifier
@@ -97,6 +114,20 @@ fun HelpScreen(
                 HelpEntryRow(entry = entry)
                 HorizontalDivider(color = GameColors.divider)
             }
+
+            if (hints.isNotEmpty()) {
+                item(key = "hints_header") {
+                    HintsHeader(alreadyReset = hintsAlreadyReset, onReset = onResetHints)
+                }
+                items(items = hints, key = { "hint_" + it.key }) { hint ->
+                    ScreenHintContent(
+                        hint = hint,
+                        modifier = Modifier.padding(vertical = RowVerticalPadding),
+                        centered = false
+                    )
+                    HorizontalDivider(color = GameColors.divider)
+                }
+            }
         }
     }
 }
@@ -132,6 +163,70 @@ private fun HelpEntryRow(entry: HelpEntry, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * Заголовок раздела «Подсказки по экранам» с кнопкой, возвращающей все подсказки.
+ *
+ * @param alreadyReset ни одна подсказка не закрыта — сбрасывать нечего.
+ * @param onReset вызывается кнопкой «Показать подсказки заново».
+ * @param modifier модификатор колонки.
+ */
+@Composable
+private fun HintsHeader(
+    alreadyReset: Boolean,
+    onReset: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = SectionTopPadding, bottom = RowVerticalPadding),
+        verticalArrangement = Arrangement.spacedBy(SectionGap)
+    ) {
+        Text(
+            text = "Подсказки по экранам",
+            modifier = Modifier.semantics { heading() },
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Text(
+            text = if (alreadyReset) {
+                "Готово! Подсказки снова появятся, когда ты зайдёшь на экраны."
+            } else {
+                "Их можно перечитать здесь или вернуть, чтобы они снова появились на экранах."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        PillButton(
+            text = "Показать подсказки заново",
+            onClick = onReset,
+            modifier = Modifier.fillMaxWidth(),
+            style = PillStyle.Tonal,
+            enabled = !alreadyReset,
+            compact = true
+        )
+    }
+}
+
+/** Подсказки превью: две настоящие, чтобы увидеть раздел под терминами. */
+private val PreviewHints = listOf(
+    Hint(
+        key = "shop",
+        icon = "🛒",
+        title = "Магазин",
+        paragraphs = listOf(
+            "Здесь покупают еду, игрушки, одежду и украшения для питомца.",
+            "Не хватает монет? Нажми на звёздочку у вещи — она станет твоей целью."
+        )
+    ),
+    Hint(
+        key = "log",
+        icon = "📒",
+        title = "Журнал",
+        paragraphs = listOf("Здесь записано каждое изменение твоих монет.")
+    )
+)
+
 /** Термины превью: несколько настоящих, чтобы увидеть, как список выглядит на экране. */
 private val PreviewEntries = listOf(
     HelpEntry(
@@ -161,7 +256,7 @@ private val PreviewEntries = listOf(
 @Composable
 private fun HelpScreenPreview() {
     FinGameTheme(darkTheme = false) {
-        HelpScreen(entries = PreviewEntries, onClose = {})
+        HelpScreen(entries = PreviewEntries, onClose = {}, hints = PreviewHints)
     }
 }
 
@@ -176,7 +271,7 @@ private fun HelpScreenPreview() {
 @Composable
 private fun HelpScreenLargeTextPreview() {
     FinGameTheme(darkTheme = false) {
-        HelpScreen(entries = PreviewEntries, onClose = {})
+        HelpScreen(entries = PreviewEntries, onClose = {}, hints = PreviewHints)
     }
 }
 
@@ -185,6 +280,6 @@ private fun HelpScreenLargeTextPreview() {
 @Composable
 private fun HelpScreenLandscapePreview() {
     FinGameTheme(darkTheme = false) {
-        HelpScreen(entries = PreviewEntries, onClose = {})
+        HelpScreen(entries = PreviewEntries, onClose = {}, hints = PreviewHints)
     }
 }
