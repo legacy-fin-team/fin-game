@@ -12,17 +12,21 @@ import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -33,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,6 +48,7 @@ import com.legacy.fingame.game.settings.GameSettings
 import com.legacy.fingame.game.settings.ThemeMode
 import com.legacy.fingame.ui.components.SpriteButton
 import com.legacy.fingame.ui.components.Sprites
+import com.legacy.fingame.ui.theme.DialogWindowMotion
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 
@@ -54,7 +60,8 @@ private val CloseButtonSize = 64.dp
  *
  * Макет:
  * - Кнопка закрытия (X) в правом верхнем углу.
- * - Чекбоксы «Звуки» и «Музыка».
+ * - Слайдеры громкости «Звуки» и «Музыка».
+ * - Переключатель «Анимации».
  * - Выбор темы: Светлая / Тёмная / Авто.
  * - Кнопка «Режим взрослого» → переход на отдельный экран (заглушка).
  * - Кнопка «Сбросить прогресс» → модальное окно с подтверждением.
@@ -132,6 +139,14 @@ fun SettingsScreen(
             onValueChange = { onSettingsChanged(settings.copy(musicVolume = it)) }
         )
 
+        // --- Анимации ---
+        SettingSwitch(
+            label = "Анимации",
+            hint = "Движение питомца, сердечек и окон",
+            checked = settings.animationsEnabled,
+            onCheckedChange = { onSettingsChanged(settings.copy(animationsEnabled = it)) }
+        )
+
         Spacer(modifier = Modifier.height(4.dp))
 
         // --- Выбор темы ---
@@ -179,6 +194,7 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { showResetDialog = false },
             title = {
+                DialogWindowMotion()
                 Text(text = "Сброс прогресса")
             },
             text = {
@@ -240,6 +256,58 @@ private fun SettingSlider(
                 thumbColor = MaterialTheme.colorScheme.primary,
                 activeTrackColor = MaterialTheme.colorScheme.primary,
                 inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+        )
+    }
+}
+
+/**
+ * Настройка «включено / выключено»: подпись, короткое пояснение под ней и переключатель справа.
+ *
+ * Нажимается вся строка, а не только переключатель, так что попасть в неё легко; программа чтения
+ * с экрана слышит её как один переключатель с подписью и состоянием.
+ *
+ * @param label название настройки.
+ * @param hint что именно она включает, простыми словами.
+ * @param checked включена ли настройка.
+ * @param onCheckedChange вызывается с новым состоянием, когда строку нажали.
+ */
+@Composable
+private fun SettingSwitch(
+    label: String,
+    hint: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Text(
+                text = hint,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(
+            checked = checked,
+            // Нажатие ловит вся строка (см. toggleable выше).
+            onCheckedChange = null,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
             )
         )
     }
@@ -335,7 +403,11 @@ private fun SettingsScreenDarkPreview() {
     FinGameTheme(darkTheme = true) {
         Surface(color = MaterialTheme.colorScheme.background) {
             SettingsScreen(
-                settings = GameSettings(soundVolume = 0, themeMode = ThemeMode.DARK),
+                settings = GameSettings(
+                    soundVolume = 0,
+                    themeMode = ThemeMode.DARK,
+                    animationsEnabled = false
+                ),
                 onSettingsChanged = {},
                 onOpenAdultMode = {},
                 onResetProgress = {},

@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -16,6 +17,7 @@ import com.legacy.fingame.game.settings.ThemeMode
 import com.legacy.fingame.ui.ClickSound
 import com.legacy.fingame.ui.FinGameApp
 import com.legacy.fingame.ui.theme.FinGameTheme
+import com.legacy.fingame.ui.theme.LocalAnimationsEnabled
 
 /**
  * App entry point: sets up edge-to-edge display, initializes the audio system,
@@ -78,12 +80,18 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.AUTO -> isSystemInDarkTheme()
             }
 
-            FinGameTheme(darkTheme = isDark) {
-                FinGameApp(
-                    vm = vm,
-                    onPlaySound = { soundKey -> audioManager?.playSound(soundKey) },
-                    onPlayAnimalSound = { animalId -> audioManager?.playAnimalSound(animalId) }
-                )
+            // Настройка «Анимации» доходит до всего, что двигается: спрайтов, сердечек, смены
+            // экранов и окон.
+            CompositionLocalProvider(
+                LocalAnimationsEnabled provides currentSettings.animationsEnabled
+            ) {
+                FinGameTheme(darkTheme = isDark) {
+                    FinGameApp(
+                        vm = vm,
+                        onPlaySound = { soundKey -> audioManager?.playSound(soundKey) },
+                        onPlayAnimalSound = { animalId -> audioManager?.playAnimalSound(animalId) }
+                    )
+                }
             }
         }
     }
