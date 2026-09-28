@@ -1,147 +1,144 @@
 # Fin Game
 
-Мобильная игра для Android, которая учит ребёнка обращаться с деньгами. Ребёнок заводит
-питомца, ухаживает за ним, получает ежедневный доход, планирует бюджет (обязательные траты,
-необязательные траты, сбережения, вклад), копит на цели и принимает решения в квестах.
-Для родителя предусмотрен взрослый режим с замком и отчётами о том, как ребёнок распоряжался
-деньгами.
+Мобильная игра для Android, которая учит ребёнка обращаться с деньгами. Ребёнок заводит питомца и
+заботится о нём, получает монеты раз в день, планирует бюджет (обязательные и необязательные траты,
+сбережения, вклад), копит на цели и принимает решения в квестах. Взрослый за простым замком видит
+прогресс ребёнка по темам финансовой грамотности, проверяет задания и добавляет свои квесты и
+награды.
 
-Приложение полностью автономное: сервера нет, сетевых запросов нет, все данные хранятся
-локально на устройстве.
+Приложение полностью автономное: сервера, учётных записей и сетевых запросов нет, все данные
+хранятся на устройстве.
 
-- Платформа: Android 8.0+ (minSdk 26), targetSdk 37.
-- Язык и UI: Kotlin, Jetpack Compose (Material 3), пиксельная графика.
+- Платформа: Android 8.0+ (minSdk 26), targetSdk 37; пакет `com.legacy.fingame`, версия 1.0 (1).
+- Стек: Kotlin, Jetpack Compose (Material 3), пиксельная графика, данные игры в XML.
 - Язык интерфейса: русский.
 
-Полная сопроводительная документация: [`docs/DOCUMENTATION.md`](docs/DOCUMENTATION.md)
-(она же в Word: [`docs/FinGame-Документация.docx`](docs/FinGame-Документация.docx)).
+Полная документация — [docs/README.md](docs/README.md); Word-версия для сдачи —
+`docs/FinGame-Документация.docx`.
 
 ## Что умеет игра
 
-| Возможность | Где в коде |
+| Возможность | Подробнее |
 |---|---|
-| Выбор питомца (кот двух окрасов, золотая рыбка) и имени | `ui/screens/AnimalSelectScreen.kt`, `assets/data/animals.xml` |
-| Уход: шкалы здоровья, сытости и настроения, которые убывают со временем | `game/stats/PetStats.kt`, `game/stats/StatKind.kt` |
-| Рост питомца по этапам (один этап в сутки) | `game/animals/Growth.kt` |
-| Доход: бонус дня +50 монет раз в календарные сутки | `game/economy/Economy.kt` |
-| Магазин с категориями, корзиной и вариантами товаров | `ui/screens/ShopScreen.kt`, `assets/data/items.xml` |
-| Инвентарь: еда расходуется, игрушки многоразовые, одежда и декор надеваются | `ui/screens/InventoryScreen.kt`, `game/items/*` |
-| Бюджет периода: обязательные / необязательные траты / сбережения, отчёт «план — факт» | `game/economy/Budget.kt`, `ui/screens/BudgetScreen.kt` |
-| Вклад на 2–7 дней под 4–15 % | `game/economy/Deposit.kt` |
-| Цели: звёздочка на товаре в магазине и прогресс накопления | `game/items/Goals.kt`, `ui/screens/GoalsCarousel.kt` |
-| Журнал всех движений денег | `game/economy/MoneyLog.kt`, `ui/screens/LogScreen.kt` |
-| Демо-сборка с кнопкой «Вперёд на 12 часов» | `DemoMode.kt`, `app/build.gradle.kts` |
-| Настройки: звуки, музыка, тема (светлая/тёмная/авто), сброс прогресса; кнопка «Режим взрослого» — пока заглушка | `ui/screens/SettingsScreen.kt`, `game/settings/*` |
-| Поглаживание питомца касанием (сердечки, звук) | `game/scene/PetTouch.kt` |
+| Выбор питомца (кот двух окрасов, золотая рыбка) и имени | [animals.md](docs/animals.md) |
+| Уход: шкалы здоровья, сытости и настроения убывают и при закрытом приложении; еда и игрушки их восполняют | [pet-growth.md](docs/pet-growth.md) |
+| Рост питомца в три этапа: скорость зависит от ухода; дни без заботы уменьшают бонус дня и повышают цены на необязательное | [pet-growth.md](docs/pet-growth.md) |
+| Доход: бонус дня раз в календарные сутки; награды квестов | [economy.md](docs/economy.md) |
+| Магазин: еда, игрушки, одежда, декор, награды «Другое»; варианты, корзина, подтверждение покупки | [items.md](docs/items.md) |
+| Инвентарь: съесть, поиграть, надеть одежду, поставить декор в комнату | [items.md](docs/items.md) |
+| Сцена с питомцем: пять слоёв, масштаб и перемещение жестами, поглаживание (сердечки, звук) | [scene.md](docs/scene.md) |
+| Бюджет периода: обязательные, необязательные, вклад, «Останется»; итог «план — факт — разница» | [economy.md](docs/economy.md) |
+| Вклад на 2–7 дней под 4–15 %, досрочное закрытие без процентов | [economy.md](docs/economy.md) |
+| Цели: звёздочка в магазине и прогресс накопления на главном экране | [items.md](docs/items.md) |
+| Журнал всех движений денег по дням | [economy.md](docs/economy.md) |
+| Квесты: истории с выбором, случайные события, кулдауны, одноразовые квесты | [quests.md](docs/quests.md) |
+| Подсказки по экранам при первом входе и словарик «Помощь» | [education.md](docs/education.md) |
+| Взрослый режим: замок, прогресс по темам без оценок, отчёты по дням, покупкам и квестам, проверка заданий, изменение монет с причиной, свои товары, награды и квесты | [quests.md](docs/quests.md), [education.md](docs/education.md) |
+| Настройки: громкость звуков и музыки, тема (светлая / тёмная / авто), сброс прогресса | [ux-accessibility.md](docs/ux-accessibility.md) |
+| Демо-сборка с кнопкой «+12 ч» для показа игры за несколько минут | [build.md](docs/build.md) |
 
-Функции в ветках, ожидающих слияния:
-
-| Возможность | Ветка | PR |
-|---|---|---|
-| Квесты: ситуации выбора с последствиями для денег и питомца, случайные события, кулдаун и одноразовые квесты | `stef-quests` | #20, готова |
-| Взрослый режим: замок, прогресс по темам без оценок, отчёты и история, проверка квестов взрослым, изменение монет с причиной, награды из жизни, свои товары и квесты (включает `stef-quests`; настройки из бывшей ветки `options` уже в `main`) | `stef-adult` | #21, готова |
-| Рост в зависимости от ухода; штрафы за дни без заботы (меньше бонус дня, дороже одежда и декор) | `stef-growth` | готовится |
-| Окно знакомства при первом запуске и раздел «Помощь» со словариком терминов | `stef-onboarding` | готовится |
-
-Подробный статус — в разделе 5 документации.
+Соответствие требованиям ТЗ по пунктам — [requirements.md](docs/requirements.md).
 
 ## Состав репозитория
 
 ```
 .
 ├── app/
-│   ├── build.gradle.kts            модуль приложения: SDK, buildTypes, демо-режим, зависимости
+│   ├── build.gradle.kts            модуль приложения: SDK, типы сборки, демо-режим, зависимости
 │   └── src/
 │       ├── main/
-│       │   ├── AndroidManifest.xml
+│       │   ├── AndroidManifest.xml     одна Activity, разрешений нет
 │       │   ├── assets/
-│       │   │   ├── data/           игровые данные: animals.xml, items.xml, audio.xml
-│       │   │   ├── textures/       спрайты: животные, предметы, интерфейс, локации
-│       │   │   └── audio/          фоновая музыка и звуки питомца (OGG), attributions.xml
+│       │   │   ├── data/           игровые данные: animals, items, quests, care, hints, help, audio (.xml)
+│       │   │   ├── textures/       спрайты: животные, предметы, интерфейс, магазин, комната, эффекты
+│       │   │   └── audio/          фоновая музыка и звуки питомца (OGG) + attributions.xml
 │       │   ├── java/com/legacy/fingame/
 │       │   │   ├── MainActivity.kt, FinGameApplication.kt, DemoMode.kt
-│       │   │   ├── game/           игровая логика без UI: economy, animals, items, stats, scene, settings
+│       │   │   ├── game/           логика без UI: economy, rules, stats, animals, items, quests,
+│       │   │   │                   scene, adult, hints, help, settings; GameViewModel, PlayerState
 │       │   │   ├── ui/             Compose: FinGameApp (навигация), screens, components, theme
-│       │   │   └── utils/          хранилище (PlayerPreferences), кодеки, SpriteLoader
-│       │   └── res/                иконка, тема, пиксельный шрифт Press Start 2P и его лицензия
-│       ├── test/                   юнит-тесты JUnit 4 (383 теста, из них 2 падают — см. документацию)
+│       │   │   └── utils/          хранилище PlayerPreferences, кодеки, SpriteLoader
+│       │   └── res/                иконка, тема, шрифт Press Start 2P и его лицензия (res/raw)
+│       ├── test/                   юнит-тесты JUnit 4 (65 классов, 718 тестов)
 │       └── androidTest/            инструментальные Compose-тесты
+├── docs/                           документация (docs/README.md — оглавление), Word-версия, tools/
 ├── gradle/                         libs.versions.toml, wrapper, JVM-тулчейн демона Gradle
-├── docs/                           сопроводительная документация
 ├── build.gradle.kts, settings.gradle.kts, gradle.properties
 └── gradlew, gradlew.bat
 ```
 
 ## Быстрый запуск
 
-Нужны: JDK 17 или новее (Gradle сам подтягивает JDK 25 для демона), Android SDK с платформой
-`android-37.0`, Android Studio последней версии (по желанию).
+Нужны JDK 17 или новее (Gradle сам скачает JDK 25 для демона) и Android SDK с платформой
+`android-37.0`; Android Studio — по желанию.
 
-1. Установите платформу SDK. Платформа 37.0 публикуется в preview-канале sdkmanager:
+1. Установить платформу SDK (она опубликована в preview-канале sdkmanager):
 
    ```bash
    sdkmanager --channel=3 "platform-tools" "platforms;android-37.0" "build-tools;37.0.0"
    ```
 
-2. Укажите путь к SDK (или откройте проект в Android Studio — файл создастся сам):
+2. Указать путь к SDK (или открыть проект в Android Studio — файл создастся сам):
 
    ```bash
    echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties   # macOS; на Linux обычно ~/Android/Sdk
    ```
 
-3. Соберите и установите отладочную (демо) сборку на подключённое устройство или эмулятор:
+3. Собрать и установить демо-сборку на устройство или эмулятор:
 
    ```bash
    ./gradlew :app:installDebug
    ```
 
-   Или вручную: `./gradlew :app:assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk`.
-
-4. Запустите юнит-тесты:
+4. Запустить юнит-тесты:
 
    ```bash
    ./gradlew :app:testDebugUnitTest
    ```
 
-Сборка релизного APK и его подпись описаны пошагово в
-[разделе 2 документации](docs/DOCUMENTATION.md#2-требования-к-окружению-и-сборка-релизного-apk).
+Сборка и подпись релизного APK по шагам — [build.md](docs/build.md).
 
 ## Варианты сборки
 
-| Вариант | Debuggable | Подпись | Минификация | `DEMO_MODE` | Чем отличается в игре | Команда | APK |
-|---|---|---|---|---|---|---|---|
-| debug | да | отладочный ключ Android SDK | нет | `true` | Есть кнопка «+12 ч» (перемотка времени, см. `DemoMode.kt`); квесты без ожидания — кулдауны и паузы между этапами отключены | `./gradlew :app:assembleDebug` | `app/build/outputs/apk/debug/app-debug.apk` |
-| release | нет | не задана — APK неподписанный, подписывается вручную (`apksigner`) | выключена (`optimization { enable = false }`) | `false` | Кнопки перемотки нет, время идёт как у игрока; кулдауны и паузы в квестах действуют | `./gradlew :app:assembleRelease` | `app/build/outputs/apk/release/app-release-unsigned.apk` |
-| releaseDebuggable | да (копия `release` + `isDebuggable = true`) | отладочный ключ Android SDK (как у debug) | выключена (копия `release`) | `false` | Как у release (без «+12 ч»), но APK подписан отладочным ключом и ставится поверх debug-сборки; квесты без ожидания, как в debug (`BuildConfig.DEBUG = true`) | `./gradlew :app:assembleReleaseDebuggable` | `app/build/outputs/apk/releaseDebuggable/app-releaseDebuggable.apk` |
+| Вариант | Для чего | Перемотка «+12 ч» | Ожидание в квестах | Подпись | Команда |
+|---|---|---|---|---|---|
+| debug | Разработка и показ | есть | нет (кулдауны и паузы сняты) | отладочный ключ | `./gradlew :app:assembleDebug` |
+| release | Выпуск | нет | есть | нет, подписывается вручную | `./gradlew :app:assembleRelease` |
+| releaseDebuggable | Проверка поведения релиза с отладкой | нет | нет | отладочный ключ | `./gradlew :app:assembleReleaseDebuggable` |
 
-`DEMO_MODE` переопределяется для любого варианта свойством `-Pfingame.demoMode=true|false`
-(например, `./gradlew :app:assembleRelease -Pfingame.demoMode=true` — релизная сборка с кнопкой
-перемотки времени для показа жюри). Подробнее, включая правило для отладочных сборок в системе
-квестов, — в [разделе 2.2 документации](docs/DOCUMENTATION.md#22-типы-сборки-и-демо-режим).
+Демо-режим включается для любого варианта свойством `-Pfingame.demoMode=true` (например, релиз для
+показа жюри: `./gradlew :app:assembleRelease -Pfingame.demoMode=true`). Подробности, пути к APK и
+остальные различия — [build.md](docs/build.md).
 
 ## Документация
 
-[`docs/DOCUMENTATION.md`](docs/DOCUMENTATION.md) содержит:
+| Файл | О чём |
+|---|---|
+| [docs/README.md](docs/README.md) | Оглавление и соответствие требованиям ТЗ к документации |
+| [docs/build.md](docs/build.md) | Окружение, варианты сборки, релизный APK, тесты |
+| [docs/architecture.md](docs/architecture.md) | Архитектура, экраны, жизненный цикл данных, структура данных |
+| [docs/pet-growth.md](docs/pet-growth.md) | Рост питомца: все правила и формулы |
+| [docs/animals.md](docs/animals.md) | Животные; как добавить новое |
+| [docs/items.md](docs/items.md) | Предметы, магазин, инвентарь; как добавить новый предмет |
+| [docs/quests.md](docs/quests.md) | Квесты; как добавить новый квест |
+| [docs/scene.md](docs/scene.md) | Игровая область: размеры, слои, координаты, жесты |
+| [docs/economy.md](docs/economy.md) | Деньги, бюджет, вклад, журнал |
+| [docs/education.md](docs/education.md) | Образовательный контент, подсказки, словарик |
+| [docs/ux-accessibility.md](docs/ux-accessibility.md) | UX/UI, доступность, разрешения, данные, удаление профиля |
+| [docs/testing.md](docs/testing.md) | Тесты и ручные сценарии |
+| [docs/requirements.md](docs/requirements.md) | Матрица соответствия требованиям |
+| [docs/licenses.md](docs/licenses.md) | Лицензии |
+| [docs/roadmap.md](docs/roadmap.md) | Ограничения и план развития |
 
-1. Назначение, состав, быстрый запуск.
-2. Требования к окружению и сборка релизного APK.
-3. Функциональная и компонентная архитектура.
-4. Структуры данных: профиль, экономика, задания, прогресс.
-5. Матрица соответствия функциональным требованиям.
-6. Формулы и правила расчёта.
-7. Карта образовательного контента.
-8. UX/UI-решения и доступность.
-9. Разрешения Android, собираемые данные, удаление профиля.
-10. Тест-кейсы и отчёт о проверке на устройстве.
-11. Известные ограничения и план развития.
-12. Сторонние библиотеки, шрифты и ресурсы.
+Word-версия собирается командой `python3 docs/tools/make_docx.py` (нужен pandoc 3.x).
 
-Word-версия собирается из Markdown командой `python3 docs/tools/make_docx.py` (нужен pandoc 3.x).
+## Лицензии
 
-## Лицензии сторонних компонентов
-
-Библиотеки AndroidX, Jetpack Compose и Coil распространяются по Apache License 2.0, шрифт
-Press Start 2P — по SIL Open Font License 1.1 (текст лицензии — в
-`app/src/main/res/raw/press_start_2p_regular.txt`), фоновая музыка и звуки питомца — по CC0-1.0 /
-CC-BY-3.0 / CC-BY-4.0 (список источников — в `attributions.xml` рядом с аудиофайлами). Подробнее,
-включая ресурсы без указанного источника, — раздел 12 документации.
+Все ассеты игры (спрайты, текстуры интерфейса, фоны, иконки, звуки) сделаны командой, если не
+указано иное. Лицензии чужих работ, подключённых как ресурсы Android, лежат в
+`app/src/main/res/raw/` (шрифт Press Start 2P — SIL Open Font License 1.1,
+`press_start_2p_regular.txt`). Лицензии и авторство остальных чужих ассетов указаны в файлах
+`attributions.xml` рядом с самими ассетами — сейчас это фоновая музыка
+(`assets/audio/music/background/`, CC0-1.0) и звуки питомца (`assets/audio/sounds/animal/`,
+CC0-1.0, CC-BY-3.0, CC-BY-4.0). Библиотеки AndroidX, Jetpack Compose и Coil — Apache License 2.0.
+Подробно — [docs/licenses.md](docs/licenses.md).
