@@ -81,6 +81,8 @@ private const val TICK_POLLS_PER_TICK = 10L
  * @param onPlaySound plays a sound effect by its key (see [AudioManager.playSound]); the app's
  *   audio lives in the activity, so it is handed in rather than looked up. Silent by default, e.g.
  *   in previews.
+ * @param onPlayAnimalSound plays a random sound of the animal with the given id (see
+ *   [AudioManager.playAnimalSound]) when the player pats the pet. Silent by default.
  */
 @Composable
 fun FinGameApp(
@@ -94,7 +96,8 @@ fun FinGameApp(
             )
         }
     ),
-    onPlaySound: (String) -> Unit = {}
+    onPlaySound: (String) -> Unit = {},
+    onPlayAnimalSound: (animalId: String) -> Unit = {}
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val application = LocalContext.current.applicationContext as FinGameApplication
@@ -169,7 +172,7 @@ fun FinGameApp(
                         ),
                         // Patting the pet only makes it happy to see: hearts on the screen and a
                         // sound, no stats and no money.
-                        onPetTap = { onPlaySound(AudioManager.SOUND_PAT) },
+                        onPetTap = { onPlayAnimalSound(pet.animalId) },
                         goals = Goals.linesOf(goals = state.goals, catalog = itemRegistry),
                         onOpenGoal = vm::openGoal
                     )

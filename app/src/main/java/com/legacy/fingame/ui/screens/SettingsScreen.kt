@@ -1,5 +1,6 @@
 package com.legacy.fingame.ui.screens
 
+import android.content.res.Configuration
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,13 +75,27 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     var showResetDialog by remember { mutableStateOf(false) }
+    val scrollState = rememberScrollState()
+
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+    // В альбомной ориентации задаем дополнительные отступы от боковых краев (выреза вырезов/камеры) и снизу (от свайп-панели навигации)
+    val horizontalPadding = if (isLandscape) 64.dp else ScreenPadding
+    val bottomPadding = if (isLandscape) 40.dp else ScreenPadding
 
     Column(
         modifier = modifier
             .fillMaxSize()
+            .displayCutoutPadding()
             .systemBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(ScreenPadding),
+            .verticalScroll(scrollState)
+            .padding(
+                start = horizontalPadding,
+                end = horizontalPadding,
+                top = ScreenPadding,
+                bottom = bottomPadding
+            ),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Верхняя панель с заголовком и кнопкой закрытия (X)
@@ -307,6 +324,23 @@ private fun SettingsScreenDarkPreview() {
         Surface(color = MaterialTheme.colorScheme.background) {
             SettingsScreen(
                 settings = GameSettings(soundEnabled = false, themeMode = ThemeMode.DARK),
+                onSettingsChanged = {},
+                onOpenAdultMode = {},
+                onResetProgress = {},
+                onBack = {}
+            )
+        }
+    }
+}
+
+/** Preview of [SettingsScreen] in landscape orientation. */
+@Preview(name = "Settings — Landscape", showBackground = true, widthDp = 891, heightDp = 411)
+@Composable
+private fun SettingsScreenLandscapePreview() {
+    FinGameTheme(darkTheme = false) {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            SettingsScreen(
+                settings = GameSettings(),
                 onSettingsChanged = {},
                 onOpenAdultMode = {},
                 onResetProgress = {},

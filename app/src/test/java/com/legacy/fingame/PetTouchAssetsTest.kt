@@ -29,10 +29,6 @@ class PetTouchAssetsTest {
     private fun int32(bytes: ByteArray, offset: Int): Int =
         ByteBuffer.wrap(bytes, offset, 4).order(ByteOrder.LITTLE_ENDIAN).int
 
-    /** Reads a little-endian 16-bit number out of [bytes] at [offset]. */
-    private fun int16(bytes: ByteArray, offset: Int): Int =
-        ByteBuffer.wrap(bytes, offset, 2).order(ByteOrder.LITTLE_ENDIAN).short.toInt()
-
     @Test
     fun `the heart is a lossless 8 by 8 sprite`() {
         val bytes = asset("textures/${Sprites.HEART}").readBytes()
@@ -48,17 +44,32 @@ class PetTouchAssetsTest {
     }
 
     @Test
-    fun `the pat sound is a short 16-bit mono WAV under its key`() {
-        val bytes = asset("audio/sounds/animal/${AudioManager.SOUND_PAT}.wav").readBytes()
+    fun `the pat sound is an OGG file under its key`() {
+        assertOgg("audio/sounds/animal/${AudioManager.SOUND_PAT}.ogg")
+    }
 
-        assertEquals("RIFF", String(bytes, 0, 4, Charsets.US_ASCII))
-        assertEquals("WAVE", String(bytes, 8, 4, Charsets.US_ASCII))
-        assertEquals(1, int16(bytes, 20))          // PCM
-        assertEquals(1, int16(bytes, 22))          // mono
-        assertEquals(22050, int32(bytes, 24))      // Hz
-        assertEquals(16, int16(bytes, 34))         // bits per sample
-        assertEquals("data", String(bytes, 36, 4, Charsets.US_ASCII))
-        val millis = int32(bytes, 40) / 2 * 1000 / 22050
-        assertTrue("$millis ms", millis in 150..200)
+    @Test
+    fun `the cat has its own OGG sounds`() {
+        val folder = asset("audio/sounds/animal/${AudioManager.SOUND_PAT}.ogg").parentFile!!
+        val keys = folder.list()!!.map { it.substringBeforeLast('.') }.distinct().sorted()
+        assertEquals(listOf("cat1", "cat2"), AudioManager.animalSoundKeys(keys, "cat"))
+        for (key in listOf("cat1", "cat2")) {
+            assertOgg("audio/sounds/animal/$key.ogg")
+        }
+    }
+
+    @Test
+    fun `an animal's sounds are its id followed by digits only`() {
+        val all = listOf("cat1", "cat2", "cat10", "category", "cat", "catx1", "dog1", "pat")
+        assertEquals(listOf("cat1", "cat2", "cat10"), AudioManager.animalSoundKeys(all, "cat"))
+        assertEquals(listOf("dog1"), AudioManager.animalSoundKeys(all, "dog"))
+        assertTrue(AudioManager.animalSoundKeys(all, "fox").isEmpty())
+        assertTrue(AudioManager.animalSoundKeys(all, "").isEmpty())
+    }
+
+    /** The asset at [path] is an OGG audio file starting with 'OggS'. */
+    private fun assertOgg(path: String) {
+        val bytes = asset(path).readBytes()
+        assertEquals("OggS", String(bytes, 0, 4, Charsets.US_ASCII))
     }
 }

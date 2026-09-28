@@ -5,6 +5,7 @@ import android.content.res.AssetFileDescriptor
 import android.media.MediaPlayer
 import android.media.SoundPool
 import android.util.Log
+import kotlin.random.Random
 
 /**
  * Менеджер аудио: управляет фоновой музыкой (через [MediaPlayer])
@@ -14,19 +15,74 @@ import android.util.Log
  * Звуки — короткие реакции на действия пользователя.
  *
  * Файлы ожидаются в assets:
- * - Музыка: `audio/music/`
+ * - Музыка: список треков в `data/audio.xml` (см. [AudioReader]), запасной вариант —
+ *   первый по имени файл из `audio/music/background/`
  * - Звуки животных: `audio/sounds/animal/`
  */
-class AudioManager(private val context: Context) {
+class AudioManager(context: Context) {
+
+    private val context: Context = context.applicationContext
 
     companion object {
         private const val TAG = "AudioManager"
-        private const val MUSIC_DIR = "audio/music"
+        private const val AUDIO_DIR = "audio"
+        private const val MUSIC_BACKGROUND_DIR = "audio/music/background"
+        private const val AUDIO_DATA = "data/audio.xml"
         private const val SOUNDS_ANIMAL_DIR = "audio/sounds/animal"
         private const val MAX_STREAMS = 4
 
-        /** Звук «погладил» при нажатии на питомца: `audio/sounds/animal/pat.wav`. */
+        /**
+         * Запасной звук «погладил» при нажатии на питомца (`audio/sounds/animal/pat.ogg`) —
+         * для животного, у которого нет своих звуков.
+         */
         const val SOUND_PAT = "pat"
+
+        /**
+         * Звуки животного: ключи вида `<animalId><цифры>` (`cat1`, `cat2`, `cat10`).
+         * `category` для `cat` не подходит — после id должны идти только цифры.
+         *
+         * @param all все ключи загруженных звуков (имена файлов без расширения).
+         * @param animalId id животного из `data/animals.xml`.
+         * @return Ключи звуков животного, отсортированные по номеру.
+         */
+        fun animalSoundKeys(all: Collection<String>, animalId: String): List<String> {
+            if (animalId.isEmpty()) return emptyList()
+            return all.filter { key ->
+                key.length > animalId.length &&
+                    key.startsWith(animalId) &&
+                    key.substring(animalId.length).all { it.isDigit() }
+            }.sortedBy { it.substring(animalId.length).toBigInteger() }
+        }
+
+        /**
+         * Выбирает случайный трек фоновой музыки.
+         *
+         * @param declared треки из `data/audio.xml` (пути относительно `assets/audio/`).
+         * @param folderFiles имена файлов в `audio/music/background/`.
+         * @param random источник случайности для выбора трека.
+         * @param exists есть ли такой путь (относительно `assets/`) на самом деле.
+         * @return Путь относительно `assets/`: случайный из объявленных треков, которые существуют,
+         *   иначе случайный файл из папки, иначе null — музыки нет.
+         */
+        fun chooseBackgroundTrack(
+            declared: List<String>,
+            folderFiles: List<String>,
+            random: Random = Random.Default,
+            exists: (String) -> Boolean
+        ): String? {
+            val validDeclared = declared
+                .map { "$AUDIO_DIR/${it.trimStart('/')}" }
+                .filter(exists)
+            if (validDeclared.isNotEmpty()) {
+                return validDeclared.random(random)
+            }
+            val validFolderFiles = folderFiles
+                .filter { exists("$MUSIC_BACKGROUND_DIR/$it") }
+            if (validFolderFiles.isNotEmpty()) {
+                return "$MUSIC_BACKGROUND_DIR/${validFolderFiles.random(random)}"
+            }
+            return null
+        }
     }
 
     private var mediaPlayer: MediaPlayer? = null
@@ -65,19 +121,19 @@ class AudioManager(private val context: Context) {
     }
 
     /**
-     * Запускает фоновую музыку. Берёт первый файл из `audio/music/`.
+     * Запускает фоновую музыку: первый трек из `data/audio.xml`, а если его нет —
+     * первый по имени файл из `audio/music/background/`.
      */
     fun startMusic() {
         if (!musicEnabled) return
         if (mediaPlayer != null) return // уже играет
 
         try {
-            val musicFiles = context.assets.list(MUSIC_DIR)
-            if (musicFiles.isNullOrEmpty()) {
-                Log.w(TAG, "Нет музыкальных файлов в $MUSIC_DIR")
+            val musicFile = findBackgroundTrack()
+            if (musicFile == null) {
+                Log.w(TAG, "Нет фоновой музыки ни в $AUDIO_DATA, ни в $MUSIC_BACKGROUND_DIR")
                 return
             }
-            val musicFile = "$MUSIC_DIR/${musicFiles[0]}"
             val afd: AssetFileDescriptor = context.assets.openFd(musicFile)
 
             mediaPlayer = MediaPlayer().apply {
@@ -136,6 +192,20 @@ class AudioManager(private val context: Context) {
             return
         }
         soundPool?.play(soundId, 1f, 1f, 1, 0, 1f)
+        Log.d(TAG, "Звук: $soundKey")
+    }
+
+    /**
+     * Проигрывает случайный звук животного из его набора (`cat1`, `cat2`, `cat3` для `cat`),
+     * а если своих звуков у животного нет — запасной [SOUND_PAT].
+     *
+     * @param animalId id животного из `data/animals.xml`.
+     * @param random источник случайности (подменяется в тестах).
+     */
+    fun playAnimalSound(animalId: String, random: Random = Random.Default) {
+        if (!soundEnabled) return
+        val keys = animalSoundKeys(loadedSounds.keys, animalId)
+        playSound(if (keys.isEmpty()) SOUND_PAT else keys.random(random))
     }
 
     /**
@@ -149,6 +219,30 @@ class AudioManager(private val context: Context) {
     }
 
     /**
+     * Ищет трек фоновой музыки по данным и по папке (см. [chooseBackgroundTrack]).
+     */
+    private fun findBackgroundTrack(): String? {
+        val declared = try {
+            context.assets.open(AUDIO_DATA).use { AudioReader().readBackgroundTracks(it) }
+        } catch (e: Exception) {
+            Log.w(TAG, "Нет $AUDIO_DATA, музыка берётся из папки")
+            emptyList()
+        }
+        val folderFiles = assetList(MUSIC_BACKGROUND_DIR)
+        return chooseBackgroundTrack(declared, folderFiles) { path ->
+            path.substringAfterLast('/') in assetList(path.substringBeforeLast('/', ""))
+        }
+    }
+
+    /** Имена файлов в папке assets, пусто если папки нет. */
+    private fun assetList(dir: String): List<String> =
+        try {
+            context.assets.list(dir)?.toList().orEmpty()
+        } catch (e: Exception) {
+            emptyList()
+        }
+
+    /**
      * Загружает все звуки из `audio/sounds/animal/`.
      */
     private fun loadAllSounds() {
@@ -160,6 +254,7 @@ class AudioManager(private val context: Context) {
                 return
             }
             for (file in files) {
+                if (!file.endsWith(".ogg", ignoreCase = true)) continue
                 val path = "$SOUNDS_ANIMAL_DIR/$file"
                 try {
                     val afd = context.assets.openFd(path)
