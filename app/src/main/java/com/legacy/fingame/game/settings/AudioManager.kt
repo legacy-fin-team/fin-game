@@ -93,6 +93,8 @@ class AudioManager(context: Context) {
 
     private var musicEnabled = true
     private var soundEnabled = true
+    private var musicVolume = 100
+    private var soundVolume = 100
 
     /** Вызван ли [init] (и после него ещё не было [release]). */
     var isInitialized = false
@@ -116,8 +118,13 @@ class AudioManager(context: Context) {
      */
     fun applySettings(settings: GameSettings) {
         val wasMusicEnabled = musicEnabled
+        musicVolume = settings.musicVolume
+        soundVolume = settings.soundVolume
         musicEnabled = settings.musicEnabled
         soundEnabled = settings.soundEnabled
+
+        val musicVolFloat = musicVolume / 100f
+        mediaPlayer?.setVolume(musicVolFloat, musicVolFloat)
 
         if (musicEnabled && !wasMusicEnabled) {
             startMusic()
@@ -142,11 +149,12 @@ class AudioManager(context: Context) {
             }
             val afd: AssetFileDescriptor = context.assets.openFd(musicFile)
 
+            val musicVolFloat = musicVolume / 100f
             mediaPlayer = MediaPlayer().apply {
                 setDataSource(afd.fileDescriptor, afd.startOffset, afd.length)
                 afd.close()
                 isLooping = false
-                setVolume(1.0f, 1.0f)
+                setVolume(musicVolFloat, musicVolFloat)
                 setOnCompletionListener {
                     stopMusic()
                     startMusic()
@@ -201,13 +209,14 @@ class AudioManager(context: Context) {
             Log.w(TAG, "Звук '$soundKey' не загружен")
             return
         }
-        soundPool?.play(soundId, 1f, 1f, 1, 0, 1f)
+        val soundVolFloat = soundVolume / 100f
+        soundPool?.play(soundId, soundVolFloat, soundVolFloat, 1, 0, 1f)
         Log.d(TAG, "Звук: $soundKey")
     }
 
     /**
      * Проигрывает случайный звук животного из его набора (`cat1`, `cat2` для `cat`),
-     * а если своих звуков у животного нет — случайный звук из серии запасных (`pat1`, `pat2`).
+     * а если своих звуков у животного нет — случайный звук из серии запасных (`pat1`, `pat2` и т.д.).
      *
      * @param animalId id животного из `data/animals.xml`.
      * @param random источник случайности (подменяется в тестах).
@@ -218,14 +227,11 @@ class AudioManager(context: Context) {
         if (keys.isNotEmpty()) {
             playSound(keys.random(random))
         } else {
-            val patKeys = animalSoundKeys(loadedSounds.keys, SOUND_PAT).toMutableList()
-            if (loadedSounds.containsKey(SOUND_PAT)) {
-                patKeys.add(SOUND_PAT)
-            }
+            val patKeys = animalSoundKeys(loadedSounds.keys, SOUND_PAT)
             if (patKeys.isNotEmpty()) {
                 playSound(patKeys.random(random))
             } else {
-                playSound(SOUND_PAT)
+                Log.w(TAG, "Нет запасных звуков поглаживания ('pat1', 'pat2'...)")
             }
         }
     }
