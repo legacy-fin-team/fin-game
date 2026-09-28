@@ -13,6 +13,7 @@ import com.legacy.fingame.game.quests.QuestKind
 import com.legacy.fingame.game.quests.QuestNode
 import com.legacy.fingame.game.quests.QuestOption
 import com.legacy.fingame.game.scene.GameLayer
+import com.legacy.fingame.game.settings.GameSettings
 import com.legacy.fingame.game.stats.StatKind
 import kotlin.random.Random
 
@@ -168,6 +169,7 @@ internal class FakeGameClock(
  * meet a quest.
  * @param random dice for random quests; by default dice that fail the test the moment they are
  * rolled, so a test that does not script them proves they were never needed.
+ * @param settings the saved settings the app starts with.
  * @return A view model backed by the given doubles.
  */
 internal fun testGameViewModel(
@@ -176,14 +178,16 @@ internal fun testGameViewModel(
     clock: GameClock = FakeGameClock(),
     questCatalog: QuestCatalog = QuestCatalog.EMPTY,
     random: Random = ScriptedRandom(),
-    allowRestart: Boolean = true
+    allowRestart: Boolean = true,
+    settings: GameSettings = GameSettings()
 ): GameViewModel = GameViewModel(
     store = store,
     catalog = catalog,
     clock = clock,
     questCatalog = questCatalog,
     random = random,
-    allowRestart = allowRestart
+    allowRestart = allowRestart,
+    settings = settings
 )
 
 /**

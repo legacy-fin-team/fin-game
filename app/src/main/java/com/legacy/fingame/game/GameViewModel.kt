@@ -30,6 +30,7 @@ import com.legacy.fingame.game.quests.QuestEngine
 import com.legacy.fingame.game.quests.QuestKind
 import com.legacy.fingame.game.quests.QuestOutcome
 import com.legacy.fingame.game.quests.QuestProgress
+import com.legacy.fingame.game.settings.GameSettings
 import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.ui.DemoContent
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -57,7 +58,9 @@ enum class Screen {
     /** Экран журнала: все изменения денег игрока, новейшие сверху. */
     LOG,
     /** The options/settings screen. */
-    OPTIONS
+    OPTIONS,
+    /** The adult mode screen (placeholder). */
+    ADULT_MODE
 }
 
 /**
@@ -161,7 +164,8 @@ data class GameUiState(
     val quests: List<QuestProgress> = emptyList(),
     val questsSeenAtMillis: Long = PlayerState.QUESTS_NEVER_SEEN,
     val lastRandomQuestAtMillis: Long = PlayerState.NO_RANDOM_QUEST,
-    val hasUnseenQuestStep: Boolean = false
+    val hasUnseenQuestStep: Boolean = false,
+    val settings: GameSettings = GameSettings()
 ) {
     /**
      * @param questId id квеста.
@@ -250,6 +254,9 @@ data class GameUiState(
  * @param random кости для случайных квестов; в тестах — заранее заданные.
  * @param allowRestart можно ли пройти пройденный квест ещё раз ([restartQuest]); только в
  * демо-сборке, иначе монеты «Копилки» можно было бы собирать без конца.
+ * @param settings the settings the app starts with, as they were saved: they are in the state from
+ * its very first value, so nothing that follows the state — the music, the click sound, the theme —
+ * ever sees the defaults for a frame.
  */
 class GameViewModel(
     private val store: PlayerStateStore,
@@ -257,7 +264,8 @@ class GameViewModel(
     clock: GameClock = GameClock.DEVICE,
     private val questCatalog: QuestCatalog = QuestCatalog.EMPTY,
     private val random: Random = Random.Default,
-    private val allowRestart: Boolean = DemoMode.ENABLED
+    private val allowRestart: Boolean = DemoMode.ENABLED,
+    settings: GameSettings = GameSettings()
 ) : ViewModel() {
 
     /**
@@ -292,6 +300,7 @@ class GameViewModel(
          * @param clock where the current day comes from; defaults to the device's calendar day.
          * @param questCatalog какие квесты есть в игре.
          * @param allowRestart можно ли проходить квесты ещё раз; по умолчанию — только в демо.
+         * @param settings the saved settings the app starts with.
          * @return A factory creating a [GameViewModel] backed by [store] and [catalog].
          */
         fun factory(
@@ -299,15 +308,23 @@ class GameViewModel(
             catalog: ItemCatalog,
             clock: GameClock = GameClock.DEVICE,
             questCatalog: QuestCatalog = QuestCatalog.EMPTY,
-            allowRestart: Boolean = DemoMode.ENABLED
+            allowRestart: Boolean = DemoMode.ENABLED,
+            settings: GameSettings = GameSettings()
         ): ViewModelProvider.Factory = viewModelFactory {
             initializer {
-                GameViewModel(store, catalog, clock, questCatalog, allowRestart = allowRestart)
+                GameViewModel(
+                    store,
+                    catalog,
+                    clock,
+                    questCatalog,
+                    allowRestart = allowRestart,
+                    settings = settings
+                )
             }
         }
     }
 
-    private val _state = MutableStateFlow(restoredState())
+    private val _state = MutableStateFlow(restoredState(settings))
 
     /** Current [GameUiState], observed by the UI. */
     val state: StateFlow<GameUiState> = _state.asStateFlow()
@@ -1120,9 +1137,10 @@ class GameViewModel(
     /**
      * Builds the state the app starts with out of the [PlayerState] the previous run left behind.
      *
+     * @param settings the saved settings the app starts with.
      * @return The initial [GameUiState]: the player's game as it was saved, everything else fresh.
      */
-    private fun restoredState(): GameUiState {
+    private fun restoredState(settings: GameSettings): GameUiState {
         val saved = store.load()
         // The time a demo skipped outlives a restart as a shift, not as a moment reached: the
         // real time that passed while the app was closed runs on top of the skipped hours instead
@@ -1179,7 +1197,8 @@ class GameViewModel(
             quests = quests,
             questsSeenAtMillis = saved.questsSeenAtMillis,
             lastRandomQuestAtMillis = saved.lastRandomQuestAtMillis,
-            hasUnseenQuestStep = QuestEngine.hasUnseenStep(quests, saved.questsSeenAtMillis, now)
+            hasUnseenQuestStep = QuestEngine.hasUnseenStep(quests, saved.questsSeenAtMillis, now),
+            settings = settings
         )
     }
 
@@ -1269,5 +1288,36 @@ class GameViewModel(
                 lastRandomQuestAtMillis = current.lastRandomQuestAtMillis
             )
         )
+    }
+
+    /**
+     * Updates the game settings (sound, music, theme).
+     *
+     * @param settings the new [GameSettings] to apply.
+     */
+    fun updateSettings(settings: GameSettings) {
+        _state.value = _state.value.copy(settings = settings)
+    }
+
+    /**
+     * Starts the game over: the pet, the money, the budget, the items and everything else the
+     * player has done is dropped — from the screen and from [store] alike, so a restart does not
+     * bring it back — and the player is taken back to picking a pet, as on the very first launch.
+     *
+     * The settings stay as they are: they are the player's, not the game's. The clock stays as it
+     * is as well: the game never goes back behind a moment the player was already shown (see
+     * [PlayerState.gameNowMillis]), so a demo that skipped ahead stays skipped ahead.
+     */
+    fun resetProgress() {
+        val today = clock.today()
+        _state.value = GameUiState(
+            dailyBonusAvailable = Economy.isDailyBonusAvailable(
+                lastClaimedDay = Economy.NEVER_CLAIMED,
+                today = today
+            ),
+            todayDay = today,
+            settings = _state.value.settings
+        )
+        persist()
     }
 }

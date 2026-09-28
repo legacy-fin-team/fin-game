@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -19,6 +20,7 @@ import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.scene.GameLayer
 import com.legacy.fingame.game.scene.GameScene
 import com.legacy.fingame.game.scene.SceneSprite
+import com.legacy.fingame.game.scene.SceneViewport
 import com.legacy.fingame.ui.DemoContent
 import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.screens.PetStage
@@ -107,6 +109,9 @@ class SceneGesturesTest {
     /** How far the scene may be moved either way before its own edge would come into the window. */
     private fun free(): Float = ((sceneSide() - windowSide()) / 2f).coerceAtLeast(0f)
 
+    /** How many times the area has said the pet was patted. */
+    private var pats = 0
+
     /**
      * Shows a game area of a given size and nothing else.
      *
@@ -121,7 +126,7 @@ class SceneGesturesTest {
         compose.setContent {
             FinGameTheme(darkTheme = false) {
                 Box(modifier = Modifier.requiredSize(side)) {
-                    PetStage(scene = scene)
+                    PetStage(scene = scene, onPetTap = { pats++ })
                 }
             }
         }
@@ -152,7 +157,13 @@ class SceneGesturesTest {
         // A phone shows a part of the room, so there is something to drag in the first place.
         assertTrue(sceneSide() > windowSide())
         assertTrue(free() > 0f)
-        assertEquals(Offset.Zero, moved())
+        // It starts with the pet in the middle of the window: not moved sideways, and pulled up by
+        // as much as the pet is lowered onto the floor less the room left over its head, as far as
+        // the edge of the scene allows.
+        val lowered =
+            (SceneViewport.PET_FLOOR_SHIFT_PX - SceneViewport.PET_HEAD_ROOM_PX) * scale()
+        assertEquals(0f, moved().x, 0f)
+        assertEquals(-minOf(lowered, free()), moved().y, 0.5f)
 
         // A short drag to the right brings the scene right, and not as far as the edge. How short
         // is counted from what the scene actually has hidden, which depends on the density of the
@@ -234,6 +245,39 @@ class SceneGesturesTest {
         assertEquals(with(compose.density) { tabletWindow.roundToPx() }, node.size.width)
         assertEquals(node.size.width, windowSide())
         assertTrue(sceneSide() >= node.size.width.toFloat())
+    }
+
+    @Test
+    fun aTapOnThePetPatsItAndATapOnTheRoomDoesNot() {
+        showStage(phoneWindow)
+
+        // Near the left edge of the window there is only the room: the pet is in the middle, and
+        // it is a quarter of the scene wide at most.
+        stage.performTouchInput { click(Offset(x = width * 0.1f, y = centerY)) }
+        compose.runOnIdle { assertEquals(0, pats) }
+
+        // The area starts with the pet in the middle of the window.
+        stage.performTouchInput { click(center) }
+        compose.runOnIdle { assertEquals(1, pats) }
+    }
+
+    @Test
+    fun dragsAndPinchesStartedOnThePetMoveTheRoomAndPatNothing() {
+        showStage(phoneWindow)
+        val startedAt = moved()
+        val startScale = scale()
+
+        // Both start right on the pet, in the middle of the window.
+        val shortDrag = free() / 2f
+        stage.performTouchInput {
+            swipeRight(startX = centerX - shortDrag / 2f, endX = centerX + shortDrag / 2f)
+        }
+        assertTrue(moved().x > startedAt.x)
+
+        pinchBy(from = 40f, to = 160f)
+        assertTrue(scale() > startScale)
+
+        compose.runOnIdle { assertEquals(0, pats) }
     }
 
     @Test
