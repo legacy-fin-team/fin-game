@@ -50,8 +50,7 @@
         category="toys"
     >
         <variants>
-            <variant id="red" />
-            <variant id="blue" />
+            <variant id="default" />
         </variants>
         <effects>
             <effect stat="pleasure" value="20" />
@@ -95,25 +94,33 @@
         </variants>
     </item>
     <item
-        id="lamp"
-        name="Лампа"
+        id="plant"
+        name="Растение"
         price="150"
         category="decor"
-        layer="environment-front"
     >
         <variants>
             <variant id="default" />
         </variants>
     </item>
     <item
-        id="rug"
-        name="Коврик"
+        id="dresser"
+        name="Комод"
         price="90"
         category="decor"
     >
         <variants>
-            <variant id="beige" />
-            <variant id="blue" />
+            <variant id="default" />
+        </variants>
+    </item>
+    <item
+        id="books"
+        name="Книги"
+        price="90"
+        category="decor"
+    >
+        <variants>
+            <variant id="default" />
         </variants>
     </item>
 </items>

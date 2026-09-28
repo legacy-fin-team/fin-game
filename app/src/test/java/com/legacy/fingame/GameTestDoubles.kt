@@ -9,6 +9,7 @@ import com.legacy.fingame.game.items.ItemCatalog
 import com.legacy.fingame.game.items.ItemCategory
 import com.legacy.fingame.game.rules.PetCareTuning
 import com.legacy.fingame.game.scene.GameLayer
+import com.legacy.fingame.game.settings.GameSettings
 import com.legacy.fingame.game.stats.StatKind
 
 /**
@@ -160,18 +161,21 @@ internal class FakeGameClock(
  * @param catalog what is on sale.
  * @param clock which day the game is played on.
  * @param careTuning правила ухода; по умолчанию — те же, что в игре.
+ * @param settings the saved settings the app starts with.
  * @return A view model backed by the given doubles.
  */
 internal fun testGameViewModel(
     store: PlayerStateStore = FakePlayerStateStore(),
     catalog: ItemCatalog = FakeItemCatalog(),
     clock: GameClock = FakeGameClock(),
-    careTuning: PetCareTuning = PetCareTuning.DEFAULT
+    careTuning: PetCareTuning = PetCareTuning.DEFAULT,
+    settings: GameSettings = GameSettings()
 ): GameViewModel = GameViewModel(
     store = store,
     catalog = catalog,
     clock = clock,
-    careTuning = careTuning
+    careTuning = careTuning,
+    settings = settings
 )
 
 /**
