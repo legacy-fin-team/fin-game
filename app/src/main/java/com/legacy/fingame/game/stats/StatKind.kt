@@ -14,14 +14,14 @@ package com.legacy.fingame.game.stats
  * fast the player has to keep coming back for this particular bar.
  */
 enum class StatKind(val xmlName: String, val decayPerTick: Int) {
-    /** How healthy the pet is; falls slowly, and mostly on what the player feeds it. */
+    /** How healthy the pet is; falls like the other bars. */
     HEALTH("health", 1),
 
-    /** How fed the pet is: a full bar is a pet that is not hungry at all. Falls the fastest. */
-    HUNGER("hunger", 3),
+    /** How fed the pet is: a full bar is a pet that is not hungry at all. */
+    HUNGER("hunger", 1),
 
     /** How happy the pet is; kept up by playing with it and by what it wears. */
-    PLEASURE("pleasure", 2);
+    PLEASURE("pleasure", 1);
 
     companion object {
 
