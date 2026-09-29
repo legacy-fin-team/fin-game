@@ -135,7 +135,7 @@ private val BottomGroupGap = 16.dp
  * comfortable to hit, so the row is allowed to run wider instead of shrinking any further — which
  * on any screen this game is meant for it never has to (see [bottomRowFit]).
  */
-private val MinTouchTarget = 40.dp
+private val MinTouchTarget = 48.dp
 
 /**
  * Gap left between the blocks standing in the corners of the screen and what is laid out between

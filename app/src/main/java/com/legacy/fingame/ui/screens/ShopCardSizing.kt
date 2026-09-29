@@ -28,7 +28,7 @@ internal val ShortScreenRailGap = 12.dp
 /**
  * Width of a sideways card's rightmost column, the one that buys the item: enough for the widest of
  * the purchase controls, which is the counter — two [CounterButtonSize] buttons, two [CounterGap]
- * gaps and the quantity between them, i.e. `40 * 2 + 8 * 2 + 32`. The 32.dp left for
+ * gaps and the quantity between them, i.e. `48 * 2 + 2 * 2 + 28`. The 28.dp left for
  * the number holds twice the two digits the cart ever counts up to (see
  * [com.legacy.fingame.game.GameViewModel.MAX_ITEM_QUANTITY]) at the ordinary font scale, and the
  * number shrinks rather than wraps above it, see [counterValueWidth].

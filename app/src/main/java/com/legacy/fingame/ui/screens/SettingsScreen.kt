@@ -334,7 +334,7 @@ private fun ThemeChip(
 ) {
     Surface(
         onClick = onClick,
-        modifier = modifier,
+        modifier = modifier.heightIn(min = 48.dp),
         shape = RoundedCornerShape(50),
         color = if (selected) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.surface,

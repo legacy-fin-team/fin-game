@@ -25,7 +25,7 @@ import com.legacy.fingame.ui.theme.GameDimens
 
 /** Sizes shared by the windows of the game; see [GameDialogBlock]. */
 private val DialogMaxWidth = 320.dp
-private val DialogCloseButtonSize = 44.dp
+private val DialogCloseButtonSize = 48.dp
 
 /** Room between the buttons of a window, and between them and what stands above them. */
 private val DialogActionsGap = 8.dp
