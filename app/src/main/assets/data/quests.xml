@@ -320,8 +320,8 @@
                 <result>Хозяин сказал спасибо и дал 20 монет. На душе светло!</result>
                 <effect stat="pleasure" value="15" />
             </option>
-            <option label="Оставить себе" next="end" money="30">
-                <result>Монет стало больше, а радости нет: хозяин ищет кошелёк.</result>
+            <option label="Оставить себе" next="end">
+                <result>Ты заметил хозяина и пришлось вернуть кошелёк. На душе грустно.</result>
                 <effect stat="pleasure" value="-20" />
             </option>
         </node>
