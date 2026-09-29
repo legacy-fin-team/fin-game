@@ -27,12 +27,23 @@ data class PetStats(val values: Map<StatKind, Int> = emptyMap()) {
         /** Value of a full bar: there is nothing to do for the player on this stat. */
         const val MAX_VALUE = 100
 
+        /** Period over which a neglected pet loses [DECAY_POINTS_PER_PERIOD] points of every bar. */
+        val DECAY_PERIOD_MILLIS: Long = TimeUnit.HOURS.toMillis(12)
+
+        /**
+         * How many points every bar loses over [DECAY_PERIOD_MILLIS] without care: a full bar of 100
+         * ends up at 30, not at zero. One point per tick keeps the bars in whole points without any
+         * rounding drift; the tick is the period divided by this number (about 10.3 minutes, the
+         * division drops less than a millisecond, so 12 hours are exactly 70 ticks).
+         */
+        const val DECAY_POINTS_PER_PERIOD = 70
+
         /**
          * How long the pet keeps a stat before it loses [StatKind.decayPerTick] of it. Real time,
          * not app time: the pet gets hungry while the app is closed as well, so the whole ticks that
          * fit between two launches are applied at the next one.
          */
-        val TICK_MILLIS: Long = TimeUnit.MINUTES.toMillis(5)
+        val TICK_MILLIS: Long = DECAY_PERIOD_MILLIS / DECAY_POINTS_PER_PERIOD
 
         /** Stats of a pet nobody has neglected yet, i.e. of a brand new pet. */
         val FULL: PetStats = PetStats(StatKind.entries.associateWith { MAX_VALUE })

@@ -1,5 +1,6 @@
 package com.legacy.fingame
 
+import java.util.concurrent.TimeUnit
 import com.legacy.fingame.game.animals.Animal
 import com.legacy.fingame.game.animals.Growth
 import com.legacy.fingame.game.stats.PetStats
@@ -61,7 +62,27 @@ class PetStatsTest {
     }
 
     @Test
-    fun `every bar falls at its own pace`() {
+    fun `twelve hours without care take a full bar from 100 down to 30`() {
+        val ticks = PetStats.ticksBetween(0L, TimeUnit.HOURS.toMillis(12))
+        val fallen = PetStats.FULL.decayedBy(ticks)
+
+        assertEquals(70L, ticks)
+        StatKind.entries.forEach { stat ->
+            assertEquals(30, fallen[stat])
+        }
+    }
+
+    @Test
+    fun `a bar reaches zero only after a day and a half without care`() {
+        val day = TimeUnit.HOURS.toMillis(24)
+        val start = PetStats.FULL
+
+        assertEquals(30, start.decayedBy(PetStats.ticksBetween(0L, day / 2))[StatKind.HUNGER])
+        assertEquals(0, start.decayedBy(PetStats.ticksBetween(0L, day))[StatKind.HUNGER])
+    }
+
+    @Test
+    fun `every bar falls by its own decay per tick`() {
         val fallen = PetStats.FULL.decayedBy(ticks = 3)
 
         StatKind.entries.forEach { stat ->
