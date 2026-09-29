@@ -64,8 +64,8 @@ class MainActivity : ComponentActivity() {
                         questCatalog = questRegistry,
                         careTuning = careTuning,
                         settings = savedSettings,
-                        // Отладочная сборка (debug и releaseDebuggable) проверяет квесты без
-                        // ожидания; в обычном release кулдаун и паузы между шагами действуют.
+                        // Во всех сборках кулдаун и паузы между шагами действуют; в демо
+                        // ожидание пропускает только кнопка «+12 ч».
                         ignoreQuestDelays = false
                     )
                 }
