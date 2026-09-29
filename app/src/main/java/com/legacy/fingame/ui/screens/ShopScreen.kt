@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -103,6 +104,9 @@ private val VariantButtonSize = 36.dp
  */
 internal val CounterButtonSize = 48.dp
 internal val CounterGap = 2.dp
+
+/** Most variants a row shows without scrolling, see [ItemVariantRow]. */
+private const val MaxUnscrolledVariants = 3
 
 /**
  * Height of the slot a card's purchase control stands in, whichever of the three it is.
@@ -1286,9 +1290,16 @@ private fun ItemVariantRow(
         contentAlignment = contentAlignment
     ) {
         if (item.hasSeveralVariants) {
+            // Three touch areas of 48.dp are 144.dp, wider than the 134.dp of the narrowest card, so
+            // a short row is let out a few dp into the card's padding (the drawn sprites are
+            // narrower than their areas and stay inside); a longer one scrolls.
             Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = if (item.variantIds.size <= MaxUnscrolledVariants) {
+                    Modifier.wrapContentWidth(align = Alignment.CenterHorizontally, unbounded = true)
+                } else {
+                    Modifier.horizontalScroll(rememberScrollState())
+                },
+                horizontalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 item.variantIds.forEach { variantId ->
                     SpriteButton(
