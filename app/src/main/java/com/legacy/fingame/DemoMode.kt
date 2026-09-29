@@ -22,8 +22,10 @@ object DemoMode {
 
     /**
      * How far one press of the demo's time button pushes the game's clock, in hours. Half a day, so
-     * two presses make a day: the pet is visibly hungry after the first one and has grown up — and
-     * has a new daily bonus waiting — after the second.
+     * two presses make a day: the pet is visibly hungry after the first one and has a new daily
+     * bonus waiting after the second. Growing up takes longer on purpose — at least
+     * [com.legacy.fingame.game.animals.Growth.FULL_GROWTH_DAYS] days of good care, so 42 presses
+     * with the pet fed in between; the button skips time and never cheats the pet's rules.
      */
     const val FAST_FORWARD_HOURS = 12L
 

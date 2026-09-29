@@ -6,9 +6,10 @@ import com.legacy.fingame.game.stats.PetStats
 /**
  * Как питомцу жилось: сколько он вырос и сколько дней подряд им не занимались.
  *
- * Жизнь питомца делится на его собственные дни — по [Growth.STAGE_MILLIS] от момента, когда его
+ * Жизнь питомца делится на его собственные дни — по [Growth.DAY_MILLIS] от момента, когда его
  * взяли, а не по календарю: так день питомца всегда длится ровно сутки, и хорошо ухоженный питомец
- * растёт ровно так же, как рос до этих правил — на стадию в сутки.
+ * за каждый такой день вырастает на сутки роста — и вырастает полностью ровно за
+ * [Growth.FULL_GROWTH_DAYS] дней (см. [Growth]).
  *
  * Каждый прожитый день судится по лучшему индексу ухода, который питомец набрал за этот день
  * ([dayBestCare]): ребёнку достаточно хотя бы раз за день накормить питомца и поиграть с ним, а не
@@ -38,7 +39,7 @@ data class PetCare(
 
         /**
          * Уход питомца из сохранения, сделанного до этих правил: питомец сохраняет возраст, который
-         * успел набрать по старому правилу (каждые прожитые сутки — стадия), а серия начинается
+         * успел набрать по старому правилу (каждые прожитые сутки — сутки роста), а серия начинается
          * с нуля — задним числом никого не наказываем.
          *
          * @param bornAtMillis момент, когда питомца взяли, или [Growth.NOT_BORN].
@@ -49,10 +50,10 @@ data class PetCare(
             val days = if (bornAtMillis == Growth.NOT_BORN || nowMillis <= bornAtMillis) {
                 0L
             } else {
-                (nowMillis - bornAtMillis) / Growth.STAGE_MILLIS
+                (nowMillis - bornAtMillis) / Growth.DAY_MILLIS
             }
             return PetCare(
-                growthMillis = days * Growth.STAGE_MILLIS,
+                growthMillis = days * Growth.DAY_MILLIS,
                 judgedDays = days,
                 dayBestCare = PetCareRules.careIndex(stats),
                 neglectStreak = 0
@@ -90,12 +91,12 @@ data class PetCare(
         tuning: PetCareTuning = PetCareTuning.DEFAULT
     ): PetCare {
         if (bornAtMillis == Growth.NOT_BORN || nowMillis <= bornAtMillis) return this
-        val dueDays = (nowMillis - bornAtMillis) / Growth.STAGE_MILLIS
+        val dueDays = (nowMillis - bornAtMillis) / Growth.DAY_MILLIS
 
         var care = this
         var previousStart: PetStats? = null
         while (care.judgedDays < dueDays) {
-            val dayStart = bornAtMillis + (care.judgedDays + 1) * Growth.STAGE_MILLIS
+            val dayStart = bornAtMillis + (care.judgedDays + 1) * Growth.DAY_MILLIS
             val startStats = stats.decayedBy(PetStats.ticksBetween(statsAtMillis, dayStart))
             if (startStats == previousStart) {
                 // Шкалы больше не меняются: каждый оставшийся день такой же, как этот.
@@ -113,7 +114,7 @@ data class PetCare(
      */
     private fun closed(days: Long, tuning: PetCareTuning): PetCare {
         val growth = PetCareRules.growthMultiplierFor(dayBestCare, tuning)
-        val gained = (Growth.STAGE_MILLIS * growth).toLong()
+        val gained = (Growth.DAY_MILLIS * growth).toLong()
         val streak = if (PetCareRules.isNeglected(dayBestCare, tuning)) {
             (neglectStreak + days).coerceAtMost(MAX_STREAK.toLong()).toInt()
         } else {

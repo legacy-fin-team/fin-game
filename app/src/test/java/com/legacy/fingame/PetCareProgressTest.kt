@@ -1,5 +1,6 @@
 package com.legacy.fingame
 
+import com.legacy.fingame.game.animals.Animal
 import com.legacy.fingame.game.animals.Growth
 import com.legacy.fingame.game.rules.PetCare
 import com.legacy.fingame.game.rules.PetCareRules
@@ -7,13 +8,14 @@ import com.legacy.fingame.game.stats.PetStats
 import com.legacy.fingame.game.stats.StatKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /** Как дни питомца закрываются: рост за день и серия дней без заботы. */
 class PetCareProgressTest {
 
     private val born = 1_000_000_000L
-    private val day = Growth.STAGE_MILLIS
+    private val day = Growth.DAY_MILLIS
 
     /** Шкалы, которые не падают: у этой проверки не распад, а суд над днём. */
     private val empty = PetStats(StatKind.entries.associateWith { PetStats.MIN_VALUE })
@@ -27,7 +29,7 @@ class PetCareProgressTest {
     }
 
     @Test
-    fun `a well cared for day grows the pet a full stage`() {
+    fun `a well cared for day grows the pet a full day of growth`() {
         val care = PetCare().lived(born, PetStats.FULL, born, born + day)
 
         assertEquals(1L, care.judgedDays)
@@ -36,7 +38,7 @@ class PetCareProgressTest {
     }
 
     @Test
-    fun `a so-so day grows the pet half a stage and a bad one not at all`() {
+    fun `a so-so day grows the pet half a day of growth and a bad one not at all`() {
         val soSo = PetCare(dayBestCare = 0.3).lived(born, empty, born, born + day)
         val bad = PetCare(dayBestCare = 0.1).lived(born, empty, born, born + day)
 
@@ -95,5 +97,27 @@ class PetCareProgressTest {
         assertEquals(0, care.neglectStreak)
         assertEquals(PetCareRules.FULL_CARE, care.dayBestCare, 0.0)
         assertEquals(0L, PetCare.migrated(Growth.NOT_BORN, born, PetStats.FULL).judgedDays)
+    }
+
+    /** Ставит питомцу полные шкалы и прожитый день: так ухаживает ребёнок, который заходит каждый день. */
+    private fun perfectDays(days: Int): PetCare {
+        var care = PetCare()
+        repeat(days) { d ->
+            care = care.noticed(PetStats.FULL)
+                .lived(born, PetStats.FULL, born + day * d, born + day * (d + 1))
+        }
+        return care
+    }
+
+    @Test
+    fun `growing up takes no less than 21 days even with perfect care`() {
+        assertEquals(Growth.FULL_GROWTH_DAYS.toLong() * day, Growth.FULL_GROWTH_MILLIS)
+
+        assertEquals(Animal.FIRST_AGE, Growth.ageOf(perfectDays(10).growthMillis))
+        assertEquals(Animal.FIRST_AGE + 1, Growth.ageOf(perfectDays(11).growthMillis))
+        assertEquals(Animal.FIRST_AGE + 1, Growth.ageOf(perfectDays(20).growthMillis))
+        assertTrue(Growth.ageOf(perfectDays(20).growthMillis) < Growth.ADULT_AGE)
+        assertEquals(Growth.ADULT_AGE, Growth.ageOf(perfectDays(21).growthMillis))
+        assertEquals(0, perfectDays(21).neglectStreak)
     }
 }

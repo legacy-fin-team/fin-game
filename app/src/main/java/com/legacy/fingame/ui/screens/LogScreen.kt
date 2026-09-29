@@ -344,7 +344,7 @@ private val PreviewLog = MoneyLog(
         MoneyEntry(MoneyLog.REASON_DEPOSIT_CLOSED, 200, 19_002L, 1_700_002_100_000L),
         MoneyEntry("Яблоко x4", -60, 19_001L, 1_700_001_000_000L),
         MoneyEntry(MoneyLog.REASON_DEPOSIT_OPENED, -200, 19_000L, 1_700_000_500_000L),
-        MoneyEntry(MoneyLog.REASON_DAILY_BONUS, 50, 19_000L, 1_700_000_000_000L)
+        MoneyEntry(MoneyLog.REASON_DAILY_BONUS, 125, 19_000L, 1_700_000_000_000L)
     )
 )
 
