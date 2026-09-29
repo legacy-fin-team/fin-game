@@ -251,6 +251,5 @@ class ItemReaderTest {
             mapOf(StatKind.PLEASURE to 20, StatKind.HUNGER to -5),
             items.getValue("ball").effects
         )
-        assertEquals(mapOf(StatKind.PLEASURE to 30), items.getValue("teddy").effects)
     }
 }

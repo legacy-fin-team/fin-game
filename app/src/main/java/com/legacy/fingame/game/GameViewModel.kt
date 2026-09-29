@@ -325,8 +325,8 @@ data class GameUiState(
  * @param allowRestart можно ли пройти пройденный квест ещё раз ([restartQuest]); только в
  * демо-сборке, иначе монеты «Копилки» можно было бы собирать без конца.
  * @param ignoreQuestDelays не ждать ни кулдауна квестов, ни паузы между шагами — всё доступно
- * сразу (см. [QuestEngine]). В приложении это отладочная сборка (см. [factory]); по умолчанию
- * выключено, так что тесты сами решают, нужно ли им ожидание.
+ * сразу (см. [QuestEngine]). В приложении выключено во всех сборках (ожидание в демо
+ * пропускает кнопка «+12 ч»); тесты сами решают, нужно ли им ожидание.
  * @param careTuning правила ухода: как уход влияет на рост питомца, бонус дня и цены (см.
  * [PetCareRules]).
  * @param settings the settings the app starts with, as they were saved: they are in the state from
@@ -400,8 +400,8 @@ class GameViewModel(
          * @param allowRestart можно ли проходить квесты ещё раз; по умолчанию — только в демо.
          * @param careTuning правила ухода.
          * @param settings the saved settings the app starts with.
-         * @param ignoreQuestDelays снять ожидание в квестах; по умолчанию — в отладочной сборке
-         * (`BuildConfig.DEBUG`: debug и releaseDebuggable), в обычном release ожидание действует.
+         * @param ignoreQuestDelays снять ожидание в квестах; по умолчанию выключено во всех сборках, в демо
+         * ожидание пропускает только кнопка «+12 ч».
          * @return A factory creating a [GameViewModel] backed by [store] and [catalog].
          */
         fun factory(

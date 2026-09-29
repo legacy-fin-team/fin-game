@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -96,13 +97,16 @@ private val VariantButtonSize = 36.dp
 /**
  * Size of the "−" and "+" of a counter on a stacked card, and the gap between them and the number.
  *
- * The same 40.dp the sideways card and the budget's own amount pickers use: the counter has to fit
+ * The same 48.dp the sideways card and the budget's own amount pickers use: the counter has to fit
  * the narrowest card the shop lays out twice to a row — `134.dp` inside its padding — with enough
  * left between the buttons for a quantity of two digits at any font scale the game is played at,
  * see [counterValueWidth].
  */
-internal val CounterButtonSize = 40.dp
-internal val CounterGap = 8.dp
+internal val CounterButtonSize = 48.dp
+internal val CounterGap = 2.dp
+
+/** Most variants a row shows without scrolling, see [ItemVariantRow]. */
+private const val MaxUnscrolledVariants = 3
 
 /**
  * Height of the slot a card's purchase control stands in, whichever of the three it is.
@@ -1169,7 +1173,9 @@ private fun ItemSprite(
                 onClick = onToggleGoals,
                 size = starButtonSize,
                 showIndicator = false,
-                modifier = Modifier.align(Alignment.TopEnd)
+                modifier = Modifier.align(Alignment.TopEnd),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.Top
             )
         }
     }
@@ -1286,9 +1292,16 @@ private fun ItemVariantRow(
         contentAlignment = contentAlignment
     ) {
         if (item.hasSeveralVariants) {
+            // Three touch areas of 48.dp are 144.dp, wider than the 134.dp of the narrowest card, so
+            // a short row is let out a few dp into the card's padding (the drawn sprites are
+            // narrower than their areas and stay inside); a longer one scrolls.
             Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = if (item.variantIds.size <= MaxUnscrolledVariants) {
+                    Modifier.wrapContentWidth(align = Alignment.CenterHorizontally, unbounded = true)
+                } else {
+                    Modifier.horizontalScroll(rememberScrollState())
+                },
+                horizontalArrangement = Arrangement.spacedBy(0.dp)
             ) {
                 item.variantIds.forEach { variantId ->
                     SpriteButton(
