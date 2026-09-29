@@ -6,11 +6,12 @@
     python3 docs/tools/make_docx.py
 
 Что делает:
-- вступление берётся из docs/README.md (текст до оглавления), затем файлы из FILES по порядку;
+- вступление берётся из docs/README.md (текст до оглавления), затем файлы из FILES по порядку,
+  а в конце — раздел «Лицензии» из корневого README.md (отдельного файла о лицензиях нет);
 - заголовок первого уровня каждого файла становится разделом документа, его подразделы — пунктами
   оглавления второго уровня;
 - ссылки между файлами становятся ссылками на соответствующий раздел внутри документа;
-- блоки Mermaid заменяются ссылкой на Markdown-версию (текстовая схема остаётся);
+- блоки Mermaid заменяются ссылкой на Markdown-версию (GitHub показывает схему картинкой);
 - оглавление заполняется сразу (видно в любом просмотрщике) и обновляется Word при открытии;
 - стили (A4, рамки таблиц, шрифты) берутся из docs/tools/reference.docx.
 """
@@ -38,9 +39,10 @@ FILES = [
     'ux-accessibility.md',
     'testing.md',
     'tz-compliance.md',
-    'licenses.md',
     'roadmap.md',
 ]
+ROOT_README = os.path.join(ROOT, 'README.md')
+LICENSES_HEADING = '## Лицензии'
 REF = os.path.join(DOCS, 'tools', 'reference.docx')
 OUT = os.path.join(DOCS, 'FinGame-Документация.docx')
 TITLE = 'Fin Game — сопроводительная документация'
@@ -72,6 +74,8 @@ def rewrite_links(text, titles):
         label, target = m.group(1), m.group(2)
         if re.match(r'^[a-z]+://', target):
             return m.group(0)
+        if target == '../README.md#лицензии':
+            return f'[{label}](#doc-licenses)'
         path = target.split('#', 1)[0]
         if path in titles:
             return f'[{label}](#{anchor(path)})'
@@ -91,6 +95,21 @@ def shifted(text):
     return '\n'.join(out)
 
 
+def licenses_section(titles):
+    """Раздел «Лицензии» корневого README.md — до следующего заголовка второго уровня или до конца."""
+    with open(ROOT_README, encoding='utf-8') as f:
+        text = f.read()
+    start = text.find('\n' + LICENSES_HEADING + '\n')
+    if start < 0:
+        sys.exit(f'В README.md нет раздела «{LICENSES_HEADING[3:]}»')
+    section = text[start + 1:]
+    end = section.find('\n## ', len(LICENSES_HEADING))
+    if end >= 0:
+        section = section[:end]
+    body = section.split('\n', 1)[1].replace('](docs/', '](')
+    return f'## Лицензии и сторонние компоненты {{#doc-licenses}}\n{rewrite_links(body, titles)}'
+
+
 def prepare_markdown():
     titles = {name: split_title(name, read(name))[0] for name in FILES}
     _, intro = split_title(INDEX, read(INDEX))
@@ -100,9 +119,10 @@ def prepare_markdown():
         title, body = split_title(name, read(name))
         body = rewrite_links(shifted(body), titles)
         parts.append(f'## {title} {{#{anchor(name)}}}\n{body}')
+    parts.append(licenses_section(titles))
     body = '\n\n'.join(parts)
     body = re.sub(r'```mermaid\n.*?```',
-                  '*Та же схема в формате Mermaid приведена в файле docs/architecture.md.*',
+                  '*Схема в формате Mermaid — в файле docs/architecture.md репозитория; GitHub показывает её картинкой.*',
                   body, flags=re.S)
     if '<!--' in body:
         sys.exit('В документации остался HTML-комментарий, который не попадёт в DOCX')
