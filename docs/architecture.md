@@ -130,7 +130,7 @@ flowchart TD
 | `selection` | `AnimalSelection?` | `null` | Выбранный питомец; `null` — экран выбора |
 | `petName` | `String` | `""` | Имя питомца |
 | `subLocationIndex` | `Int` | 0 | Номер комнаты (в игре одна, см. [scene.md](scene.md)) |
-| `balance` | `Int` | 200 | Текущий счёт |
+| `balance` | `Int` | `Economy.STARTING_BALANCE` | Текущий счёт |
 | `deposit` | `Deposit?` | `null` | Открытый вклад |
 | `budget` | `BudgetState?` | `null` | План и факт текущего периода |
 | `previousBudgetResult` | `BudgetResult?` | `null` | Итог прошлого периода |

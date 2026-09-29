@@ -46,29 +46,30 @@
 - `Item.effects` пуст у всего, что надевается: одежда и декор шкалы не меняют, даже если в XML у них
   указан `<effect>` (он читается в `declaredEffects` и игнорируется); эффектов нет и у наград
   «Другое»;
-- у одного предмета одновременно надет только один вариант: надевая зелёный бант, игрок снимает
-  красный (`GameViewModel.toggleWorn`);
+- у одного предмета одновременно надет только один вариант: надевая один вариант одежды, игрок снимает
+  другой вариант той же вещи (`GameViewModel.toggleWorn`);
 - раздел «Другое» в магазине виден, только когда в нём есть предметы (их добавляет взрослый):
   фильтр в `ui/FinGameApp.kt`.
 
 ## 3. Каталог `items.xml`
 
+Формат записи (сначала одежда с несколькими вариантами и без эффектов, затем еда с одним вариантом
+и эффектами на шкалы; `…` — значение, которое выбирает автор):
+
 ```xml
-<item id="bow" name="Бант" price="100" category="clothes">
+<item id="some-clothes" name="Название" price="…" category="clothes">
     <variants>
-        <variant id="red" />
-        <variant id="green" />
-        <variant id="violet" />
+        <variant id="first" />
+        <variant id="second" />
     </variants>
 </item>
-<item id="kibble" name="Корм" price="40" category="food">
+<item id="some-food" name="Название" price="…" category="food">
     <variants>
         <variant id="default" />
     </variants>
     <effects>
-        <effect stat="hunger" value="50" />
-        <effect stat="pleasure" value="10" />
-        <effect stat="health" value="10" />
+        <effect stat="hunger" value="…" />
+        <effect stat="health" value="…" />
     </effects>
 </item>
 ```
@@ -87,23 +88,21 @@
 повтор `id` в категории) с сообщением в logcat и продолжает читать остальные. Неизвестный слой
 заменяется слоем категории, неверный эффект отбрасывается.
 
-Текущий каталог:
+Состав каталога (какие товары есть, их цены, варианты и эффекты) не фиксируется в этой
+документации: он меняется вместе с балансом. Источник правды — `assets/data/items.xml`. По
+смыслу каталог устроен так:
 
-| Товар | `id` | Цена | Категория | Варианты | Эффекты |
-|---|---|---|---|---|---|
-| Яблоко | `apple` | 15 | еда | `default` | сытость +20, здоровье +5 |
-| Рыбка | `fish` | 25 | еда | `default` | сытость +35, настроение +5 |
-| Корм | `kibble` | 40 | еда | `default` | сытость +50, настроение +10, здоровье +10 |
-| Мячик | `ball` | 60 | игрушки | `default` | настроение +20, сытость −5 |
-| Бант | `bow` | 100 | одежда | `red`, `green`, `violet` | — |
-| Галстук | `tie` | 80 | одежда | `orange`, `green`, `blue`, `violet` | — |
-| Бабочка | `bowtie` | 80 | одежда | `red`, `green`, `violet` | — |
-| Растение | `plant` | 150 | декор | `default` | — |
-| Комод | `dresser` | 90 | декор | `default` | — |
-| Книги | `books` | 90 | декор | `default` | — |
+- **обязательные** товары — категории «Еда» и «Игрушки» (вид траты `MUST`): то, что нужно для ухода
+  за питомцем;
+- **необязательные** товары — «Одежда» и «Декор» (вид траты `WANT`): украшения, на шкалы они не
+  влияют;
+- еда восстанавливает голод и здоровье, игрушки поднимают настроение; конкретные значения
+  эффектов заданы в `<effects>` каждого товара;
+- у одежды и части декора несколько вариантов (окрасов), у остальных один вариант `default`;
+- у каждого варианта в `assets/textures/items/` есть свой спрайт.
 
-Всего 10 товаров: 4 обязательных (3 еды и мячик) и 6 необязательных (3 вида одежды и 3 предмета
-декора). У каждого варианта в `assets/textures/items/` есть свой спрайт.
+Требования ТЗ к каталогу (не меньше 8 товаров двух типов, есть и обязательные, и необязательные)
+проверяет тест по фактическим данным (`ItemReaderTest`), а не числа в этом файле.
 
 ## 4. Спрайты предметов
 
@@ -117,7 +116,7 @@
 | `placed.webp` | 128×128 | Декор в комнате: одна картинка на вариант, без привязки к животному | `ItemSprites.placedInScenery` |
 
 Полный путь одежды: `/assets/textures/items/<id>/<variant>/equipped-<animal>-<stage>.webp`,
-например `items/bow/violet/equipped-cat-1.webp`, где `<animal>` — `id` животного из
+например `items/<id>/<вариант>/equipped-cat-1.webp`, где `<animal>` — `id` животного из
 `animals.xml`, а `<stage>` — этап роста, **уже ограниченный** числом нарисованных стадий животного:
 `animalRegistry.coerceAge(pet.animalId, state.petAge)` (`Animal.coerceAge`, вызов в
 `ui/FinGameApp.kt`). Питомец продолжает «расти» после последнего нарисованного этапа
@@ -210,24 +209,25 @@
 
 ## 9. Пример: как добавить новый предмет
 
-Добавим одежду «Шапка» (`cap`) в двух вариантах и еду «Морковь» (`carrot`).
+Добавим одежду (`new-clothes`) в двух вариантах и еду (`new-food`). Названия, цены и эффекты
+ниже — условные, реальные значения выбирает автор предмета.
 
 1. **Данные.** В `app/src/main/assets/data/items.xml`:
 
    ```xml
-   <item id="cap" name="Шапка" price="90" category="clothes">
+   <item id="new-clothes" name="Название" price="…" category="clothes">
        <variants>
-           <variant id="blue" />
-           <variant id="yellow" />
+           <variant id="first" />
+           <variant id="second" />
        </variants>
    </item>
-   <item id="carrot" name="Морковь" price="10" category="food">
+   <item id="new-food" name="Название" price="…" category="food">
        <variants>
            <variant id="default" />
        </variants>
        <effects>
-           <effect stat="hunger" value="15" />
-           <effect stat="health" value="5" />
+           <effect stat="hunger" value="…" />
+           <effect stat="health" value="…" />
        </effects>
    </item>
    ```
@@ -238,15 +238,12 @@
 2. **Текстуры** (WebP, пиксельная графика) в `app/src/main/assets/textures/items/`:
 
    ```
-   items/carrot/default/icon.webp                 32×32 — еда: только иконка
-   items/cap/blue/icon.webp                        32×32
-   items/cap/blue/equipped-cat-0.webp              32×32 — по картинке на каждое животное
-   items/cap/blue/equipped-cat-1.webp                       и каждый этап роста из animals.xml
-   items/cap/blue/equipped-cat-2.webp
-   items/cap/blue/equipped-fish-0.webp
-   items/cap/blue/equipped-fish-1.webp
-   items/cap/blue/equipped-fish-2.webp
-   items/cap/yellow/…                              то же для второго варианта
+   items/new-food/default/icon.webp                  32×32 — еда: только иконка
+   items/new-clothes/first/icon.webp                 32×32
+   items/new-clothes/first/equipped-<animal>-<stage>.webp
+                                                     32×32 — по картинке на каждое животное
+                                                     и каждый этап роста из animals.xml
+   items/new-clothes/second/…                        то же для второго варианта
    ```
 
    Для декора вместо `equipped-…` кладётся один `placed.webp` 128×128 на вариант. Спрайт одежды
@@ -258,19 +255,11 @@
    поставляемого каталога (`the data the app ships with …`): каждый предмет читается, путь иконки
    каждого варианта строится как `items/<id>/<вариант>/icon.webp`, у одежды и декора нет эффектов.
    Тест сверяет только строку пути — **отсутствие текстур тесты не ловят**: пропущенный файл
-   видно только в игре (заглушка `error.webp`) и в logcat (`SpriteLoader`). Для новой еды стоит дописать ожидаемые
-   эффекты в тест `the data the app ships with gives the pet nothing to feel about what it wears`
-   по образцу `kibble`:
+   видно только в игре (заглушка `error.webp`) и в logcat (`SpriteLoader`). Для новой еды стоит
+   дописать ожидаемые эффекты по образцу уже имеющихся в этом тесте.
 
-   ```kotlin
-   assertEquals(
-       mapOf(StatKind.HUNGER to 15, StatKind.HEALTH to 5),
-       items.getValue("carrot").effects
-   )
-   ```
-
-4. **Проверка.** `./gradlew :app:testDebugUnitTest`, затем в игре: магазин → «Одежда» → «Шапка»
-   (выбор варианта), покупка, инвентарь → «Надеть» — шапка на питомце; перемотать время до
+4. **Проверка.** `./gradlew :app:testDebugUnitTest`, затем в игре: магазин → нужный раздел
+   (выбор варианта), покупка, инвентарь → «Надеть» — вещь на питомце; перемотать время до
    следующего этапа (демо-сборка, «+12 ч» дважды) — картинка сменилась на `equipped-<animal>-1`.
 
 Код менять не нужно: каталог, магазин, инвентарь, сцена и сохранение работают с любым предметом из
