@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -12,10 +13,12 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -48,6 +51,9 @@ import com.legacy.fingame.ui.theme.GameColors
 private val SelectScreenPadding = 16.dp
 private val AnimalCellMinSize = 150.dp
 private val NameFieldMaxWidth = 360.dp
+
+/** Below this screen height the name field scrolls with the cards instead of being pinned below them. */
+private val CompactHeight = 500.dp
 
 /** How long a pet's name may be, so it still fits into the badge above the pet on the main screen. */
 private const val MaxPetNameLength = 20
@@ -236,53 +242,105 @@ private fun VariantStep(
     }
     var name by rememberSaveable(animal.id) { mutableStateOf(animal.name) }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .systemBarsPadding()
-            .padding(SelectScreenPadding),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(
-            text = animal.name,
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onBackground,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            text = "Выбери вид и придумай имя",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        AnimalGrid(modifier = Modifier.weight(1f)) {
-            items(items = variantIds, key = { variantId -> variantId }) { variantId ->
-                AnimalCard(
-                    spritePath = animal.getIdleSpritePath(variantId, Animal.FIRST_AGE),
-                    description = animal.name,
-                    title = null,
-                    selected = variantId == selection?.variantId,
-                    onClick = {
-                        selection = AnimalSelection(
-                            animalId = animal.id,
-                            variantId = variantId
-                        )
+    // A phone held sideways has no room for the cards, the field and the buttons at once, let alone
+    // with the keyboard up, so there the field and the buttons scroll along with the cards.
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val compact = maxHeight < CompactHeight
+        val nameEditor: @Composable () -> Unit = {
+            NameEditor(
+                name = name,
+                onNameChange = { typed -> name = typed.take(MaxPetNameLength) },
+                onBack = onBack,
+                onConfirm = {
+                    selection?.let { picked ->
+                        onConfirm(picked.variantId, name.trim().ifBlank { animal.name })
                     }
-                )
-            }
+                },
+                confirmEnabled = selection != null
+            )
         }
 
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .systemBarsPadding()
+                // The window is not resized under edge-to-edge, so lift the content above the
+                // keyboard by hand; the grid takes the squeeze.
+                .imePadding()
+                .padding(SelectScreenPadding),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = animal.name,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = "Выбери вид и придумай имя",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            AnimalGrid(modifier = Modifier.weight(1f)) {
+                items(items = variantIds, key = { variantId -> variantId }) { variantId ->
+                    AnimalCard(
+                        spritePath = animal.getIdleSpritePath(variantId, Animal.FIRST_AGE),
+                        description = animal.name,
+                        title = null,
+                        selected = variantId == selection?.variantId,
+                        onClick = {
+                            selection = AnimalSelection(
+                                animalId = animal.id,
+                                variantId = variantId
+                            )
+                        }
+                    )
+                }
+                if (compact) {
+                    item(key = "name-editor", span = { GridItemSpan(maxLineSpan) }) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) { nameEditor() }
+                    }
+                }
+            }
+
+            if (!compact) nameEditor()
+        }
+    }
+}
+
+/**
+ * The field for the pet's name with the "back" and "confirm" buttons under it.
+ *
+ * @param name text currently in the field.
+ * @param onNameChange called with the new text when the player types.
+ * @param onBack called when the player wants to pick a different animal.
+ * @param onConfirm called when the player confirms the choice.
+ * @param confirmEnabled whether the confirm button can be pressed.
+ */
+@Composable
+private fun NameEditor(
+    name: String,
+    onNameChange: (String) -> Unit,
+    onBack: () -> Unit,
+    onConfirm: () -> Unit,
+    confirmEnabled: Boolean
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(modifier = Modifier.height(16.dp))
 
         OutlinedTextField(
             value = name,
-            onValueChange = { typed -> name = typed.take(MaxPetNameLength) },
+            onValueChange = onNameChange,
             modifier = Modifier
                 .fillMaxWidth()
                 .widthIn(max = NameFieldMaxWidth),
@@ -294,15 +352,7 @@ private fun VariantStep(
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             PillButton(text = "Назад", onClick = onBack)
-            PillButton(
-                text = "Выбрать",
-                onClick = {
-                    selection?.let { picked ->
-                        onConfirm(picked.variantId, name.trim().ifBlank { animal.name })
-                    }
-                },
-                enabled = selection != null
-            )
+            PillButton(text = "Выбрать", onClick = onConfirm, enabled = confirmEnabled)
         }
     }
 }
