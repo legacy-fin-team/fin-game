@@ -11,10 +11,10 @@ package com.legacy.fingame.game.economy
 object Economy {
 
     /** Money a player who has never played before starts the game with. */
-    const val STARTING_BALANCE = 200
+    const val STARTING_BALANCE = 400
 
     /** Money the daily bonus pays out, once per calendar day. */
-    const val DAILY_BONUS = 50
+    const val DAILY_BONUS = 125
 
     /**
      * Value of [com.legacy.fingame.game.PlayerState.lastDailyBonusDay] standing for "the bonus was
