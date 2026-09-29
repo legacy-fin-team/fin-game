@@ -6,14 +6,14 @@
 ## 1. Юнит-тесты
 
 Каталог `app/src/test/java/com/legacy/fingame/`, JUnit 4, запуск `./gradlew :app:testDebugUnitTest`.
-Прогон 29.09.2026 на коде `main` (после слияния PR #37 и #38 и исправления `ShippedQuestsTest`):
-**67 классов, 742 теста, 0 падений, 0 пропусков**.
+Прогон 29.09.2026 на коде `main` (после слияния PR #37–#40):
+**67 классов, 744 теста, 0 падений, 0 пропусков**.
 
 | Группа | Классы (число тестов) | Итого |
 |---|---|---|
 | Экономика, бюджет, вклад, время | `BudgetFlowTest` (28), `EconomyTest` (27), `BudgetTest` (18), `FastForwardTest` (16), `MoneyLogCodecTest` (14), `DepositTest` (11), `MoneyLogTest` (9), `SpendKindTest` (7), `BudgetHistoryCodecTest` (6) | 136 |
 | Цели | `GameViewModelGoalsTest` (15), `GoalFormatTest` (10), `GoalsCodecTest` (7), `GoalsTest` (6) | 38 |
-| Шкалы, уход, рост | `PetCareTest` (18), `GameCareRulesTest` (18), `PetStatsTest` (12), `PetCareRulesTest` (11), `PetCareProgressTest` (9), `ItemEffectsTest` (8), `PetCareTuningReaderTest` (4) | 80 |
+| Шкалы, уход, рост | `PetCareTest` (18), `GameCareRulesTest` (18), `PetStatsTest` (14), `PetCareRulesTest` (11), `PetCareProgressTest` (9), `ItemEffectsTest` (8), `PetCareTuningReaderTest` (4) | 82 |
 | Животные | `AnimalReaderTest` (8), `AnimalRegistryTest` (5), `AnimalSelectionSaverTest` (3) | 16 |
 | Предметы | `ItemReaderTest` (8), `ItemSpritesTest` (7), `ItemCategoryTest` (4) | 19 |
 | Квесты | `QuestEngineTest` (46), `GameViewModelQuestTest` (30), `QuestFormatTest` (18), `QuestReaderTest` (17), `ShippedQuestsTest` (16), `QuestStateCodecTest` (13), `QuestLogCodecTest` (6), `QuestBoardTest` (4) | 150 |
@@ -24,7 +24,7 @@
 | Вёрстка и форматирование | `MainScreenLayoutTest` (18), `ShopCardSizingTest` (15), `MoneyFormatTest` (14), `AmountStepsTest` (9), `PillButtonSizingTest` (6), `BudgetLabelSizeTest` (4) | 66 |
 | Настройки и звук | `AudioReaderTest` (7), `GameSettingsRepositoryTest` (4) | 11 |
 | Шаблон | `ExampleUnitTest` (1) | 1 |
-| **Всего** | **67 классов** | **742** |
+| **Всего** | **67 классов** | **744** |
 
 Тесты, которые читают поставляемые данные из `app/src/main/assets/` и ломаются при их неверной
 правке: `ItemReaderTest` (`items.xml`), `ShippedQuestsTest` (`quests.xml`), `HintReaderTest`
