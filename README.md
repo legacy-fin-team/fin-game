@@ -60,7 +60,7 @@
 │       │   │   ├── ui/             Compose: FinGameApp (навигация), screens, components, theme
 │       │   │   └── utils/          хранилище PlayerPreferences, кодеки, SpriteLoader
 │       │   └── res/                иконка, тема, шрифт Press Start 2P и его лицензия (res/raw)
-│       ├── test/                   юнит-тесты JUnit 4 (67 классов, 730 тестов)
+│       ├── test/                   юнит-тесты JUnit 4 (67 классов, 731 тест)
 │       └── androidTest/            инструментальные Compose-тесты
 ├── docs/                           документация (docs/README.md — оглавление), Word-версия, tools/
 ├── gradle/                         libs.versions.toml, wrapper, JVM-тулчейн демона Gradle

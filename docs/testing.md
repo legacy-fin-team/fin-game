@@ -7,7 +7,7 @@
 
 Каталог `app/src/test/java/com/legacy/fingame/`, JUnit 4, запуск `./gradlew :app:testDebugUnitTest`.
 Прогон 29.09.2026 на коде `main` (коммит `8f34311`, после слияния квестов и переключателя анимаций) с
-исправленным `ItemReaderTest` (в нём оставалась проверка удалённого из каталога предмета): **67 классов, 730 тестов, 0 падений,
+исправленным `ItemReaderTest` (в нём оставалась проверка удалённого из каталога предмета): **67 классов, 731 тест, 0 падений,
 0 пропусков**.
 
 | Группа | Классы (число тестов) | Итого |
@@ -22,10 +22,10 @@
 | Подсказки и «Помощь» | `HintReaderTest` (8), `HintsSeenTest` (7), `HelpReaderTest` (6) | 21 |
 | ViewModel и сохранение | `GameViewModelTest` (26), `PlayerPreferencesKeysTest` (10), `RestartTest` (8) | 44 |
 | Сцена, спрайты и поглаживание | `SceneViewportTest` (24), `HeartBurstTest` (15), `GameSceneTest` (11), `PetTouchAssetsTest` (4), `SpriteFramesTest` (3) | 57 |
-| Вёрстка и форматирование | `MainScreenLayoutTest` (18), `MoneyFormatTest` (14), `ShopCardSizingTest` (14), `AmountStepsTest` (9), `PillButtonSizingTest` (6), `BudgetLabelSizeTest` (4) | 65 |
+| Вёрстка и форматирование | `MainScreenLayoutTest` (18), `MoneyFormatTest` (14), `ShopCardSizingTest` (15), `AmountStepsTest` (9), `PillButtonSizingTest` (6), `BudgetLabelSizeTest` (4) | 66 |
 | Настройки и звук | `AudioReaderTest` (7), `GameSettingsRepositoryTest` (4) | 11 |
 | Шаблон | `ExampleUnitTest` (1) | 1 |
-| **Всего** | **67 классов** | **730** |
+| **Всего** | **67 классов** | **731** |
 
 Тесты, которые читают поставляемые данные из `app/src/main/assets/` и ломаются при их неверной
 правке: `ItemReaderTest` (`items.xml`), `ShippedQuestsTest` (`quests.xml`), `HintReaderTest`
