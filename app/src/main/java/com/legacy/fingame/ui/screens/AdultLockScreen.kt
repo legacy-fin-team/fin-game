@@ -48,6 +48,7 @@ import com.legacy.fingame.ui.components.Sprites
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
+import com.legacy.fingame.ui.theme.LocalAnimationsEnabled
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
@@ -75,7 +76,8 @@ private const val AnswersSeparator = ","
  *
  * Ответ набирается в выбранную строку (по нажатию на строку или сам: набрав две цифры, ввод
  * переходит к следующей). «Дальше» ждёт трёх ответов; неверно — строки вздрагивают, появляются
- * новые примеры и подсказка «Не сошлось, попробуй ещё».
+ * новые примеры и подсказка «Не сошлось, попробуй ещё». С выключенной настройкой «Анимации»
+ * строки не вздрагивают — об ошибке говорят новые примеры и подсказка.
  *
  * Примеры и ввод переживают поворот экрана ([rememberSaveable]).
  *
@@ -98,6 +100,7 @@ fun AdultLockScreen(
     var active by rememberSaveable { mutableIntStateOf(0) }
     var wrong by rememberSaveable { mutableStateOf(false) }
     val shake = remember { Animatable(0f) }
+    val animationsEnabled = LocalAnimationsEnabled.current
     val allTyped = answers.all { it.isNotEmpty() }
     val short = GameDimens.isShortScreen
     val scope = rememberCoroutineScope()
@@ -131,7 +134,7 @@ fun AdultLockScreen(
         seed = random.nextInt()
         answersText = emptyAnswers()
         active = 0
-        scope.launch {
+        if (animationsEnabled) scope.launch {
             shake.animateTo(
                 targetValue = 0f,
                 animationSpec = keyframes {

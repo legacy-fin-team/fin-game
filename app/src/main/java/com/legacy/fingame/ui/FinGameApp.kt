@@ -2,6 +2,8 @@ package com.legacy.fingame.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -43,6 +45,7 @@ import com.legacy.fingame.ui.screens.MainScreen
 import com.legacy.fingame.ui.screens.QuestsScreen
 import com.legacy.fingame.ui.screens.SettingsScreen
 import com.legacy.fingame.ui.screens.ShopScreen
+import com.legacy.fingame.ui.theme.LocalAnimationsEnabled
 import kotlinx.coroutines.delay
 
 /**
@@ -63,6 +66,9 @@ private const val TICK_POLLS_PER_TICK = 10L
  * or removed) can't be played, so the player picks again — but is told that the pet is gone
  * instead of being greeted as a newcomer, and the saved choice is only replaced once a new pet is
  * actually picked.
+ *
+ * With the animations turned off in the settings ([LocalAnimationsEnabled]) the screens change at
+ * once instead of cross-fading.
  *
  * Layout: a full-size [Surface] with an [AnimatedContent] that cross-fades between
  * [MainScreen], [ShopScreen], [InventoryScreen], [QuestsScreen], [BudgetScreen], [LogScreen],
@@ -128,6 +134,8 @@ fun FinGameApp(
     // «Назад» из режима взрослого и из замка ведёт в настройки (см. [GameViewModel.closeScreen]).
     BackHandler(enabled = state.screen != Screen.MAIN) { vm.closeScreen() }
 
+    val animationsEnabled = LocalAnimationsEnabled.current
+
     Surface(
         modifier = modifier.fillMaxSize(),
         color = MaterialTheme.colorScheme.background
@@ -152,7 +160,13 @@ fun FinGameApp(
 
             AnimatedContent(
                 targetState = state.screen,
-                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                transitionSpec = {
+                    if (animationsEnabled) {
+                        fadeIn() togetherWith fadeOut()
+                    } else {
+                        EnterTransition.None togetherWith ExitTransition.None
+                    }
+                },
                 label = "screen"
             ) { current ->
                 when (current) {

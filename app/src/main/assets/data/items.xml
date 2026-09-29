@@ -58,19 +58,6 @@
         </effects>
     </item>
     <item
-        id="teddy"
-        name="Мишка"
-        price="120"
-        category="toys"
-    >
-        <variants>
-            <variant id="default" />
-        </variants>
-        <effects>
-            <effect stat="pleasure" value="30" />
-        </effects>
-    </item>
-    <item
         id="bow"
         price="100"
         name="Бант"

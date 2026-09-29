@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.legacy.fingame.BuildConfig
+
 import com.legacy.fingame.DemoMode
 import com.legacy.fingame.game.adult.AdultMoney
 import com.legacy.fingame.game.adult.RewardUsage
@@ -412,7 +412,7 @@ class GameViewModel(
             allowRestart: Boolean = DemoMode.ENABLED,
             careTuning: PetCareTuning = PetCareTuning.DEFAULT,
             settings: GameSettings = GameSettings(),
-            ignoreQuestDelays: Boolean = BuildConfig.DEBUG
+            ignoreQuestDelays: Boolean = false
         ): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 GameViewModel(

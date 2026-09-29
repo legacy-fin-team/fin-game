@@ -38,11 +38,11 @@ class ShippedQuestsTest {
     }
 
     @Test
-    fun `the four quests of the spec are all read`() {
+    fun `the six quests of the spec are all read`() {
         val quests = readShippedQuests()
 
         assertEquals(
-            listOf("picnic", "piggy_bank", "lost_wallet", "guests"),
+            listOf("picnic", "piggy_bank", "lost_wallet", "guests", "lemonade", "fair"),
             quests.map { it.id }
         )
     }
@@ -56,22 +56,27 @@ class ShippedQuestsTest {
                 "picnic" to QuestTopic.PLANNING,
                 "piggy_bank" to QuestTopic.SAVING,
                 "lost_wallet" to QuestTopic.HONESTY,
-                "guests" to QuestTopic.NEEDS_WANTS
+                "guests" to QuestTopic.NEEDS_WANTS,
+                "lemonade" to QuestTopic.SAVING,
+                "fair" to QuestTopic.NEEDS_WANTS
             ),
             topics
         )
     }
 
     @Test
-    fun `the picnic needs 100 coins, has progress and waits a minute between steps`() {
+    fun `the picnic needs 300 coins, has progress and has 16 steps across 3 days`() {
         val picnic = readShippedQuests().single { it.id == "picnic" }
 
         assertEquals("Пикник", picnic.title)
         assertEquals(QuestKind.PLAYER, picnic.kind)
         assertTrue(picnic.hasProgress)
-        assertEquals(100, picnic.minBalance)
-        assertEquals(3, picnic.stepCount)
-        assertEquals(listOf(1, 1, 0), picnic.stepOrder.map { picnic.node(it)!!.delayMinutes })
+        assertEquals(300, picnic.minBalance)
+        assertEquals(16, picnic.stepCount)
+        assertEquals(
+            listOf(0, 0, 0, 0, 1440, 0, 0, 0, 0, 0, 1440, 0, 0, 0, 0, 0),
+            picnic.stepOrder.map { picnic.node(it)!!.delayMinutes }
+        )
         assertTrue(picnic.nodes.values.flatMap { it.options }.any { it.moneyDelta < 0 })
     }
 
@@ -124,6 +129,29 @@ class ShippedQuestsTest {
         assertEquals(10, tea.progressDelta)
         assertEquals(mapOf(StatKind.PLEASURE to 5), tea.statEffects)
         assertEquals("tidy", tea.nextNodeId)
+    }
+
+    @Test
+    fun `the lemonade quest is taken by player, has progress and needs 50 coins`() {
+        val lemonade = readShippedQuests().single { it.id == "lemonade" }
+
+        assertEquals("Лимонад", lemonade.title)
+        assertEquals(QuestKind.PLAYER, lemonade.kind)
+        assertTrue(lemonade.hasProgress)
+        assertEquals(50, lemonade.minBalance)
+        assertEquals(2, lemonade.stepCount)
+        assertEquals(listOf(1, 0), lemonade.stepOrder.map { lemonade.node(it)!!.delayMinutes })
+    }
+
+    @Test
+    fun `the fair quest comes by itself and has two nodes`() {
+        val fair = readShippedQuests().single { it.id == "fair" }
+
+        assertEquals("Ярмарка", fair.title)
+        assertEquals(QuestKind.RANDOM, fair.kind)
+        assertFalse(fair.hasProgress)
+        assertEquals(2, fair.stepCount)
+        assertEquals(listOf(1, 0), fair.stepOrder.map { fair.node(it)!!.delayMinutes })
     }
 
     @Test
