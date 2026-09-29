@@ -6,25 +6,27 @@
 ## 1. Юнит-тесты
 
 Каталог `app/src/test/java/com/legacy/fingame/`, JUnit 4, запуск `./gradlew :app:testDebugUnitTest`.
-Прогон 29.09.2026 на коде `main` (коммит `73f5127`, после слияния PR #34, #35 и #36):
-**67 классов, 731 тест, 0 падений, 0 пропусков**.
+Прогон 29.09.2026 на коде `main` (коммит `04d05ec`, после слияния PR #37 и #38):
+**67 классов, 742 теста, 741 прошёл, 1 упал, 0 пропусков**. Упал `ShippedQuestsTest`
+(«returning the wallet pays less but feels better than keeping it»): тест ждёт у варианта «Оставить себе»
+квеста «Потерянный кошелёк» награду 30 монет, а в `quests.xml` её нет; ошибка есть в самом `main`, не в документации.
 
 | Группа | Классы (число тестов) | Итого |
 |---|---|---|
-| Экономика, бюджет, вклад, время | `BudgetFlowTest` (28), `EconomyTest` (26), `BudgetTest` (18), `FastForwardTest` (16), `MoneyLogCodecTest` (14), `MoneyLogTest` (9), `SpendKindTest` (7), `DepositTest` (6), `BudgetHistoryCodecTest` (6) | 130 |
+| Экономика, бюджет, вклад, время | `BudgetFlowTest` (28), `EconomyTest` (27), `BudgetTest` (18), `FastForwardTest` (16), `MoneyLogCodecTest` (14), `DepositTest` (11), `MoneyLogTest` (9), `SpendKindTest` (7), `BudgetHistoryCodecTest` (6) | 136 |
 | Цели | `GameViewModelGoalsTest` (15), `GoalFormatTest` (10), `GoalsCodecTest` (7), `GoalsTest` (6) | 38 |
-| Шкалы, уход, рост | `PetCareTest` (18), `GameCareRulesTest` (16), `PetStatsTest` (12), `PetCareRulesTest` (11), `ItemEffectsTest` (8), `PetCareProgressTest` (8), `PetCareTuningReaderTest` (4) | 77 |
+| Шкалы, уход, рост | `PetCareTest` (18), `GameCareRulesTest` (18), `PetStatsTest` (12), `PetCareRulesTest` (11), `PetCareProgressTest` (9), `ItemEffectsTest` (8), `PetCareTuningReaderTest` (4) | 80 |
 | Животные | `AnimalReaderTest` (8), `AnimalRegistryTest` (5), `AnimalSelectionSaverTest` (3) | 16 |
-| Предметы | `ItemReaderTest` (7), `ItemSpritesTest` (7), `ItemCategoryTest` (4) | 18 |
-| Квесты | `QuestEngineTest` (46), `GameViewModelQuestTest` (30), `QuestFormatTest` (18), `QuestReaderTest` (17), `ShippedQuestsTest` (15), `QuestStateCodecTest` (13), `QuestLogCodecTest` (6), `QuestBoardTest` (4) | 149 |
+| Предметы | `ItemReaderTest` (8), `ItemSpritesTest` (7), `ItemCategoryTest` (4) | 19 |
+| Квесты | `QuestEngineTest` (46), `GameViewModelQuestTest` (30), `QuestFormatTest` (18), `QuestReaderTest` (17), `ShippedQuestsTest` (16), `QuestStateCodecTest` (13), `QuestLogCodecTest` (6), `QuestBoardTest` (4) | 150 |
 | Взрослый режим | `CustomQuestsTest` (16), `AdultFormatTest` (11), `CustomItemsTest` (10), `GameViewModelAdultModeTest` (10), `GameViewModelCustomQuestsTest` (10), `GameViewModelCustomItemsTest` (9), `AdultMoneyTest` (6), `AdultProgressTest` (6), `AdultReportsTest` (6), `GameViewModelAdultDataTest` (6), `ParentLockTest` (5), `GameViewModelAdultCheckTest` (4), `RewardUsageLogTest` (4) | 103 |
 | Подсказки и «Помощь» | `HintReaderTest` (8), `HintsSeenTest` (7), `HelpReaderTest` (6) | 21 |
 | ViewModel и сохранение | `GameViewModelTest` (26), `PlayerPreferencesKeysTest` (10), `RestartTest` (8) | 44 |
 | Сцена, спрайты и поглаживание | `SceneViewportTest` (24), `HeartBurstTest` (15), `GameSceneTest` (11), `PetTouchAssetsTest` (4), `SpriteFramesTest` (3) | 57 |
-| Вёрстка и форматирование | `MainScreenLayoutTest` (18), `MoneyFormatTest` (14), `ShopCardSizingTest` (15), `AmountStepsTest` (9), `PillButtonSizingTest` (6), `BudgetLabelSizeTest` (4) | 66 |
+| Вёрстка и форматирование | `MainScreenLayoutTest` (18), `ShopCardSizingTest` (15), `MoneyFormatTest` (14), `AmountStepsTest` (9), `PillButtonSizingTest` (6), `BudgetLabelSizeTest` (4) | 66 |
 | Настройки и звук | `AudioReaderTest` (7), `GameSettingsRepositoryTest` (4) | 11 |
 | Шаблон | `ExampleUnitTest` (1) | 1 |
-| **Всего** | **67 классов** | **731** |
+| **Всего** | **67 классов** | **742** |
 
 Тесты, которые читают поставляемые данные из `app/src/main/assets/` и ломаются при их неверной
 правке: `ItemReaderTest` (`items.xml`), `ShippedQuestsTest` (`quests.xml`), `HintReaderTest`
