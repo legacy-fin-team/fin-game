@@ -477,8 +477,15 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
         val amount = preferences.getInt(KEY_DEPOSIT_AMOUNT, 0)
         if (amount <= 0) return null
 
-        val termDays = preferences.getInt(KEY_DEPOSIT_TERM_DAYS, Deposit.MIN_TERM_DAYS)
-            .coerceIn(Deposit.TERM_DAYS)
+        // Срок открытого вклада остаётся тем, на который его открывали, даже если такого срока
+        // игра больше не предлагает: день погашения и ставка — условия, на которые игрок уже
+        // подписался. К нынешним срокам приводится только срок, которого в сохранении нет.
+        val savedTerm = preferences.getInt(KEY_DEPOSIT_TERM_DAYS, 0)
+        val termDays = if (savedTerm in 1..Deposit.MAX_TERM_DAYS) {
+            savedTerm
+        } else {
+            Deposit.termOf(savedTerm)
+        }
         return Deposit(
             amount = amount,
             termDays = termDays,
@@ -551,10 +558,9 @@ class PlayerPreferences(context: Context) : PlayerStateStore {
             mustSpend = preferences.getInt(KEY_BUDGET_DRAFT_MUST, 0),
             wantSpend = preferences.getInt(KEY_BUDGET_DRAFT_WANT, 0),
             depositAmount = preferences.getInt(KEY_BUDGET_DRAFT_DEPOSIT_AMOUNT, 0),
-            depositTermDays = preferences.getInt(
-                KEY_BUDGET_DRAFT_DEPOSIT_TERM_DAYS,
-                Deposit.MIN_TERM_DAYS
-            ).coerceIn(Deposit.TERM_DAYS)
+            depositTermDays = Deposit.termOf(
+                preferences.getInt(KEY_BUDGET_DRAFT_DEPOSIT_TERM_DAYS, Deposit.MIN_TERM_DAYS)
+            )
         )
     }
 

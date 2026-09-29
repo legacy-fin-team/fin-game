@@ -134,7 +134,7 @@ object Budget {
             mustSpend = must,
             wantSpend = want,
             depositAmount = deposit,
-            depositTermDays = draft.depositTermDays.coerceIn(Deposit.TERM_DAYS)
+            depositTermDays = Deposit.termOf(draft.depositTermDays)
         )
     }
 
