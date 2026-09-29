@@ -149,16 +149,18 @@ class FastForwardTest {
 
     @Test
     fun `skipping time grows the pet up`() {
+        // Ход времени, а не уход: без правил ухода брошенный питомец растёт как обычно.
         val clock = FakeGameClock()
-        val vm = testGameViewModel(store = storeWithPet(clock), clock = clock)
+        val vm = testGameViewModel(store = storeWithPet(clock), clock = clock, careTuning = NO_CARE_RULES)
         assertEquals(Animal.FIRST_AGE, vm.state.value.petAge)
 
-        vm.fastForward(halfDay)
+        // Стадия 1 наступает на 11-й день: пять с половиной суток ещё рано, одиннадцать — уже пора.
+        vm.fastForward(Growth.DAY_MILLIS * 11 / 2)
         assertEquals(Animal.FIRST_AGE, vm.state.value.petAge)
 
-        vm.fastForward(halfDay)
+        vm.fastForward(Growth.DAY_MILLIS * 11 / 2)
         assertEquals(Animal.FIRST_AGE + 1, vm.state.value.petAge)
-        assertEquals(Growth.STAGE_MILLIS, halfDay * 2)
+        assertEquals(2 * Growth.STAGE_MILLIS, Growth.FULL_GROWTH_MILLIS)
     }
 
     @Test
@@ -258,7 +260,7 @@ class FastForwardTest {
         val vm = testGameViewModel(store = storeWithPet(clock), clock = clock)
 
         vm.fastForward(0)
-        vm.fastForward(-Growth.STAGE_MILLIS)
+        vm.fastForward(-Growth.DAY_MILLIS)
 
         assertEquals(PetStats.FULL, vm.state.value.stats)
         assertEquals(Animal.FIRST_AGE, vm.state.value.petAge)

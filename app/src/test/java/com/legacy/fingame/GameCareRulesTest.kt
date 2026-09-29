@@ -26,9 +26,12 @@ import org.junit.Test
  */
 class GameCareRulesTest {
 
-    private val day = Growth.STAGE_MILLIS
+    private val day = Growth.DAY_MILLIS
     private val fish = ItemSelection(TestItems.FISH.id, "default")
     private val ball = ItemSelection(TestItems.BALL.id, "red")
+
+    /** Бонус дня после серии из двух дней без заботы: care.xml отнимает 10% за день серии. */
+    private val reducedBonus = Economy.DAILY_BONUS * 80 / 100
 
     /** Питомец, которого только что взяли, с запасом рыбы и мячиком, чтобы о нём заботиться. */
     private fun storeWithPet(
@@ -70,12 +73,13 @@ class GameCareRulesTest {
         leaveAlone(vm, clock, days = 3)
 
         // Первый день питомец начал сытым — он засчитан, дальше шкалы пустые.
-        assertEquals(Animal.FIRST_AGE + 1, vm.state.value.petAge)
+        assertEquals(day, vm.state.value.care.growthMillis)
+        assertEquals(Animal.FIRST_AGE, vm.state.value.petAge)
         assertEquals(2, vm.state.value.care.neglectStreak)
     }
 
     @Test
-    fun `a pet cared for every day grows a stage a day`() {
+    fun `a pet cared for every day grows a day of growth a day`() {
         val clock = FakeGameClock()
         val vm = testGameViewModel(store = storeWithPet(clock), clock = clock)
 
@@ -84,7 +88,8 @@ class GameCareRulesTest {
             careFor(vm)
         }
 
-        assertEquals(Animal.FIRST_AGE + 3, vm.state.value.petAge)
+        assertEquals(day * 3, vm.state.value.care.growthMillis)
+        assertEquals(Animal.FIRST_AGE, vm.state.value.petAge)
         assertEquals(0, vm.state.value.care.neglectStreak)
     }
 
@@ -99,7 +104,7 @@ class GameCareRulesTest {
         leaveAlone(vm, clock, days = 1)
 
         assertEquals(0, vm.state.value.care.neglectStreak)
-        assertEquals(Animal.FIRST_AGE + 2, vm.state.value.petAge)
+        assertEquals(day * 2, vm.state.value.care.growthMillis)
     }
 
     @Test
@@ -108,13 +113,15 @@ class GameCareRulesTest {
         val vm = testGameViewModel(store = storeWithPet(clock), clock = clock)
         leaveAlone(vm, clock, days = 3)
 
-        assertEquals(40, vm.state.value.dailyIncome)
+        // Серия из двух дней: минус 20% бонуса.
+        assertEquals(reducedBonus, vm.state.value.dailyIncome)
+        assertTrue(reducedBonus < Economy.DAILY_BONUS)
         assertTrue(vm.claimDailyBonus())
 
-        assertEquals(Economy.STARTING_BALANCE + 40, vm.state.value.balance)
+        assertEquals(Economy.STARTING_BALANCE + reducedBonus, vm.state.value.balance)
         val entry = vm.state.value.moneyLog.entries.first()
         assertEquals(MoneyLog.REASON_DAILY_BONUS, entry.reason)
-        assertEquals(40, entry.delta)
+        assertEquals(reducedBonus, entry.delta)
     }
 
     @Test
@@ -127,7 +134,7 @@ class GameCareRulesTest {
 
         assertTrue(vm.claimDailyBonus())
 
-        assertEquals(Economy.STARTING_BALANCE + 40, vm.state.value.balance)
+        assertEquals(Economy.STARTING_BALANCE + reducedBonus, vm.state.value.balance)
     }
 
     @Test
@@ -243,7 +250,7 @@ class GameCareRulesTest {
 
         assertEquals(2, store.state.care?.neglectStreak)
         assertEquals(2, nextRun.state.value.care.neglectStreak)
-        assertEquals(Animal.FIRST_AGE + 1, nextRun.state.value.petAge)
+        assertEquals(day, nextRun.state.value.care.growthMillis)
     }
 
     @Test
@@ -255,7 +262,7 @@ class GameCareRulesTest {
         val vm = testGameViewModel(store = store, clock = clock)
 
         assertEquals(3, vm.state.value.care.neglectStreak)
-        assertEquals(Animal.FIRST_AGE + 1, vm.state.value.petAge)
+        assertEquals(day, vm.state.value.care.growthMillis)
     }
 
     @Test
@@ -267,14 +274,14 @@ class GameCareRulesTest {
 
         val vm = testGameViewModel(store = store, clock = clock)
 
-        assertEquals(Animal.FIRST_AGE + 2, vm.state.value.petAge)
+        assertEquals(day * 2, vm.state.value.care.growthMillis)
         assertEquals(0, vm.state.value.care.neglectStreak)
         assertEquals(Economy.DAILY_BONUS, vm.state.value.dailyIncome)
         assertEquals(born, store.state.petBornAtMillis)
 
         // С этого запуска дни судятся по новым правилам: брошенный питомец дальше не растёт.
         leaveAlone(vm, clock, days = 2)
-        assertEquals(Animal.FIRST_AGE + 2, vm.state.value.petAge)
+        assertEquals(day * 2, vm.state.value.care.growthMillis)
         assertEquals(2, vm.state.value.care.neglectStreak)
     }
 
@@ -308,5 +315,44 @@ class GameCareRulesTest {
         careFor(vm)
 
         assertTrue(vm.state.value.care.dayBestCare >= 0.5)
+    }
+
+    @Test
+    fun `the demo time button grows a well cared for pet up in 21 days and not sooner`() {
+        val clock = FakeGameClock()
+        val vm = testGameViewModel(store = storeWithPet(clock), clock = clock)
+        val pressesPerDay = (day / DemoMode.FAST_FORWARD_MILLIS).toInt()
+
+        // Кнопка «+12 ч» дважды в сутки; с началом каждого нового дня питомца ребёнок кормит его
+        // и играет с ним — раз в день, как и настоящий игрок (рыбы в запасе на 33 дня).
+        var presses = 0
+        fun press(times: Int) = repeat(times) {
+            vm.fastForward(DemoMode.FAST_FORWARD_MILLIS)
+            presses++
+            if (presses % pressesPerDay == 0) careFor(vm)
+        }
+
+        press(10 * pressesPerDay)
+        assertEquals(Animal.FIRST_AGE, vm.state.value.petAge)
+        press(1 * pressesPerDay)
+        assertEquals(Animal.FIRST_AGE + 1, vm.state.value.petAge)
+        press(9 * pressesPerDay)
+        assertTrue(vm.state.value.petAge < Growth.ADULT_AGE)
+        press(1 * pressesPerDay)
+        assertEquals(Growth.ADULT_AGE, vm.state.value.petAge)
+        assertEquals(Growth.FULL_GROWTH_DAYS * pressesPerDay, 42)
+        assertEquals(0, vm.state.value.care.neglectStreak)
+    }
+
+    @Test
+    fun `the demo time button does not grow a pet nobody cares for`() {
+        val clock = FakeGameClock()
+        val vm = testGameViewModel(store = storeWithPet(clock), clock = clock)
+
+        repeat(Growth.FULL_GROWTH_DAYS * 2) { vm.fastForward(DemoMode.FAST_FORWARD_MILLIS) }
+
+        // Первый день питомец начал сытым и вырос, дальше шкалы пустые, и он не растёт.
+        assertEquals(day, vm.state.value.care.growthMillis)
+        assertEquals(Animal.FIRST_AGE, vm.state.value.petAge)
     }
 }

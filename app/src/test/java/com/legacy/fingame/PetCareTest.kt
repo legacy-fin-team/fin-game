@@ -280,10 +280,10 @@ class PetCareTest {
             )
         )
 
-        clock.millis += Growth.STAGE_MILLIS * 3
+        clock.millis += Growth.FULL_GROWTH_MILLIS
         val nextRun = testGameViewModel(store = store, clock = clock)
 
-        assertEquals(Animal.FIRST_AGE + 3, nextRun.state.value.petAge)
+        assertEquals(Growth.ADULT_AGE, nextRun.state.value.petAge)
     }
 
     @Test
