@@ -70,6 +70,7 @@ import com.legacy.fingame.ui.screens.depositTextOf
 import com.legacy.fingame.ui.theme.FinGameTheme
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
+import com.legacy.fingame.ui.theme.LocalAnimationsEnabled
 import com.legacy.fingame.utils.SpriteLoader
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Job
@@ -85,7 +86,8 @@ import kotlinx.coroutines.launch
  * @param assetPath path to the sprite, relative to `assets/textures/`. If the file at this path
  *   does not exist, [SpriteLoader] automatically falls back to `error.webp` — that is expected
  *   behavior while assets are being produced, not a bug, so callers should not add their own
- *   fallback handling for missing files.
+ *   fallback handling for missing files. An animated sprite plays its frames only while the
+ *   animations are on ([LocalAnimationsEnabled]); otherwise it shows its first one.
  * @param contentDescription accessibility description announced for this image, or `null` when
  *   the sprite is purely decorative and should be skipped by screen readers.
  * @param modifier modifier applied to the underlying [AsyncImage].
@@ -99,7 +101,10 @@ fun Sprite(
 ) {
     val context = LocalContext.current
     val loader = remember(context) { SpriteLoader(context) }
-    val request = remember(assetPath, loader) { loader.getSprite(assetPath) }
+    // With the animations off, an animated sprite (the goldfish, say) is loaded as its first frame
+    // and stands still; switching the setting loads it again the other way.
+    val animated = LocalAnimationsEnabled.current
+    val request = remember(assetPath, loader, animated) { loader.getSprite(assetPath, animated) }
 
     AsyncImage(
         model = request,

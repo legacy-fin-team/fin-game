@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.legacy.fingame.ui.theme.DialogWindowMotion
 import com.legacy.fingame.ui.theme.GameColors
 import com.legacy.fingame.ui.theme.GameDimens
 
@@ -35,6 +36,8 @@ private val DialogActionsGap = 8.dp
  * and centred in the screen with a margin of its own.
  *
  * A tap outside it and the system back gesture close it, which is [onDismiss]'s job either way.
+ * With the animations turned off in the settings the window shows up and goes away at once
+ * instead of popping up ([DialogWindowMotion]); what it says stays the same.
  *
  * @param onDismiss called when the window should be closed without anything happening.
  * @param content the block the window shows; see [GameDialogBlock].
@@ -48,6 +51,7 @@ fun GameDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
+        DialogWindowMotion()
         Box(
             modifier = Modifier
                 .fillMaxWidth()

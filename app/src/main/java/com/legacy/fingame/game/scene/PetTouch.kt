@@ -71,6 +71,37 @@ data class HeartBurst(
         )
     }
 
+    /**
+     * Where a heart of the wave stands while the animations are turned off in the settings: the
+     * pat still answers with the same three hearts over the pet's head for as long as the wave
+     * would have lasted, only they do not rise, sway or fade — they come out all at once, stand
+     * still and are gone together after [LIFE_MILLIS]. The two side hearts sit right on the head,
+     * the middle one a whole sprite higher, so none of them covers another (see
+     * [PetTouchController.LANES_PX]).
+     *
+     * @param index which heart of the wave, from 0 to [HEARTS] - 1.
+     * @param elapsedMillis how long ago the wave was set off.
+     * @return Where that heart stands, fully opaque, or `null` once the wave is over.
+     */
+    fun stillHeartAt(index: Int, elapsedMillis: Long): HeartFrame? {
+        if (elapsedMillis < 0 || elapsedMillis >= LIFE_MILLIS) return null
+        return HeartFrame(
+            x = spreads[index].toFloat(),
+            y = startY - HEART_PIXELS * (index / 2),
+            alpha = 1f
+        )
+    }
+
+    /**
+     * @param index which heart of the wave, from 0 to [HEARTS] - 1.
+     * @param elapsedMillis how long ago the wave was set off.
+     * @param animated whether the animations are on (the "Анимации" setting).
+     * @return The heart as it is drawn by then: rising ([heartAt]) or standing still
+     * ([stillHeartAt]).
+     */
+    fun frameAt(index: Int, elapsedMillis: Long, animated: Boolean): HeartFrame? =
+        if (animated) heartAt(index, elapsedMillis) else stillHeartAt(index, elapsedMillis)
+
     companion object {
 
         /** How many hearts one pat sends up. */

@@ -9,7 +9,16 @@ import android.content.SharedPreferences
  * Каждый вызов [save] немедленно записывает все поля в файл настроек;
  * [load] восстанавливает их (или возвращает значения по умолчанию, если файла ещё нет).
  */
-class GameSettingsRepository(context: Context) {
+class GameSettingsRepository(private val prefs: SharedPreferences) {
+
+    /**
+     * Хранит настройки в собственном файле приложения [PREFS_NAME].
+     *
+     * @param context любой контекст приложения.
+     */
+    constructor(context: Context) : this(
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    )
 
     companion object {
         private const val PREFS_NAME = "fin_game_settings"
@@ -18,10 +27,8 @@ class GameSettingsRepository(context: Context) {
         private const val KEY_SOUND_VOLUME = "sound_volume"
         private const val KEY_MUSIC_VOLUME = "music_volume"
         private const val KEY_THEME = "theme_mode"
+        private const val KEY_ANIMATIONS = "animations_enabled"
     }
-
-    private val prefs: SharedPreferences =
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     /**
      * Загружает настройки. Если файл ещё не существует — возвращает значения по умолчанию.
@@ -45,10 +52,15 @@ class GameSettingsRepository(context: Context) {
             ?.let { name -> ThemeMode.entries.firstOrNull { it.name == name } }
             ?: defaults.themeMode
 
+        // Сохранения, сделанные до появления переключателя, ключа не знают: анимации в них включены,
+        // как и были.
+        val animationsEnabled = prefs.getBoolean(KEY_ANIMATIONS, defaults.animationsEnabled)
+
         return GameSettings(
             soundVolume = soundVol,
             musicVolume = musicVol,
-            themeMode = themeMode
+            themeMode = themeMode,
+            animationsEnabled = animationsEnabled
         )
     }
 
@@ -62,6 +74,7 @@ class GameSettingsRepository(context: Context) {
             .putBoolean(KEY_SOUND, settings.soundEnabled)
             .putBoolean(KEY_MUSIC, settings.musicEnabled)
             .putString(KEY_THEME, settings.themeMode.name)
+            .putBoolean(KEY_ANIMATIONS, settings.animationsEnabled)
             .apply()
     }
 }
