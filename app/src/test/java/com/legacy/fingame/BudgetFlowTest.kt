@@ -248,7 +248,7 @@ class BudgetFlowTest {
         assertEquals(1_000 + Economy.DAILY_BONUS - 400, state.balance)
         assertEquals(400, state.deposit?.amount)
         assertEquals(5, state.deposit?.termDays)
-        assertEquals(10, state.deposit?.ratePercent)
+        assertEquals(30, state.deposit?.ratePercent)
         assertEquals(FakeGameClock.DEFAULT_DAY, state.deposit?.openedDay)
         assertEquals(300, state.budget?.plannedMust)
         assertEquals(100, state.budget?.plannedWant)
@@ -394,7 +394,7 @@ class BudgetFlowTest {
         assertEquals(100 + Economy.DAILY_BONUS + 300, vm.state.value.totalToPlan)
 
         vm.updateBudgetDraft(
-            BudgetDraft(mustSpend = 0, wantSpend = 0, depositAmount = 250, depositTermDays = 4)
+            BudgetDraft(mustSpend = 0, wantSpend = 0, depositAmount = 250, depositTermDays = 5)
         )
 
         assertEquals(250, vm.state.value.planningDraft.depositAmount)
@@ -402,7 +402,7 @@ class BudgetFlowTest {
 
         val state = vm.state.value
         assertEquals(250, state.deposit?.amount)
-        assertEquals(4, state.deposit?.termDays)
+        assertEquals(5, state.deposit?.termDays)
         assertEquals(250, state.budget?.plannedDeposit)
     }
 
@@ -433,9 +433,9 @@ class BudgetFlowTest {
         assertTrue(vm.claimDailyBonus())
 
         // Тело и проценты вернулись на счёт до того, как с него сняли «сколько сохранено».
-        assertEquals(40 + 500 + 75, vm.state.value.previousBudgetResult?.actualSavings)
+        assertEquals(40 + 500 + 250, vm.state.value.previousBudgetResult?.actualSavings)
         assertEquals(60, vm.state.value.previousBudgetResult?.plannedSavings)
-        assertEquals(40 + 500 + 75 + Economy.DAILY_BONUS, vm.state.value.balance)
+        assertEquals(40 + 500 + 250 + Economy.DAILY_BONUS, vm.state.value.balance)
     }
 
     @Test
@@ -459,41 +459,41 @@ class BudgetFlowTest {
 
         val state = vm.state.value
         assertNull(state.deposit)
-        assertEquals(100 + 500 + 75, state.balance)
+        assertEquals(100 + 500 + 250, state.balance)
         assertEquals(
             listOf(MoneyLog.REASON_DEPOSIT_INTEREST, MoneyLog.REASON_DEPOSIT_CLOSED),
             state.moneyLog.entries.map { it.reason }
         )
-        assertEquals(listOf(75, 500), state.moneyLog.entries.map { it.delta })
+        assertEquals(listOf(250, 500), state.moneyLog.entries.map { it.delta })
     }
 
     @Test
     fun `a deposit too small to earn a coin writes no interest line at all`() {
         val clock = FakeGameClock()
-        // 4% of 10 is less than half a coin, so the interest rounds to nothing.
+        // 15% of 3 is less than half a coin, so the interest rounds to nothing.
         val store = FakePlayerStateStore(
             PlayerState(
                 balance = 100,
                 deposit = Deposit.openedOn(
-                    amount = 10,
-                    termDays = 2,
+                    amount = 3,
+                    termDays = 3,
                     day = FakeGameClock.DEFAULT_DAY
                 )
             )
         )
         val vm = testGameViewModel(store = store, clock = clock)
 
-        clock.day += 2
+        clock.day += 3
         vm.openScreen(Screen.BUDGET)
 
         val state = vm.state.value
         assertNull(state.deposit)
-        assertEquals(100 + 10, state.balance)
+        assertEquals(100 + 3, state.balance)
         assertEquals(
             listOf(MoneyLog.REASON_DEPOSIT_CLOSED),
             state.moneyLog.entries.map { it.reason }
         )
-        assertEquals(listOf(10), state.moneyLog.entries.map { it.delta })
+        assertEquals(listOf(3), state.moneyLog.entries.map { it.delta })
     }
 
     @Test
@@ -507,21 +507,21 @@ class BudgetFlowTest {
         firstRun.fastForward(TimeUnit.HOURS.toMillis(12))
         assertTrue(firstRun.claimDailyBonus())
         firstRun.updateBudgetDraft(
-            BudgetDraft(mustSpend = 0, wantSpend = 0, depositAmount = 100, depositTermDays = 2)
+            BudgetDraft(mustSpend = 0, wantSpend = 0, depositAmount = 100, depositTermDays = 3)
         )
         assertTrue(firstRun.confirmBudget())
         assertEquals(
-            FakeGameClock.DEFAULT_DAY + 1 + 2,
+            FakeGameClock.DEFAULT_DAY + 1 + 3,
             firstRun.state.value.deposit?.maturityDay
         )
 
-        // Приложение закрыто на час реального времени, за который календарь ушёл на два дня.
+        // Приложение закрыто на час реального времени, за который календарь ушёл на три дня.
         clock.millis += TimeUnit.HOURS.toMillis(1)
-        clock.day += 2
+        clock.day += 3
         val nextRun = testGameViewModel(store = store, clock = clock)
 
         assertNull(nextRun.state.value.deposit)
-        assertEquals(Economy.DAILY_BONUS + 104, nextRun.state.value.balance)
+        assertEquals(Economy.DAILY_BONUS + 115, nextRun.state.value.balance)
     }
 
     @Test
@@ -532,7 +532,7 @@ class BudgetFlowTest {
                 balance = 0,
                 deposit = Deposit.openedOn(
                     amount = 100,
-                    termDays = 2,
+                    termDays = 3,
                     day = FakeGameClock.DEFAULT_DAY - 5
                 )
             )
@@ -541,7 +541,7 @@ class BudgetFlowTest {
         val vm = testGameViewModel(store = store, clock = clock)
 
         assertNull(vm.state.value.deposit)
-        assertEquals(104, vm.state.value.balance)
+        assertEquals(115, vm.state.value.balance)
         assertNull(store.state.deposit)
     }
 
@@ -553,17 +553,17 @@ class BudgetFlowTest {
                 balance = 0,
                 deposit = Deposit.openedOn(
                     amount = 100,
-                    termDays = 2,
+                    termDays = 3,
                     day = FakeGameClock.DEFAULT_DAY
                 )
             )
         )
         val vm = testGameViewModel(store = store, clock = clock)
 
-        vm.fastForward(java.util.concurrent.TimeUnit.DAYS.toMillis(2))
+        vm.fastForward(java.util.concurrent.TimeUnit.DAYS.toMillis(3))
 
         assertNull(vm.state.value.deposit)
-        assertEquals(104, vm.state.value.balance)
+        assertEquals(115, vm.state.value.balance)
     }
 
     @Test
@@ -598,7 +598,7 @@ class BudgetFlowTest {
                 balance = 0,
                 deposit = Deposit.openedOn(
                     amount = 100,
-                    termDays = 2,
+                    termDays = 3,
                     day = FakeGameClock.DEFAULT_DAY
                 )
             )
@@ -606,12 +606,12 @@ class BudgetFlowTest {
         val vm = testGameViewModel(store = store, clock = clock)
 
         // Срок наступил, но игрок не заходил ни на один экран, который бы это заметил.
-        clock.day += 2
+        clock.day += 3
         assertFalse(vm.closeDepositEarly())
 
         val state = vm.state.value
         assertNull(state.deposit)
-        assertEquals(104, state.balance)
+        assertEquals(115, state.balance)
         assertEquals(
             listOf(MoneyLog.REASON_DEPOSIT_INTEREST, MoneyLog.REASON_DEPOSIT_CLOSED),
             state.moneyLog.entries.map { it.reason }

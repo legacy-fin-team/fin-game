@@ -93,15 +93,15 @@ class RestartTest {
         val store = storeWithPet(clock)
         val firstRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
 
-        clock.millis += Growth.STAGE_MILLIS * 3
+        clock.millis += Growth.FULL_GROWTH_MILLIS
         firstRun.tick()
-        assertEquals(Animal.FIRST_AGE + 3, firstRun.state.value.petAge)
+        assertEquals(Growth.ADULT_AGE, firstRun.state.value.petAge)
 
         // The player turns the device's clock back a week between the two launches.
-        clock.millis -= Growth.STAGE_MILLIS * 7
+        clock.millis -= Growth.FULL_GROWTH_MILLIS * 3
         val nextRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
 
-        assertEquals(Animal.FIRST_AGE + 3, nextRun.state.value.petAge)
+        assertEquals(Growth.ADULT_AGE, nextRun.state.value.petAge)
     }
 
     @Test
@@ -109,11 +109,11 @@ class RestartTest {
         val clock = FakeGameClock()
         val vm = testGameViewModel(store = storeWithPet(clock), clock = clock, careTuning = NO_CARE_RULES)
 
-        clock.millis += Growth.STAGE_MILLIS
+        clock.millis += Growth.DAY_MILLIS * 11
         vm.tick()
         assertEquals(Animal.FIRST_AGE + 1, vm.state.value.petAge)
 
-        clock.millis -= Growth.STAGE_MILLIS * 2
+        clock.millis -= Growth.DAY_MILLIS * 22
         vm.tick()
 
         assertEquals(Animal.FIRST_AGE + 1, vm.state.value.petAge)
@@ -143,7 +143,7 @@ class RestartTest {
         val store = storeWithPet(clock)
         val firstRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
 
-        firstRun.fastForward(Growth.STAGE_MILLIS)
+        firstRun.fastForward(Growth.DAY_MILLIS)
         assertEquals(clock.day + 1, firstRun.state.value.todayDay)
 
         val nextRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
@@ -157,7 +157,7 @@ class RestartTest {
         val store = storeWithPet(clock)
         val firstRun = testGameViewModel(store = store, clock = clock, careTuning = NO_CARE_RULES)
 
-        firstRun.fastForward(Growth.STAGE_MILLIS)
+        firstRun.fastForward(Growth.DAY_MILLIS)
         assertTrue(firstRun.claimDailyBonus())
         val earned = firstRun.state.value.balance
 
@@ -167,7 +167,7 @@ class RestartTest {
         assertEquals(earned, nextRun.state.value.balance)
 
         // The bonus is delayed by the skipped day, not lost with it: the next day pays again.
-        nextRun.fastForward(Growth.STAGE_MILLIS)
+        nextRun.fastForward(Growth.DAY_MILLIS)
 
         assertTrue(nextRun.state.value.dailyBonusAvailable)
         assertTrue(nextRun.claimDailyBonus())

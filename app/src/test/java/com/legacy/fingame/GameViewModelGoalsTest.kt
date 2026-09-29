@@ -124,7 +124,7 @@ class GameViewModelGoalsTest {
 
     @Test
     fun `a purchase that fails keeps the goals`() {
-        val vm = testGameViewModel()
+        val vm = testGameViewModel(store = FakePlayerStateStore(PlayerState(balance = 200)))
         vm.toggleGoal(lamp)
 
         // 150 + 100 при 200 на счету: не хватает, и ничего не покупается.

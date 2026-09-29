@@ -18,6 +18,12 @@ import org.junit.Test
 class EconomyTest {
 
     @Test
+    fun `the player starts with 400 and earns 125 a day`() {
+        assertEquals(400, Economy.STARTING_BALANCE)
+        assertEquals(125, Economy.DAILY_BONUS)
+    }
+
+    @Test
     fun `a player who never played starts with the starting balance`() {
         val vm = testGameViewModel()
 

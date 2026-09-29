@@ -218,4 +218,16 @@ class ShippedQuestsTest {
         assertNull(catalog.findQuestById("nowhere"))
         assertEquals(emptyList<Quest>(), QuestCatalog.EMPTY.quests)
     }
+
+    @Test
+    fun `every shipped quest can be taken with the money the game starts with`() {
+        // «Пикник» просит 300 монет на счету: новичок должен дотянуться до него с первого дня.
+        readShippedQuests().forEach { quest ->
+            assertTrue(
+                "${quest.id} needs ${quest.minBalance}",
+                quest.minBalance <= com.legacy.fingame.game.economy.Economy.STARTING_BALANCE
+            )
+        }
+        assertEquals(300, readShippedQuests().single { it.id == "picnic" }.minBalance)
+    }
 }

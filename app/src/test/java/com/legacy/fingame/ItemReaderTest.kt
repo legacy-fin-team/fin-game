@@ -240,16 +240,30 @@ class ItemReaderTest {
 
         // Food and toys are the other half of the bargain: they are bought for what they do.
         assertEquals(
-            mapOf(StatKind.HUNGER to 20, StatKind.HEALTH to 5),
+            mapOf(StatKind.HUNGER to 5, StatKind.HEALTH to 20),
             items.getValue("apple").effects
         )
         assertEquals(
-            mapOf(StatKind.HUNGER to 50, StatKind.PLEASURE to 10, StatKind.HEALTH to 10),
+            mapOf(StatKind.HUNGER to 20, StatKind.HEALTH to 25),
+            items.getValue("fish").effects
+        )
+        assertEquals(
+            mapOf(StatKind.HUNGER to 65, StatKind.HEALTH to 25, StatKind.PLEASURE to 25),
             items.getValue("kibble").effects
         )
         assertEquals(
             mapOf(StatKind.PLEASURE to 20, StatKind.HUNGER to -5),
             items.getValue("ball").effects
         )
+    }
+
+    @Test
+    fun `food in the shipped data costs what the balance asks for`() {
+        val items = readShippedItems()
+
+        // Яблоко, рыбка, корм: дешёвое лечит, дорогое кормит досыта и радует.
+        assertEquals(10, items.getValue("apple").price)
+        assertEquals(20, items.getValue("fish").price)
+        assertEquals(50, items.getValue("kibble").price)
     }
 }
