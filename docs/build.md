@@ -17,6 +17,7 @@
 | minSdk | 26 (Android 8.0) | `app/build.gradle.kts` |
 | Build Tools | 37.0.0 | ставится вместе с платформой |
 | Пакет, версия | `com.legacy.fingame`, `versionName` 1.0, `versionCode` 1 | `app/build.gradle.kts` |
+| Название приложения | «Финансовый Питомец» (под значком и в списке приложений) | строка `app_name` в `app/src/main/res/values/strings.xml` |
 
 AGP 9 адресует платформы с минорной версией, поэтому нужна именно `platforms;android-37.0`. Она
 опубликована в preview-канале sdkmanager (`--channel=3`); без неё сборка падает с

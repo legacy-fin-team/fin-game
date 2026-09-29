@@ -45,7 +45,7 @@ ROOT_README = os.path.join(ROOT, 'README.md')
 LICENSES_HEADING = '## Лицензии'
 REF = os.path.join(DOCS, 'tools', 'reference.docx')
 OUT = os.path.join(DOCS, 'FinGame-Документация.docx')
-TITLE = 'Fin Game — сопроводительная документация'
+TITLE = 'Финансовый Питомец — сопроводительная документация'
 SUBTITLE = 'Мобильная игра по финансовой грамотности для детей. Android'
 
 LINK = re.compile(r'\[([^\]]+)\]\(([^)\s]+)\)')
