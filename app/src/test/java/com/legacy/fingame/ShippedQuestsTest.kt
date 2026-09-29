@@ -104,7 +104,7 @@ class ShippedQuestsTest {
     }
 
     @Test
-    fun `returning the wallet pays less but feels better than keeping it`() {
+    fun `returning the wallet pays and feels better, keeping it gives no money`() {
         val wallet = readShippedQuests().single { it.id == "lost_wallet" }
         val (giveBack, keep) = wallet.node(wallet.firstNodeId)!!.options
 
@@ -112,7 +112,7 @@ class ShippedQuestsTest {
         assertEquals(20, giveBack.moneyDelta)
         assertEquals(mapOf(StatKind.PLEASURE to 15), giveBack.statEffects)
         assertEquals("Оставить себе", keep.label)
-        assertEquals(30, keep.moneyDelta)
+        assertEquals(0, keep.moneyDelta)
         assertEquals(mapOf(StatKind.PLEASURE to -20), keep.statEffects)
     }
 
