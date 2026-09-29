@@ -63,7 +63,7 @@ import com.legacy.fingame.ui.theme.GameDimens
 private val CloseButtonSize = 40.dp
 private val InventoryCellMinSize = 140.dp
 private val PopupMaxWidth = 260.dp
-private val PopupCloseButtonSize = 44.dp
+private val PopupCloseButtonSize = 48.dp
 
 /** Gap between the tapped cell and the item window that pops up next to it. */
 private val PopupGap = 8.dp

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
@@ -194,6 +195,12 @@ private const val SpriteButtonUnderlineWidthFraction = 0.6f
 private val SpriteButtonUnderlineCorner = 2.dp
 
 /**
+ * Smallest touch area of any control, as the brief asks for (2.2.4 / 3.6): 48 x 48 dp. A sprite
+ * smaller than this keeps its drawn size; only the clickable box around it is stretched to this.
+ */
+val MinTouchTargetSize = 48.dp
+
+/**
  * How tall a [SpriteButton] ends up being, underline included.
  *
  * Lets a layout reserve exactly the room such a button takes without repeating what the button is
@@ -209,11 +216,13 @@ private val SpriteButtonUnderlineCorner = 2.dp
 @Composable
 @ReadOnlyComposable
 fun spriteButtonHeight(size: Dp, showIndicator: Boolean = true): Dp =
-    GameDimens.buttonSize(size) + if (showIndicator) {
-        SpriteButtonUnderlineGap + SpriteButtonUnderlineThickness
-    } else {
-        0.dp
-    }
+    (
+        GameDimens.buttonSize(size) + if (showIndicator) {
+            SpriteButtonUnderlineGap + SpriteButtonUnderlineThickness
+        } else {
+            0.dp
+        }
+        ).coerceAtLeast(MinTouchTargetSize)
 
 /**
  * Tappable sprite with no background, border or shadow — the artwork itself is the whole button.
@@ -307,6 +316,7 @@ fun SpriteButton(
 
     Column(
         modifier = modifier
+            .sizeIn(minWidth = MinTouchTargetSize, minHeight = MinTouchTargetSize)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -317,7 +327,8 @@ fun SpriteButton(
                 this.contentDescription = contentDescription
                 if (!enabled) disabled()
             },
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
         if (fallbackLabel == null) {
             Sprite(
@@ -768,10 +779,10 @@ private val PillCompactHorizontalPadding = 12.dp
  *
  * The padding above is written for a label at its normal size; a label shrunk by `autoSize`, or a
  * shorter scale altogether, would otherwise take the whole button down with it, and the button
- * would become hard to hit exactly where the screen is already tight. Same 44 dp the platform's own
+ * would become hard to hit exactly where the screen is already tight. Same 48 dp the platform's own
  * accessibility guidance asks for.
  */
-private val PillMinTouchSize = 44.dp
+private val PillMinTouchSize = MinTouchTargetSize
 
 /**
  * How loudly a [PillButton] speaks.

@@ -25,7 +25,7 @@ class MainScreenLayoutTest {
     private val rowNeeds = actionSize * 5 + 8f * 3 + 16f
 
     /** Smallest a button may be squeezed to and still be comfortable to hit, in dp. */
-    private val minTouchTarget = 40f
+    private val minTouchTarget = 48f
 
     /** Size a button is comfortably hit at, in dp: what the row is checked to keep on a phone. */
     private val comfortableTouchTarget = 48f

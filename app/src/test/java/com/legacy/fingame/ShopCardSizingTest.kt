@@ -265,4 +265,10 @@ class ShopCardSizingTest {
             details >= twoChips
         )
     }
+
+    @Test
+    fun `touch areas of the purchase controls are at least 48 dp`() {
+        assertTrue(CounterButtonSize >= com.legacy.fingame.ui.components.MinTouchTargetSize)
+        assertTrue(com.legacy.fingame.ui.components.MinTouchTargetSize >= 48.dp)
+    }
 }

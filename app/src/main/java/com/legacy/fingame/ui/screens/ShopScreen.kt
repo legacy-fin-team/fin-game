@@ -96,13 +96,13 @@ private val VariantButtonSize = 36.dp
 /**
  * Size of the "−" and "+" of a counter on a stacked card, and the gap between them and the number.
  *
- * The same 40.dp the sideways card and the budget's own amount pickers use: the counter has to fit
+ * The same 48.dp the sideways card and the budget's own amount pickers use: the counter has to fit
  * the narrowest card the shop lays out twice to a row — `134.dp` inside its padding — with enough
  * left between the buttons for a quantity of two digits at any font scale the game is played at,
  * see [counterValueWidth].
  */
-internal val CounterButtonSize = 40.dp
-internal val CounterGap = 8.dp
+internal val CounterButtonSize = 48.dp
+internal val CounterGap = 2.dp
 
 /**
  * Height of the slot a card's purchase control stands in, whichever of the three it is.
