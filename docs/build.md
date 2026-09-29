@@ -50,23 +50,23 @@ echo "sdk.dir=$HOME/Library/Android/sdk" > local.properties   # macOS; на Linu
 | `BuildConfig.DEMO_MODE` (по умолчанию) | `true` | `false` | `false` |
 | Кнопка «+12 ч» (перемотка времени) | есть | нет | нет |
 | «Ещё раз» у пройденного квеста игрока | есть | нет | нет |
-| Кулдаун квестов и паузы между шагами | сняты | действуют | сняты |
+| Кулдаун квестов и паузы между шагами | действуют | действуют | действуют |
 | Минификация (R8) | нет | выключена (`optimization { enable = false }`) | выключена |
 | Подпись | отладочный ключ Android SDK | не задана — APK неподписанный | отладочный ключ Android SDK |
 | Команда | `./gradlew :app:assembleDebug` | `./gradlew :app:assembleRelease` | `./gradlew :app:assembleReleaseDebuggable` |
 | APK | `app/build/outputs/apk/debug/app-debug.apk` | `app/build/outputs/apk/release/app-release-unsigned.apk` | `app/build/outputs/apk/releaseDebuggable/app-releaseDebuggable.apk` |
 
-Два независимых переключателя:
+Два независимых признака сборки:
 
 - **Демо-режим** — `BuildConfig.DEMO_MODE` → `DemoMode.ENABLED`. Даёт кнопку «+12 ч» на главном
   экране (см. [pet-growth.md](pet-growth.md), раздел 7) и кнопку «Ещё раз» у пройденного квеста.
   Переопределяется для любого типа gradle-свойством `fingame.demoMode`:
   `./gradlew :app:assembleRelease -Pfingame.demoMode=true` — релиз с перемоткой для показа жюри;
   `./gradlew :app:assembleDebug -Pfingame.demoMode=false` — отладочная сборка без неё.
-- **Без ожидания в квестах** — `BuildConfig.DEBUG` (debug и releaseDebuggable). `MainActivity`
-  передаёт его в `GameViewModel` как `ignoreQuestDelays`: снимаются кулдаун пройденного квеста и
-  паузы между шагами. Шесть часов между случайными квестами и проверка взрослым действуют во всех
-  сборках (см. [quests.md](quests.md), раздел 6).
+- **Отладка** — `BuildConfig.DEBUG` (debug и releaseDebuggable): логи и отладчик. На правила игры
+  он не влияет. Кулдауны и паузы квестов действуют во всех сборках: `MainActivity` передаёт в
+  `GameViewModel` `ignoreQuestDelays = false`. В демо-сборке их, как и остальное ожидание, пропускает
+  «+12 ч» (см. [quests.md](quests.md), раздел 6).
 
 Остальное поведение одинаково во всех сборках.
 

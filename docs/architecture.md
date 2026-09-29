@@ -1,6 +1,6 @@
 # Архитектура и структура данных
 
-Компонентная и функциональная схема приложения, экраны и переходы, жизненный цикл данных,
+Как устроено приложение: слои и компоненты, экраны и переходы, жизненный цикл данных,
 сохраняемый профиль и каталоги XML.
 
 Пути к исходникам даны относительно `app/src/main/java/com/legacy/fingame/`, пути к данным —
@@ -22,51 +22,34 @@ Compose. Однонаправленный поток данных с одной 
 - неизменяемые игровые данные (животные, предметы, квесты, подсказки, словарик, правила ухода,
   аудио) читаются из XML в `assets/data/` один раз при старте.
 
+Схема ниже — в формате Mermaid, GitHub показывает её картинкой. Стрелки — кто кого вызывает или
+откуда берёт данные; подробнее о каждом блоке — в таблице раздела 2.
+
 ```mermaid
 flowchart TD
-    MA[MainActivity] --> APP[FinGameApp: навигация по Screen, тик каждые 30 с]
-    APP --> SCR[ui/screens: выбор питомца, главный, магазин, инвентарь, квесты, бюджет, журнал, настройки, помощь, взрослый режим]
-    APP --> HINT[ScreenHint: подсказка к экрану]
-    SCR -- действия --> VM[GameViewModel]
+    MA["MainActivity"] --> APP["FinGameApp: навигация по Screen, тик каждые 30 с"]
+    APP --> SCR["ui/screens: выбор питомца, главный, магазин, инвентарь, квесты, бюджет, журнал, настройки, помощь, взрослый режим"]
+    APP --> HINT["ScreenHint: подсказка к экрану"]
+    SCR -- действия --> VM["GameViewModel"]
     VM -- StateFlow GameUiState --> SCR
-    VM --> RULES[game/*: economy, rules, quests, items, stats, scene, adult]
-    VM --> STORE[PlayerStateStore]
-    STORE --> PREF[utils/PlayerPreferences + кодеки]
-    PREF --> SP[(SharedPreferences player)]
-    VM --> CLK[FastForwardClock]
-    FGA[FinGameApplication] --> REG[AnimalRegistry, ItemRegistry, QuestRegistry, HintRegistry, HelpRegistry, PetCareTuning, AudioManager]
-    REG --> XML[(assets/data/*.xml)]
-    SCR --> SL[SpriteLoader / Sprites]
-    SL --> TEX[(assets/textures/**/*.webp)]
-    MA --> SET[GameSettingsRepository]
-    SET --> SP2[(SharedPreferences fin_game_settings)]
-```
-
-То же в текстовом виде:
-
-```
- MainActivity ──> FinGameApp (навигация по Screen, тик, подсказки)
-                      │
-          ui/screens: AnimalSelect, Main, Shop, Inventory, Quests,
-                      Budget, Log, Settings, Help, AdultLock, Adult
-             действия │                      ▲ StateFlow<GameUiState>
-                      ▼                      │
-                  GameViewModel ─────────────┘
-          ┌───────────┼───────────────┬───────────────────┐
-     game/* правила   FastForwardClock  PlayerStateStore    CarePricedCatalog
-     (economy, rules,  (время игры)     = PlayerPreferences  (цены с наценкой)
-      quests, items,                    -> SharedPreferences
-      stats, scene, adult)                 "player"
- FinGameApplication -> реестры из assets/data/*.xml, AudioManager
- MainActivity -> GameSettingsRepository -> SharedPreferences "fin_game_settings"
- SpriteLoader <- assets/textures/**/*.webp
+    VM --> RULES["game/*: economy, rules, quests, items, stats, scene, adult"]
+    VM --> STORE["PlayerStateStore"]
+    STORE --> PREF["utils/PlayerPreferences + кодеки"]
+    PREF --> SP[("SharedPreferences player")]
+    VM --> CLK["FastForwardClock"]
+    FGA["FinGameApplication"] --> REG["AnimalRegistry, ItemRegistry, QuestRegistry, HintRegistry, HelpRegistry, PetCareTuning, AudioManager"]
+    REG --> XML[("assets/data/*.xml")]
+    SCR --> SL["SpriteLoader / Sprites"]
+    SL --> TEX[("assets/textures/**/*.webp")]
+    MA --> SET["GameSettingsRepository"]
+    SET --> SP2[("SharedPreferences fin_game_settings")]
 ```
 
 ## 2. Компоненты
 
 | Слой / пакет | Компоненты | Ответственность |
 |---|---|---|
-| точка входа | `MainActivity` | Edge-to-edge, загрузка настроек, запуск звука, создание `GameViewModel` (с `ignoreQuestDelays = BuildConfig.DEBUG`), тема |
+| точка входа | `MainActivity` | Edge-to-edge, загрузка настроек, запуск звука, создание `GameViewModel` (с `ignoreQuestDelays = false` — квесты во всех сборках ждут по правилам), тема, раздача `LocalAnimationsEnabled` |
 | точка входа | `FinGameApplication` | Реестры данных, `PlayerPreferences`, `PetCareTuning` из `care.xml`, общий на процесс `AudioManager` (музыка не прерывается при повороте) |
 | точка входа | `DemoMode` | Флаг демо-сборки `BuildConfig.DEMO_MODE`, шаг перемотки 12 ч |
 | `game` | `GameViewModel`, `GameUiState`, `Screen` | Состояние игры и все действия игрока и взрослого |
@@ -81,18 +64,18 @@ flowchart TD
 | `game/adult` | `ParentLock`, `AdultReports`, `AdultProgress`, `AdultMoney`, `RewardUsage` | Замок, отчёты, прогресс по темам, изменение монет, награды |
 | `game/hints` | `Hint`, `HintKeys`, `HintReader`, `HintRegistry` | Подсказки по экранам → [education.md](education.md) |
 | `game/help` | `HelpEntry`, `HelpReader`, `HelpRegistry` | Словарик для экрана «Помощь» |
-| `game/settings` | `GameSettings`, `GameSettingsRepository`, `AudioManager`, `AudioReader`, `ThemeMode` | Громкость звуков и музыки, тема, воспроизведение |
+| `game/settings` | `GameSettings`, `GameSettingsRepository`, `AudioManager`, `AudioReader`, `ThemeMode` | Громкость звуков и музыки, анимации, тема, воспроизведение |
 | `ui` | `FinGameApp`, `ClickSound`, `DemoContent` | Корневой Composable: навигация, «Назад», тик, показ подсказки; щелчок кнопок |
 | `ui/screens` | `MainScreen`, `AnimalSelectScreen`, `ShopScreen`, `InventoryScreen`, `QuestsScreen`, `BudgetScreen`, `LogScreen`, `SettingsScreen`, `HelpScreen`, `AdultLockScreen`, `AdultScreen` и вкладки `Adult*Tab`, `GoalsCarousel`, `PlaceholderScreen` | Экраны |
 | `ui/screens` | `MoneyFormat`, `GoalFormat`, `QuestFormat`, `AdultFormat`, `AmountSteps`, `ShopCardSizing` | Тексты, форматирование сумм и дат, шаги ввода, размеры карточек |
 | `ui/components` | `GameComponents`, `GameDialog`, `ScreenHint`, `Sprites`, `PillButtonSizing` | Общие кнопки, шкалы, диалоги, окно подсказки, пути к спрайтам интерфейса |
-| `ui/theme` | `Theme`, `Color`, `Type`, `Fonts`, `Dimens` | Цвета, пиксельная типографика, размеры для телефона и планшета |
+| `ui/theme` | `Theme`, `Color`, `Type`, `Fonts`, `Dimens`, `Motion` | Цвета, пиксельная типографика, размеры для телефона и планшета, выключение анимаций (`LocalAnimationsEnabled`, окна без всплывания) |
 | `utils` | `PlayerPreferences`, `*Codec`, `SpriteLoader` | Сохранение профиля, сериализация списков, загрузка спрайтов |
 
 ## 3. Экраны и переходы
 
 Навигация — одно поле `GameUiState.screen` (`enum Screen`), переключение с плавным появлением
-(`AnimatedContent` в `FinGameApp`). Системная «Назад» с любого экрана, кроме главного, закрывает
+(`AnimatedContent` в `FinGameApp`; при выключенных анимациях — без перехода). Системная «Назад» с любого экрана, кроме главного, закрывает
 экран (`closeScreen`: из взрослого режима и замка — в настройки, иначе — на главный).
 
 | Экран | Как попасть | Что делает |
@@ -104,7 +87,7 @@ flowchart TD
 | `QUESTS` | Кнопка квестов | Доска квестов → [quests.md](quests.md) |
 | `BUDGET` | Сам после бонуса дня; кнопка бюджета; из журнала | «Новый день», итог прошлого периода, раскладка, вклад → [economy.md](economy.md) |
 | `LOG` | Кнопка журнала; из бюджета | Движения денег по дням |
-| `OPTIONS` | Кнопка настроек | Ползунки «Звуки» и «Музыка», тема «Светлая / Тёмная / Авто», «Режим взрослого», «Помощь», «Сбросить прогресс» (с подтверждением) |
+| `OPTIONS` | Кнопка настроек | Ползунки «Звуки» и «Музыка», переключатель «Анимации», тема «Светлая / Тёмная / Авто», «Режим взрослого», «Помощь», «Сбросить прогресс» (с подтверждением) |
 | `HELP` | Настройки → «Помощь» | Словарик из 11 терминов и раздел «Подсказки по экранам» с кнопкой «Показать подсказки заново» |
 | `ADULT_LOCK` | Настройки → «Режим взрослого» | Три примера на умножение (множители 3–9) |
 | `ADULT_MODE` | После верных ответов | Вкладки «Прогресс», «Дни», «Покупки», «Квесты», «Цели», «Вещи», «Награды», «Журнал», «Товары» |
@@ -132,7 +115,7 @@ flowchart TD
    состояние не пишется.
 4. **Действия.** Каждое действие создаёт новое неизменяемое состояние и сразу сохраняет его
    (`persist()`), поэтому закрытие приложения в любой момент не теряет прогресс.
-5. **Настройки** (громкость, тема) сохраняются отдельно при каждом изменении (`MainActivity` →
+5. **Настройки** (громкость, анимации, тема) сохраняются отдельно при каждом изменении (`MainActivity` →
    `GameSettingsRepository.save`).
 
 Время игры — `FastForwardClock` поверх часов устройства: хранит сдвиг перемотки демо-сборки и не
@@ -206,7 +189,7 @@ flowchart TD
   чтобы действующие и выведенные ключи не пересекались.
 
 **Настройки** — `GameSettingsRepository`, `SharedPreferences` `fin_game_settings`: `sound_volume`,
-`music_volume` (0–100), `theme_mode` (`LIGHT`, `DARK`, `AUTO`), а также `sound_enabled` и
+`music_volume` (0–100), `animations_enabled` (по умолчанию `true`), `theme_mode` (`LIGHT`, `DARK`, `AUTO`), а также `sound_enabled` и
 `music_enabled` для совместимости со старыми сохранениями (если громкости нет, берётся 100 или 0 по
 флагу). Сброс прогресса настройки не трогает.
 
