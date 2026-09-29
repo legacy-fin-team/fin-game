@@ -1173,7 +1173,9 @@ private fun ItemSprite(
                 onClick = onToggleGoals,
                 size = starButtonSize,
                 showIndicator = false,
-                modifier = Modifier.align(Alignment.TopEnd)
+                modifier = Modifier.align(Alignment.TopEnd),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.Top
             )
         }
     }

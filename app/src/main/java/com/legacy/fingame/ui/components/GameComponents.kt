@@ -267,6 +267,10 @@ fun spriteButtonHeight(size: Dp, showIndicator: Boolean = true): Dp =
  *   what the button does, so a screen reader is meant to read that once, not the caption too. Left
  *   `null` — the default — a button whose sprite is missing still falls back to `error.webp`, which
  *   is what every other [SpriteButton] call wants.
+ * @param horizontalAlignment where the sprite stands inside the touch area when the area is larger
+ *   than the sprite (a sprite under 48 dp); the centre by default, a corner button (the shop's star)
+ *   asks for the corner so the sprite stays where the artwork puts it.
+ * @param verticalArrangement the same, vertically.
  */
 @Composable
 fun SpriteButton(
@@ -278,7 +282,9 @@ fun SpriteButton(
     enabled: Boolean = true,
     selected: Boolean = false,
     showIndicator: Boolean = true,
-    label: String? = null
+    label: String? = null,
+    horizontalAlignment: Alignment.Horizontal = Alignment.CenterHorizontally,
+    verticalArrangement: Arrangement.Vertical = Arrangement.Center
 ) {
     val context = LocalContext.current
     val loader = remember(context) { SpriteLoader(context) }
@@ -327,8 +333,8 @@ fun SpriteButton(
                 this.contentDescription = contentDescription
                 if (!enabled) disabled()
             },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        horizontalAlignment = horizontalAlignment,
+        verticalArrangement = verticalArrangement
     ) {
         if (fallbackLabel == null) {
             Sprite(
